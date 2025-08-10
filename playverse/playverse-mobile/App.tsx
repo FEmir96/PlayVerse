@@ -1,13 +1,5 @@
-import { ConvexProvider } from "convex/react";
-import { convex } from "./src/lib/convexClient";
-import { View, Text } from "react-native";
+import { registerRootComponent } from 'expo';
+import App from './src/App';
 
-export default function App() {
-  return (
-    <ConvexProvider client={convex}>
-      <View style={{ marginTop: 100, padding: 20 }}>
-        <Text style={{ fontSize: 22 }}>PlayVerse Mobile conectado 🎮</Text>
-      </View>
-    </ConvexProvider>
-  );
-}
+// Expo necesita que registremos el componente raíz
+registerRootComponent(App);
