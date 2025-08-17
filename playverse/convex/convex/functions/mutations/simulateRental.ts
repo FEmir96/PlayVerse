@@ -7,21 +7,21 @@ export const simulateRental = mutation({
     userId: v.id("profiles"),
     gameId: v.id("games"),
     type: v.union(v.literal("rental"), v.literal("purchase")),
-    durationHours: v.optional(v.number()), // solo si es rental
+    durationHours: v.optional(v.number()),
   },
   handler: async ({ db }, { userId, gameId, type, durationHours }) => {
     const now = Date.now();
     let expiresAt = undefined;
-    if (type === "rental" && durationHours) {
+    if (type === "rental" && durationHours && durationHours > 0) {
       expiresAt = now + durationHours * 60 * 60 * 1000;
     }
-
-    return await db.insert("transactions", {
+    const id = await db.insert("transactions", {
       userId,
       gameId,
       type,
       expiresAt,
       createdAt: now,
     });
+    return { id, expiresAt };
   },
 });
