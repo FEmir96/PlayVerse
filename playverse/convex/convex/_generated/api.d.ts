@@ -13,6 +13,8 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as functions_mutations_addGame from "../functions/mutations/addGame.js";
+import type * as functions_mutations_addGamesBatch from "../functions/mutations/addGamesBatch.js";
 import type * as functions_mutations_createGame from "../functions/mutations/createGame.js";
 import type * as functions_mutations_createUser from "../functions/mutations/createUser.js";
 import type * as functions_mutations_deleteGame from "../functions/mutations/deleteGame.js";
@@ -40,6 +42,8 @@ import type * as functions_queries_getUserUpgrades from "../functions/queries/ge
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "functions/mutations/addGame": typeof functions_mutations_addGame;
+  "functions/mutations/addGamesBatch": typeof functions_mutations_addGamesBatch;
   "functions/mutations/createGame": typeof functions_mutations_createGame;
   "functions/mutations/createUser": typeof functions_mutations_createUser;
   "functions/mutations/deleteGame": typeof functions_mutations_deleteGame;
