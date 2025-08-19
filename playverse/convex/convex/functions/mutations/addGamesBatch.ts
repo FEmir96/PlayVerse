@@ -15,13 +15,24 @@ export const addGamesBatch = mutation({
     ),
   },
   handler: async ({ db }, { games }) => {
+    let insertedCount = 0;
+
     for (const game of games) {
-      await db.insert("games", {
-        ...game,
-        createdAt: Date.now(), // 👈 agregado obligatorio
-      });
+      // verificar si ya existe un juego con el mismo título
+      const existing = await db
+        .query("games")
+        .withIndex("by_title", (q) => q.eq("title", game.title))
+        .unique();
+
+      if (!existing) {
+        await db.insert("games", {
+          ...game,
+          createdAt: Date.now(),
+        });
+        insertedCount++;
+      }
     }
 
-    return { inserted: games.length };
+    return { inserted: insertedCount };
   },
 });

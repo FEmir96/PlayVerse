@@ -6,7 +6,11 @@ export default defineSchema({
   profiles: defineTable({
     name: v.string(),
     email: v.string(),
-    role: v.union(v.literal("free"), v.literal("premium")), // solo estos dos roles
+    role: v.union(
+      v.literal("free"),
+      v.literal("premium"),
+      v.literal("admin") // ahora sí, agregamos admin
+    ),
     createdAt: v.number(),
   }).index("by_email", ["email"]),
 
@@ -44,8 +48,16 @@ export default defineSchema({
   // historial de upgrades/downgrades
   upgrades: defineTable({
     userId: v.id("profiles"),
-    fromRole: v.union(v.literal("free"), v.literal("premium")),
-    toRole: v.union(v.literal("free"), v.literal("premium")),
+    fromRole: v.union(
+      v.literal("free"),
+      v.literal("premium"),
+      v.literal("admin") // también lo incluyo por consistencia
+    ),
+    toRole: v.union(
+      v.literal("free"),
+      v.literal("premium"),
+      v.literal("admin")
+    ),
     effectiveAt: v.number(),
     paymentId: v.optional(v.id("payments")), // si hubo pago asociado
   }).index("by_user", ["userId"]),
