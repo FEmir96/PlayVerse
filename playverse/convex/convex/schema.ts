@@ -61,4 +61,13 @@ export default defineSchema({
     effectiveAt: v.number(),
     paymentId: v.optional(v.id("payments")), // si hubo pago asociado
   }).index("by_user", ["userId"]),
+
+    audits: defineTable({
+    action: v.string(), // "update_game" | "delete_game"
+    entity: v.string(), // "game"
+    entityId: v.id("games"),
+    requesterId: v.id("profiles"),
+    timestamp: v.number(),
+    details: v.optional(v.any()), // cambios hechos (para update)
+  }),
 });
