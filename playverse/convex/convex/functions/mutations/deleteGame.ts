@@ -8,15 +8,20 @@ export const deleteGame = mutation({
     requesterId: v.id("profiles"),
   },
   handler: async ({ db }, { gameId, requesterId }) => {
-    // Verificar que requester sea admin
+    // Verificar que requester exista y sea admin
     const requester = await db.get(requesterId);
-    if (!requester || requester.role !== "admin") {
+    if (!requester) {
+      throw new Error("El usuario solicitante no existe.");
+    }
+    if (requester.role !== "admin") {
       throw new Error("No autorizado. Solo un admin puede eliminar juegos.");
     }
 
     // Verificar existencia del juego
     const game = await db.get(gameId);
-    if (!game) throw new Error("Juego no encontrado.");
+    if (!game) {
+      throw new Error("Juego no encontrado en la base de datos.");
+    }
 
     // Eliminar juego
     await db.delete(gameId);
@@ -28,9 +33,9 @@ export const deleteGame = mutation({
       entityId: gameId,
       requesterId,
       timestamp: Date.now(),
-      details: { deletedTitle: game.title },
+      details: { deletedTitle: game.title ?? "Título desconocido" },
     });
 
-    return { deleted: true, gameId, message: "Juego eliminado con éxito" };
+    return { deleted: true, gameId, message: `Juego "${game.title}" eliminado con éxito.` };
   },
 });

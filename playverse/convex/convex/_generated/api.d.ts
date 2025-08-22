@@ -27,6 +27,7 @@ import type * as functions_mutations_updateGame from "../functions/mutations/upd
 import type * as functions_mutations_upgradePlan from "../functions/mutations/upgradePlan.js";
 import type * as functions_queries_getAdmins from "../functions/queries/getAdmins.js";
 import type * as functions_queries_getAllUsers from "../functions/queries/getAllUsers.js";
+import type * as functions_queries_getAuditLogs from "../functions/queries/getAuditLogs.js";
 import type * as functions_queries_getAvailableGames from "../functions/queries/getAvailableGames.js";
 import type * as functions_queries_getFreeGames from "../functions/queries/getFreeGames.js";
 import type * as functions_queries_getGames from "../functions/queries/getGames.js";
@@ -59,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   "functions/mutations/upgradePlan": typeof functions_mutations_upgradePlan;
   "functions/queries/getAdmins": typeof functions_queries_getAdmins;
   "functions/queries/getAllUsers": typeof functions_queries_getAllUsers;
+  "functions/queries/getAuditLogs": typeof functions_queries_getAuditLogs;
   "functions/queries/getAvailableGames": typeof functions_queries_getAvailableGames;
   "functions/queries/getFreeGames": typeof functions_queries_getFreeGames;
   "functions/queries/getGames": typeof functions_queries_getGames;
