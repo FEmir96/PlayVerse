@@ -8,8 +8,7 @@ export const createUser = mutation({
     email: v.string(),
     role: v.union(
       v.literal("free"),
-      v.literal("premium"),
-      v.literal("admin")
+      v.literal("premium")
     ),
   },
   handler: async ({ db }, { name, email, role }) => {
