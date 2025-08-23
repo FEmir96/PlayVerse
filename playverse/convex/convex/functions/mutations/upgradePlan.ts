@@ -6,7 +6,6 @@ export const upgradePlan = mutation({
   args: {
     userId: v.id("profiles"),
     toRole: v.union(v.literal("free"), v.literal("premium")),
-    // Si el upgrade viene acompañado de un pago simulado, lo enlazamos:
     paymentId: v.optional(v.id("payments")),
   },
   handler: async (ctx, { userId, toRole, paymentId }) => {
@@ -30,6 +29,21 @@ export const upgradePlan = mutation({
       toRole,
       effectiveAt: now,
       paymentId,
+    });
+
+    // Auditoría
+    await ctx.db.insert("audits", {
+      action: "upgradePlan",
+      entity: "profile",
+      entityId: userId, // se audita el usuario
+      requesterId: userId, // el mismo usuario está cambiando su plan
+      timestamp: now,
+      details: {
+        fromRole,
+        toRole,
+        upgradeId,
+        paymentId,
+      },
     });
 
     return {
