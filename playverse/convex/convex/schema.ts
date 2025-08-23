@@ -9,7 +9,7 @@ export default defineSchema({
     role: v.union(
       v.literal("free"),
       v.literal("premium"),
-      v.literal("admin") // ahora sí, agregamos admin
+      v.literal("admin") // rol admin incluido
     ),
     createdAt: v.number(),
   }).index("by_email", ["email"]),
@@ -51,7 +51,7 @@ export default defineSchema({
     fromRole: v.union(
       v.literal("free"),
       v.literal("premium"),
-      v.literal("admin") // también lo incluyo por consistencia
+      v.literal("admin")
     ),
     toRole: v.union(
       v.literal("free"),
@@ -62,12 +62,13 @@ export default defineSchema({
     paymentId: v.optional(v.id("payments")), // si hubo pago asociado
   }).index("by_user", ["userId"]),
 
+  // auditoría
     audits: defineTable({
-    action: v.string(), // "update_game" | "delete_game"
-    entity: v.string(), // "game"
-    entityId: v.id("games"),
-    requesterId: v.id("profiles"),
-    timestamp: v.number(),
-    details: v.optional(v.any()), // cambios hechos (para update)
-  }),
+  action: v.string(), // "update_game" | "delete_game" | "create_user"
+  entity: v.string(), // "game" | "profile"
+  entityId: v.union(v.id("games"), v.id("profiles")),
+  requesterId: v.id("profiles"),
+  timestamp: v.number(),
+  details: v.optional(v.any()),
+}),
 });

@@ -8,34 +8,43 @@ export const deleteGame = mutation({
     requesterId: v.id("profiles"),
   },
   handler: async ({ db }, { gameId, requesterId }) => {
-    // Verificar que requester exista y sea admin
+    // 1) Validar admin
     const requester = await db.get(requesterId);
-    if (!requester) {
-      throw new Error("El usuario solicitante no existe.");
-    }
-    if (requester.role !== "admin") {
+    if (!requester || requester.role !== "admin") {
       throw new Error("No autorizado. Solo un admin puede eliminar juegos.");
     }
 
-    // Verificar existencia del juego
+    // 2) Verificar existencia del juego
     const game = await db.get(gameId);
-    if (!game) {
-      throw new Error("Juego no encontrado en la base de datos.");
-    }
+    if (!game) throw new Error("Juego no encontrado.");
 
-    // Eliminar juego
+    // (opcional) Chequear si tiene transacciones asociadas y bloquear
+    // const hasTx = await db.query("transactions").filter(q => q.eq(q.field("gameId"), gameId)).first();
+    // if (hasTx) throw new Error("No se puede eliminar: el juego tiene transacciones asociadas.");
+
+    // 3) Eliminar
     await db.delete(gameId);
 
-    // Registrar en auditoría
+    // 4) Auditoría
     await db.insert("audits", {
       action: "delete_game",
       entity: "game",
       entityId: gameId,
       requesterId,
       timestamp: Date.now(),
-      details: { deletedTitle: game.title ?? "Título desconocido" },
+      details: {
+        deletedTitle: game.title,
+        snapshot: {
+          title: game.title,
+          description: game.description,
+          cover_url: game.cover_url,
+          trailer_url: game.trailer_url,
+          plan: game.plan,
+          createdAt: game.createdAt,
+        },
+      },
     });
 
-    return { deleted: true, gameId, message: `Juego "${game.title}" eliminado con éxito.` };
+    return { deleted: true, gameId, message: "Juego eliminado con éxito" };
   },
 });
