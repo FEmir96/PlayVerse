@@ -47,8 +47,8 @@ export default function HomePage() {
             <p className="text-slate-400 text-lg">Explora la colección. ¡Encuentra tu próxima aventura!</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {Array.from({ length: 8 }).map((_, i) => (
               <GameCard key={i} />
             ))}
           </div>
@@ -66,8 +66,8 @@ export default function HomePage() {
             <h2 className="text-4xl md:text-5xl font-bold text-orange-400 mb-4">Próximamente</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 4 }).map((_, i) => (
               <ComingSoonCard key={i} />
             ))}
           </div>
