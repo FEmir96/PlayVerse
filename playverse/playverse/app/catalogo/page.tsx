@@ -82,8 +82,8 @@ export default function CatalogoPage() {
       {/* Games Grid */}
       <section className="py-12">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {Array.from({ length: 9 }).map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            {Array.from({ length: 12 }).map((_, i) => (
               <CatalogGameCard key={i} isPremium={i >= 6} />
             ))}
           </div>
