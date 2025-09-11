@@ -104,7 +104,7 @@ function GameCard() {
         >
           <Heart className="w-4 h-4" />
         </Button>
-        <div className="aspect-[4/3] bg-slate-700 relative overflow-hidden">
+        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
           <img
             src="/tomb-raider-game-cover.jpg"
             alt="Tomb Raider"
@@ -154,7 +154,7 @@ function ComingSoonCard() {
     <Card className="bg-slate-800 border-slate-700 overflow-hidden">
       <div className="relative">
         <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
-        <div className="aspect-[4/3] bg-slate-700 relative overflow-hidden">
+        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
           <img src="/tomb-raider-game-cover.jpg" alt="Tomb Raider" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center">
             <div className="bg-slate-800 px-3 py-1 rounded-full flex items-center gap-2">

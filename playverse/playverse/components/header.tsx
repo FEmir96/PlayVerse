@@ -1,11 +1,20 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Bell, Heart, User } from "lucide-react"
+import { Bell, Heart, User, Key } from "lucide-react"
+import { FavoritesDropdown } from "./favorites-dropdown"
+import { KeyActivationModal } from "./key-activation-modal"
 
 export function Header() {
+  const [showFavorites, setShowFavorites] = useState(false)
+  const [showKeyModal, setShowKeyModal] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false) // This would come from auth context in real app
+
   return (
-    <header className="bg-slate-900 border-b border-slate-700">
+    <header className="bg-slate-900 border-b border-slate-700 relative">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
@@ -24,6 +33,9 @@ export function Header() {
             <Link href="/mis-juegos" className="text-orange-400 hover:text-orange-300 font-medium">
               Mis juegos
             </Link>
+            <Link href="/premium" className="text-orange-400 hover:text-orange-300 font-medium">
+              Premium
+            </Link>
             <Link href="/contacto" className="text-orange-400 hover:text-orange-300 font-medium">
               Contacto
             </Link>
@@ -34,24 +46,65 @@ export function Header() {
             <Button size="icon" variant="ghost" className="text-orange-400 hover:text-orange-300">
               <Bell className="w-5 h-5" />
             </Button>
-            <Button size="icon" variant="ghost" className="text-orange-400 hover:text-orange-300">
-              <Heart className="w-5 h-5" />
+
+            {/* Favorites Button with Dropdown */}
+            <div className="relative">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-orange-400 hover:text-orange-300"
+                onClick={() => setShowFavorites(!showFavorites)}
+              >
+                <Heart className="w-5 h-5" />
+              </Button>
+              <FavoritesDropdown isOpen={showFavorites} onClose={() => setShowFavorites(false)} />
+            </div>
+
+            {/* Key Activation Button */}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-orange-400 hover:text-orange-300"
+              onClick={() => setShowKeyModal(true)}
+              title="Activar clave de juego"
+            >
+              <Key className="w-5 h-5" />
             </Button>
+
             <Button size="icon" variant="ghost" className="text-orange-400 hover:text-orange-300">
               <User className="w-5 h-5" />
             </Button>
-            <Button
-              variant="outline"
-              className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent hidden md:inline-flex"
-            >
-              Iniciar sesión
-            </Button>
-            <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium hidden md:inline-flex">
-              Registrarse
-            </Button>
+
+            {!isLoggedIn ? (
+              <>
+                <Link href="/auth/login">
+                  <Button
+                    variant="outline"
+                    className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent hidden md:inline-flex"
+                  >
+                    Iniciar sesión
+                  </Button>
+                </Link>
+                <Link href="/auth/register">
+                  <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium hidden md:inline-flex">
+                    Registrarse
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent hidden md:inline-flex"
+                onClick={() => setIsLoggedIn(false)}
+              >
+                Cerrar sesión
+              </Button>
+            )}
           </div>
         </div>
       </div>
+
+      <KeyActivationModal isOpen={showKeyModal} onClose={() => setShowKeyModal(false)} />
     </header>
   )
 }

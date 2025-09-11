@@ -146,7 +146,7 @@ function MyGameCard({
     <Card className="bg-slate-800 border-slate-700 overflow-hidden">
       <div className="relative">
         <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
-        <div className="aspect-[4/3] bg-slate-700 relative overflow-hidden">
+        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
           <img src="/tomb-raider-game-cover.jpg" alt="Tomb Raider" className="w-full h-full object-cover" />
         </div>
       </div>
