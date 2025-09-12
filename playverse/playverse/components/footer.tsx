@@ -38,7 +38,7 @@ export function Footer() {
               <Link href="/mis-juegos" className="block text-slate-400 hover:text-orange-400 text-sm">
                 Mis juegos
               </Link>
-              <Link href="/contacto" className="block text-slate-400 hover:text-orange-400 text-sm">
+              <Link href="/premium" className="block text-slate-400 hover:text-orange-400 text-sm">
                 Házte premium!
               </Link>
             </div>

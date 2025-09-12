@@ -4,13 +4,12 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Bell, Heart, User, Key } from "lucide-react"
+import { Heart, User } from "lucide-react"
 import { FavoritesDropdown } from "./favorites-dropdown"
-import { KeyActivationModal } from "./key-activation-modal"
+import { NotificationsDropdown } from "./notifications-dropdown"
 
 export function Header() {
   const [showFavorites, setShowFavorites] = useState(false)
-  const [showKeyModal, setShowKeyModal] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false) // This would come from auth context in real app
 
   return (
@@ -43,9 +42,7 @@ export function Header() {
 
           {/* Auth Buttons */}
           <div className="flex items-center space-x-3">
-            <Button size="icon" variant="ghost" className="text-orange-400 hover:text-orange-300">
-              <Bell className="w-5 h-5" />
-            </Button>
+            <NotificationsDropdown />
 
             {/* Favorites Button with Dropdown */}
             <div className="relative">
@@ -59,17 +56,6 @@ export function Header() {
               </Button>
               <FavoritesDropdown isOpen={showFavorites} onClose={() => setShowFavorites(false)} />
             </div>
-
-            {/* Key Activation Button */}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="text-orange-400 hover:text-orange-300"
-              onClick={() => setShowKeyModal(true)}
-              title="Activar clave de juego"
-            >
-              <Key className="w-5 h-5" />
-            </Button>
 
             <Button size="icon" variant="ghost" className="text-orange-400 hover:text-orange-300">
               <User className="w-5 h-5" />
@@ -103,8 +89,6 @@ export function Header() {
           </div>
         </div>
       </div>
-
-      <KeyActivationModal isOpen={showKeyModal} onClose={() => setShowKeyModal(false)} />
     </header>
   )
 }

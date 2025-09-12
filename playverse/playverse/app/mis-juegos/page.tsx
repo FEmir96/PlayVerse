@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Star, Search, Filter, ArrowUpDown, Play, Clock, Download, ShoppingCart, RotateCcw, Plus } from "lucide-react"
+import { KeyActivationModal } from "@/components/key-activation-modal"
 
 const genres = ["Todos", "Acción", "RPG", "Carreras", "Shooter", "Sandbox", "Estrategia", "Deportes"]
 
@@ -14,6 +15,7 @@ export default function MisJuegosPage() {
   const [selectedGenre, setSelectedGenre] = useState("Todos")
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("compras")
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -27,7 +29,10 @@ export default function MisJuegosPage() {
 
           {/* Add Key Section */}
           <div className="max-w-md mx-auto">
-            <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold mb-4">
+            <Button
+              className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold mb-4"
+              onClick={() => setIsKeyModalOpen(true)}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Ingresar clave
             </Button>
@@ -109,8 +114,8 @@ export default function MisJuegosPage() {
 
             {/* Games Content */}
             <TabsContent value="compras" className="mt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {Array.from({ length: 8 }).map((_, i) => (
                   <MyGameCard
                     key={i}
                     type="compra"
@@ -121,8 +126,8 @@ export default function MisJuegosPage() {
             </TabsContent>
 
             <TabsContent value="alquileres" className="mt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {Array.from({ length: 8 }).map((_, i) => (
                   <MyGameCard
                     key={i}
                     type="alquiler"
@@ -134,6 +139,9 @@ export default function MisJuegosPage() {
           </Tabs>
         </div>
       </section>
+
+      {/* Key Activation Modal */}
+      <KeyActivationModal isOpen={isKeyModalOpen} onClose={() => setIsKeyModalOpen(false)} />
     </div>
   )
 }
@@ -146,7 +154,7 @@ function MyGameCard({
     <Card className="bg-slate-800 border-slate-700 overflow-hidden">
       <div className="relative">
         <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
-        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
+        <div className="aspect-[4/3] bg-slate-700 relative overflow-hidden">
           <img src="/tomb-raider-game-cover.jpg" alt="Tomb Raider" className="w-full h-full object-cover" />
         </div>
       </div>

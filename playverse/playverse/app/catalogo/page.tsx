@@ -110,7 +110,7 @@ function CatalogGameCard({ isPremium = false }: { isPremium?: boolean }) {
         >
           <Heart className="w-4 h-4" />
         </Button>
-        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
+        <div className="aspect-[4/3] bg-slate-700 relative overflow-hidden">
           <img
             src="/tomb-raider-game-cover.jpg"
             alt="Tomb Raider"

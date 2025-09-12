@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Star, Heart, Clock } from "lucide-react"
+import Link from "next/link"
 
 export default function HomePage() {
   return (
@@ -21,20 +22,23 @@ export default function HomePage() {
         <div className="container mx-auto px-4 text-center relative z-10">
           <h1 className="text-6xl md:text-8xl font-bold text-orange-400 mb-6 tracking-wider">PLAYVERSE</h1>
           <p className="text-slate-300 text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et
-            dolore magna aliqua.
+            Bienvenido al universo de los videojuegos. Alquila o compra tus favoritos en un solo lugar.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8 py-3">
-              Explorar
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 px-8 py-3 bg-transparent"
-            >
-              Registrarse
-            </Button>
+            <Link href="/catalogo">
+              <Button size="lg" className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8 py-3">
+                Explorar
+              </Button>
+            </Link>
+            <Link href="/auth/register">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 px-8 py-3 bg-transparent"
+              >
+                Registrarse
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -54,7 +58,11 @@ export default function HomePage() {
           </div>
 
           <div className="text-center">
-            <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8">Ver todo</Button>
+            <Link href="/catalogo">
+              <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8">
+                Ver todo
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -82,9 +90,11 @@ export default function HomePage() {
             <p className="text-white/90 text-lg mb-8 max-w-2xl mx-auto">
               Catálogo ilimitado, descuentos exclusivos, cero publicidad y mucho más
             </p>
-            <Button size="lg" className="bg-white text-purple-600 hover:bg-gray-100 font-semibold px-8 py-3">
-              Descubre premium
-            </Button>
+            <Link href="/premium">
+              <Button size="lg" className="bg-white text-purple-600 hover:bg-gray-100 font-semibold px-8 py-3">
+                Descubre premium
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
