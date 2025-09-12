@@ -11,6 +11,16 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
+    "/mis-juegos/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/mis-juegos/page.js"
+    ],
+    "/mis-juegos/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/mis-juegos/loading.js"
+    ],
     "/catalogo/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -36,20 +46,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/contacto/loading.js"
     ],
-    "/mis-juegos/page": [
+    "/auth/login/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/mis-juegos/page.js"
+      "static/chunks/app/auth/login/page.js"
     ],
-    "/mis-juegos/loading": [
+    "/auth/register/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/mis-juegos/loading.js"
-    ],
-    "/_not-found/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
+      "static/chunks/app/auth/register/page.js"
     ]
   }
 }

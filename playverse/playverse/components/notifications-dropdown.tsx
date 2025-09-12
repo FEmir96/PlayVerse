@@ -105,7 +105,7 @@ export function NotificationsDropdown() {
       <Button
         variant="ghost"
         size="icon"
-        className="relative text-slate-300 hover:text-orange-400 hover:bg-slate-800"
+        className="relative text-orange-400 hover:text-orange-300"
         onClick={() => setIsOpen(!isOpen)}
       >
         <Bell className="w-5 h-5" />
