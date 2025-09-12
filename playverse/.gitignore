@@ -18,6 +18,7 @@ dist-ssr/
 build/
 web-build/
 out/
+.next/
 
 # === ARCHIVOS DE ENTORNO ===
 .env*
@@ -52,13 +53,6 @@ ios/
 # === OTROS ===
 *.orig.*
 *.pem
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
 
 # typescript
 *.next-env.d.ts
