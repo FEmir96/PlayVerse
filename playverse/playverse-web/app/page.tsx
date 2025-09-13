@@ -29,17 +29,47 @@ export default function HomePage() {
           <img
             src="/images/rob1.png"
             alt="Space Invader 1"
-            className="absolute top-40 left-1/4 w-8 h-8"
+            className="absolute top-45 left-1/4 w-8 h-8"
           />
           <img
             src="/images/moneda.png"
             alt="Moneda"
-            className="absolute bottom-40 right-1/4 w-10 h-10"
+            className="absolute bottom-50 right-1/4 w-10 h-10"
           />
           <img
             src="/images/rob2.png"
             alt="Space Invader 2"
             className="absolute top-60 right-10 w-12 h-10"
+          />
+          <img
+            src="/images/hongo.png"
+            alt="Mario Mushroom"
+            className="absolute top-80 right-50 w-10 h-10"
+          />
+          <img
+            src="/images/estrella.png"
+            alt="Estrella"
+            className="absolute top-30 left-60 w-8 h-8"
+          />
+          <img
+            src="/images/control.png"
+            alt="Mando de videojuego"
+            className="absolute bottom-20 right-120 w-14 h-10"
+          />
+          <img
+            src="/images/rob1.png"
+            alt="Space Invader 1"
+            className="absolute top-10 right-60 w-10 h-10"
+          />
+          <img
+            src="/images/moneda.png"
+            alt="Moneda"
+            className="absolute bottom-10 left-80 w-10 h-10"
+          />
+          <img
+            src="/images/rob2.png"
+            alt="Space Invader 2"
+            className="absolute top-10 left-110 w-12 h-10"
           />
         </div>
 
@@ -76,8 +106,8 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <GameCard key={i} />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <GameCard key={i} gameId={`${i + 1}`} />
             ))}
           </div>
 
@@ -109,7 +139,7 @@ export default function HomePage() {
       {/* Premium CTA Section */}
       <section className="py-16">
         <div className="container mx-auto px-4">
-          <div className="bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl p-8 md:p-12 text-center">
+          <div className="bg-gradient-to-r from-cyan-300 to-purple-600 rounded-2xl p-8 md:p-12 text-center">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">¿Listo para una experiencia premium?</h2>
             <p className="text-white/90 text-lg mb-8 max-w-2xl mx-auto">
               Catálogo ilimitado, descuentos exclusivos, cero publicidad y mucho más
@@ -126,60 +156,43 @@ export default function HomePage() {
   )
 }
 
-function GameCard() {
+function GameCard({ gameId }: { gameId: string }) {
   return (
-    <Card className="bg-slate-800 border-slate-700 overflow-hidden group hover:border-orange-400/50 transition-colors">
-      <div className="relative">
-        <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute top-3 right-3 text-slate-400 hover:text-orange-400 z-10"
-        >
-          <Heart className="w-4 h-4" />
-        </Button>
-        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
-          <img
-            src="/tomb-raider-game-cover.jpg"
-            alt="Tomb Raider"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-        </div>
-      </div>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-1 mb-2">
-          <Star className="w-4 h-4 fill-orange-400 text-orange-400" />
-          <span className="text-orange-400 font-semibold">4.5</span>
-        </div>
-        <h3 className="text-orange-400 font-semibold text-lg mb-2">Tomb Raider</h3>
-        <p className="text-slate-400 text-sm mb-4 line-clamp-2">
-          Lorem ipsum dolor sit amet consectetur adipiscing elit nulla tristique
-        </p>
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <p className="text-slate-400 text-sm">Alquiler</p>
-            <p className="text-white font-semibold">$2.99/sem</p>
-          </div>
-          <div className="text-right">
-            <p className="text-slate-400 text-sm">Compra</p>
-            <p className="text-white font-semibold">$19.99</p>
+    <Link href={`/juego/${gameId}`} className="block">
+      <Card className="bg-slate-800 border-slate-700 overflow-hidden group hover:border-orange-400/50 transition-colors p-0 cursor-pointer">
+        <div className="relative">
+          <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
+          <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
+            <img
+              src="/tomb-raider-game-cover.jpg"
+              alt="Tomb Raider"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
           </div>
         </div>
-        <p className="text-cyan-400 text-xs mb-3">10% de descuento con PlayVerse premium</p>
-        <div className="flex gap-2">
-          <Button size="sm" className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white">
-            Alquilar
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-          >
-            Comprar
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-1 mb-2">
+            <Star className="w-4 h-4 fill-orange-400 text-orange-400" />
+            <span className="text-orange-400 font-semibold">4.5</span>
+          </div>
+          <h3 className="text-orange-400 font-semibold text-lg mb-2">Tomb Raider</h3>
+          <p className="text-slate-400 text-sm mb-4 line-clamp-2">
+            Lorem ipsum dolor sit amet consectetur adipiscing elit nulla tristique
+          </p>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <p className="text-slate-400 text-sm">Alquiler</p>
+              <p className="text-white font-semibold">$2.99/sem</p>
+            </div>
+            <div className="text-right">
+              <p className="text-slate-400 text-sm">Compra</p>
+              <p className="text-white font-semibold">$19.99</p>
+            </div>
+          </div>
+          <p className="text-cyan-400 text-xs text-center">10% de descuento con PlayVerse premium</p>
+        </CardContent>
+      </Card>
+    </Link>
   )
 }
 

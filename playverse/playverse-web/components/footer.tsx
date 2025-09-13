@@ -28,17 +28,17 @@ export function Footer() {
           {/* Navigation */}
           <div>
             <h3 className="text-white font-medium mb-4">Navegación</h3>
-            <div className="space-y-2">
-              <Link href="/" className="block text-slate-400 hover:text-orange-400 text-sm">
+            <div className="flex flex-col space-y-2 items-start">
+              <Link href="/" className="inline text-slate-400 hover:text-orange-400 text-sm">
                 Inicio
               </Link>
-              <Link href="/catalogo" className="block text-slate-400 hover:text-orange-400 text-sm">
+              <Link href="/catalogo" className="inline text-slate-400 hover:text-orange-400 text-sm">
                 Catálogo
               </Link>
-              <Link href="/mis-juegos" className="block text-slate-400 hover:text-orange-400 text-sm">
+              <Link href="/mis-juegos" className="inline text-slate-400 hover:text-orange-400 text-sm">
                 Mis juegos
               </Link>
-              <Link href="/premium" className="block text-slate-400 hover:text-orange-400 text-sm">
+              <Link href="/premium" className="inline text-slate-400 hover:text-orange-400 text-sm">
                 Házte premium!
               </Link>
             </div>
@@ -47,11 +47,11 @@ export function Footer() {
           {/* Support */}
           <div>
             <h3 className="text-white font-medium mb-4">Soporte</h3>
-            <div className="space-y-2">
-              <Link href="/contacto" className="block text-slate-400 hover:text-orange-400 text-sm">
+            <div className="flex flex-col space-y-2 items-start">
+              <Link href="/contacto" className="inline text-slate-400 hover:text-orange-400 text-sm">
                 Preguntas frecuentes
               </Link>
-              <Link href="/contacto" className="block text-slate-400 hover:text-orange-400 text-sm">
+              <Link href="/contacto" className="inline text-slate-400 hover:text-orange-400 text-sm">
                 Contacto
               </Link>
             </div>

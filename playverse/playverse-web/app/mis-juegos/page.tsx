@@ -47,23 +47,6 @@ export default function MisJuegosPage() {
       <section className="py-8 bg-slate-900 border-b border-slate-700">
         <div className="container mx-auto px-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="flex justify-center mb-6">
-              <TabsList className="bg-slate-800 border border-slate-600">
-                <TabsTrigger
-                  value="compras"
-                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400"
-                >
-                  Mis compras
-                </TabsTrigger>
-                <TabsTrigger
-                  value="alquileres"
-                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400"
-                >
-                  Mis alquileres
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
             {/* Search and Filters */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
               <div className="relative flex-1 max-w-md">
@@ -110,6 +93,23 @@ export default function MisJuegosPage() {
                   {genre}
                 </Button>
               ))}
+            </div>
+
+            <div className="flex justify-center mb-6">
+              <TabsList className="bg-slate-800 border border-slate-600">
+                <TabsTrigger
+                  value="compras"
+                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400"
+                >
+                  Mis compras
+                </TabsTrigger>
+                <TabsTrigger
+                  value="alquileres"
+                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400"
+                >
+                  Mis alquileres
+                </TabsTrigger>
+              </TabsList>
             </div>
 
             {/* Games Content */}
