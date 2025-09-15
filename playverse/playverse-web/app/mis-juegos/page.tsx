@@ -48,8 +48,8 @@ export default function MisJuegosPage() {
         <div className="container mx-auto px-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {/* Search and Filters */}
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
-              <div className="relative flex-1 max-w-md">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-center mb-6">
+              <div className="relative flex-1 max-w-2xl">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
                   placeholder="Buscar por título..."
@@ -77,7 +77,7 @@ export default function MisJuegosPage() {
             </div>
 
             {/* Genre Filters */}
-            <div className="flex flex-wrap gap-2 mb-8">
+            <div className="flex flex-wrap gap-2 mb-8 items-center justify-center">
               {genres.map((genre) => (
                 <Button
                   key={genre}

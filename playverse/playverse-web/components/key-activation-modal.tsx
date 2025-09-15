@@ -30,7 +30,7 @@ export function KeyActivationModal({ isOpen, onClose }: KeyActivationModalProps)
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
         {/* Modal */}
         <div
-          className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-lg p-6 w-full max-w-md"
+          className="bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg p-6 w-full max-w-md"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="text-center mb-6">

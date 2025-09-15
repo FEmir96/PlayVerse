@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Star, Heart, Clock } from "lucide-react"
 import Link from "next/link"
+import GameCard from "@/components/game-card"
 
 export default function HomePage() {
   return (
@@ -107,15 +108,13 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
-              <GameCard key={i} gameId={`${i + 1}`} />
+              <GameCard key={i} gameId={`${i + 1}`} isPremium={i === 1 || i === 3} />
             ))}
           </div>
 
           <div className="text-center">
             <Link href="/catalogo">
-              <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8">
-                Ver todo
-              </Button>
+              <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8">Ver todo</Button>
             </Link>
           </div>
         </div>
@@ -139,13 +138,13 @@ export default function HomePage() {
       {/* Premium CTA Section */}
       <section className="py-16">
         <div className="container mx-auto px-4">
-          <div className="bg-gradient-to-r from-cyan-300 to-purple-600 rounded-2xl p-8 md:p-12 text-center">
+          <div className="bg-gradient-to-br from-orange-400/30 via-teal-500/30 to-purple-600/30 rounded-2xl p-8 md:p-12 text-center">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">¿Listo para una experiencia premium?</h2>
             <p className="text-white/90 text-lg mb-8 max-w-2xl mx-auto">
               Catálogo ilimitado, descuentos exclusivos, cero publicidad y mucho más
             </p>
             <Link href="/premium">
-              <Button size="lg" className="bg-white text-purple-600 hover:bg-gray-100 font-semibold px-8 py-3">
+              <Button size="lg" className="bg-white text-violet-800 hover:bg-gray-100 font-semibold px-8 py-3">
                 Descubre premium
               </Button>
             </Link>
@@ -156,49 +155,10 @@ export default function HomePage() {
   )
 }
 
-function GameCard({ gameId }: { gameId: string }) {
-  return (
-    <Link href={`/juego/${gameId}`} className="block">
-      <Card className="bg-slate-800 border-slate-700 overflow-hidden group hover:border-orange-400/50 transition-colors p-0 cursor-pointer">
-        <div className="relative">
-          <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
-          <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
-            <img
-              src="/tomb-raider-game-cover.jpg"
-              alt="Tomb Raider"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          </div>
-        </div>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-1 mb-2">
-            <Star className="w-4 h-4 fill-orange-400 text-orange-400" />
-            <span className="text-orange-400 font-semibold">4.5</span>
-          </div>
-          <h3 className="text-orange-400 font-semibold text-lg mb-2">Tomb Raider</h3>
-          <p className="text-slate-400 text-sm mb-4 line-clamp-2">
-            Lorem ipsum dolor sit amet consectetur adipiscing elit nulla tristique
-          </p>
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <p className="text-slate-400 text-sm">Alquiler</p>
-              <p className="text-white font-semibold">$2.99/sem</p>
-            </div>
-            <div className="text-right">
-              <p className="text-slate-400 text-sm">Compra</p>
-              <p className="text-white font-semibold">$19.99</p>
-            </div>
-          </div>
-          <p className="text-cyan-400 text-xs text-center">10% de descuento con PlayVerse premium</p>
-        </CardContent>
-      </Card>
-    </Link>
-  )
-}
 
 function ComingSoonCard() {
   return (
-    <Card className="bg-slate-800 border-slate-700 overflow-hidden">
+    <Card className="bg-slate-800 border-slate-700 gap-1 p-0 overflow-hidden">
       <div className="relative">
         <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
         <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">

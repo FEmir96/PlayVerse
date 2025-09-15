@@ -13,7 +13,7 @@ const premiumPlans = [
     period: "/mes",
     description: "Perfecto para probar la experiencia",
     popular: false,
-    features: ["Acceso a toda la biblioteca", "Descuentos del 27%", "Cero publicidad", "Soporte prioritario"],
+    features: ["Acceso a toda la biblioteca", "Descuentos del 10%", "Cero publicidad", "Soporte prioritario"],
   },
   {
     id: "annual",
@@ -70,7 +70,7 @@ const premiumBenefits = [
       </svg>
     ),
     title: "Descuentos exclusivos",
-    description: "Hasta 27% de descuento en compras y alquileres de juegos",
+    description: "Hasta 10% de descuento en compras y alquileres de juegos",
   },
 ]
 
@@ -210,13 +210,7 @@ export default function PremiumPage() {
               </Button>
             </div>
           ))}
-        </div>
-
-        <div className="text-center mt-8">
-          <p className="text-slate-400 text-sm">
-            Todos los planes incluyen garantía de devolución de 30 días. Cancela cuando quieras.
-          </p>
-        </div>
+        </div>  
       </div>
 
       {/* FAQ Section */}
