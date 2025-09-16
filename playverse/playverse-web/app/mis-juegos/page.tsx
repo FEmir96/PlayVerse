@@ -6,8 +6,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Star, Search, Filter, ArrowUpDown, Play, Clock, Download, ShoppingCart, RotateCcw, Plus } from "lucide-react"
+import { Star, Search, Filter, ArrowUpDown, Play, Clock, ShoppingCart, RotateCcw, Plus } from "lucide-react"
 import { KeyActivationModal } from "@/components/key-activation-modal"
+import Link from "next/link"
 
 const genres = ["Todos", "Acción", "RPG", "Carreras", "Shooter", "Sandbox", "Estrategia", "Deportes"]
 
@@ -44,7 +45,7 @@ export default function MisJuegosPage() {
       </section>
 
       {/* Tabs Section */}
-      <section className="py-8 bg-slate-900 border-b border-slate-700">
+      <section className="py-8 bg-slate-900">
         <div className="container mx-auto px-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {/* Search and Filters */}
@@ -96,16 +97,16 @@ export default function MisJuegosPage() {
             </div>
 
             <div className="flex justify-center mb-6">
-              <TabsList className="bg-slate-800 border border-slate-600">
+              <TabsList className="bg-slate-800 border border-slate-600 cursor-pointer">
                 <TabsTrigger
                   value="compras"
-                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400"
+                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400 cursor-pointer"
                 >
                   Mis compras
                 </TabsTrigger>
                 <TabsTrigger
                   value="alquileres"
-                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400"
+                  className="data-[state=active]:bg-orange-400 data-[state=active]:text-slate-900 text-orange-400 cursor-pointer"
                 >
                   Mis alquileres
                 </TabsTrigger>
@@ -119,7 +120,8 @@ export default function MisJuegosPage() {
                   <MyGameCard
                     key={i}
                     type="compra"
-                    status={i < 2 ? "active" : i < 4 ? "expired" : "expired-discount"}
+                    gameId={`${i + 1}`}
+                    status={i < 4 ? "active" : "expired-discount"}
                   />
                 ))}
               </div>
@@ -131,6 +133,7 @@ export default function MisJuegosPage() {
                   <MyGameCard
                     key={i}
                     type="alquiler"
+                    gameId={`${i + 1}`}
                     status={i < 2 ? "active" : i < 4 ? "expired" : "expired-discount"}
                   />
                 ))}
@@ -149,12 +152,13 @@ export default function MisJuegosPage() {
 function MyGameCard({
   type,
   status,
-}: { type: "compra" | "alquiler"; status: "active" | "expired" | "expired-discount" }) {
+  gameId,
+}: { type: "compra" | "alquiler"; status: "active" | "expired" | "expired-discount"; gameId: string }) {
   return (
-    <Card className="bg-slate-800 border-slate-700 overflow-hidden">
+    <Card className="bg-slate-800 border-slate-700 overflow-hidden gap-1 p-0">
       <div className="relative">
         <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
-        <div className="aspect-[4/3] bg-slate-700 relative overflow-hidden">
+        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
           <img src="/tomb-raider-game-cover.jpg" alt="Tomb Raider" className="w-full h-full object-cover" />
         </div>
       </div>
@@ -163,12 +167,25 @@ function MyGameCard({
           <Star className="w-4 h-4 fill-orange-400 text-orange-400" />
           <span className="text-orange-400 font-semibold">4.5</span>
         </div>
-        <h3 className="text-orange-400 font-semibold text-lg mb-2">Tomb Raider</h3>
+        <Link href={`/juego/${gameId}`}>
+          <h3 className="text-orange-400 font-semibold text-lg mb-2 hover:text-orange-300 transition-colors cursor-pointer">
+            Tomb Raider
+          </h3>
+        </Link>
         <p className="text-slate-400 text-sm mb-4 line-clamp-2">
           Lorem ipsum dolor sit amet consectetur adipiscing elit nulla tristique
         </p>
 
-        {status === "active" && (
+        {type === "compra" && (
+          <>
+            <Button size="sm" className="w-full bg-cyan-500 hover:bg-cyan-600 text-white">
+              <Play className="w-4 h-4 mr-1" />
+              Jugar
+            </Button>
+          </>
+        )}
+
+        {type === "alquiler" && status === "active" && (
           <>
             <p className="text-cyan-400 font-medium mb-4">Válido hasta el 20/07/2025</p>
             <div className="flex gap-2">
@@ -188,13 +205,13 @@ function MyGameCard({
           </>
         )}
 
-        {status === "expired" && (
+        {type === "alquiler" && status === "expired" && (
           <>
-            <p className="text-red-400 font-medium mb-4">Válido hasta el 20/07/2025</p>
+            <p className="text-cyan-400 font-medium mb-4">Válido hasta el 20/07/2025</p>
             <div className="flex gap-2">
               <Button size="sm" className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white">
-                <Download className="w-4 h-4 mr-1" />
-                Descargar
+                <Play className="w-4 h-4 mr-1" />
+                Jugar
               </Button>
               <Button
                 size="sm"
@@ -208,7 +225,7 @@ function MyGameCard({
           </>
         )}
 
-        {status === "expired-discount" && (
+        {type === "alquiler" && status === "expired-discount" && (
           <>
             <p className="text-red-400 font-medium mb-4">Caducado</p>
             <div className="flex gap-2 mb-2">

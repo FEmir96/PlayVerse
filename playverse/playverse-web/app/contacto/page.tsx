@@ -95,7 +95,7 @@ export default function ContactoPage() {
                     <Input
                       id="asunto"
                       name="asunto"
-                      placeholder="¿En qué podemos ayudarte?"
+                      placeholder="Dale un título a tu consulta"
                       value={formData.asunto}
                       onChange={handleInputChange}
                       className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
@@ -110,7 +110,7 @@ export default function ContactoPage() {
                     <Textarea
                       id="mensaje"
                       name="mensaje"
-                      placeholder="Cuéntanos más detalles..."
+                      placeholder="Cuéntanos los detalles..."
                       value={formData.mensaje}
                       onChange={handleInputChange}
                       className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 min-h-32"
@@ -131,7 +131,7 @@ export default function ContactoPage() {
             {/* Contact Information */}
             <div className="space-y-8">
               {/* Email Section */}
-              <Card className="bg-slate-800 border-orange-400/30">
+              <Card className="bg-slate-800 border-orange-400/30 p-0">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
                     <div className="bg-orange-400 p-3 rounded-full">
@@ -147,7 +147,7 @@ export default function ContactoPage() {
               </Card>
 
               {/* Phone Section */}
-              <Card className="bg-slate-800 border-orange-400/30">
+              <Card className="bg-slate-800 border-orange-400/30 p-0">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
                     <div className="bg-orange-400 p-3 rounded-full">

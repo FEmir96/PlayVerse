@@ -266,14 +266,6 @@ export default function PremiumPage() {
               >
                 Comenzar prueba gratuita
               </Button>
-              <Button
-                onClick={() => handleSubscribe("annual")}
-                variant="outline"
-                size="lg"
-                className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 px-8"
-              >
-                Ver planes
-              </Button>
             </div>
           </div>
         </div>
