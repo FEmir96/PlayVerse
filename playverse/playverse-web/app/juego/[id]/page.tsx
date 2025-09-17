@@ -304,7 +304,7 @@ export default function GameDetailPage() {
                 <div className="text-3xl font-bold text-teal-400 mb-2">{gameData.purchasePrice}</div>
                 <p className="text-slate-400">Precio de compra</p>
                 <div className="text-xl font-semibold text-teal-400 mt-2">{gameData.rentalPrice}</div>
-                <p className="text-slate-400 text-sm">Alquiler mensual</p>
+                <p className="text-slate-400 text-sm">Alquiler semanal</p>
               </div>
 
               <div className="space-y-3">
@@ -396,7 +396,7 @@ export default function GameDetailPage() {
 
             {/* Premium CTA */}
             <div className="bg-gradient-to-br from-orange-400/30 via-teal-500/30 to-purple-600/30 rounded-lg p-6 text-center">
-              <h3 className="text-xl font-bold text-white mb-2">¿Quiere más?</h3>
+              <h3 className="text-xl font-bold text-white mb-2">¿Quieres más?</h3>
               <p className="text-white/90 text-sm mb-4">
                 Con premium descubrí acceso ilimitado al catálogo y descuentos exclusivos
               </p>

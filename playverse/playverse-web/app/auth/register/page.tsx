@@ -33,10 +33,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-teal-600 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo and Title */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 mt-7">
           <div className="flex justify-center mb-4">
             <Image
               src="/images/playverse-logo.png"

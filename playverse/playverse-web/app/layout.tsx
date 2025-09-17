@@ -5,7 +5,7 @@ import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
+import { ConditionalFooter } from "@/components/ConditionalFooter"
 import { Suspense } from "react"
 
 export const metadata: Metadata = {
@@ -25,7 +25,7 @@ export default function RootLayout({
         <Suspense fallback={<div>Loading...</div>}>
           <Header />
           <main className="min-h-screen">{children}</main>
-          <Footer />
+          <ConditionalFooter />
         </Suspense>
         <Analytics />
       </body>

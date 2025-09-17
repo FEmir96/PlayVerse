@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Star, Heart, Clock } from "lucide-react"
+import { Star, Clock } from "lucide-react"
 import Link from "next/link"
 import GameCard from "@/components/game-card"
 
