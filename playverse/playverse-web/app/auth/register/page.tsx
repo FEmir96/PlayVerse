@@ -1,41 +1,71 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import Image from "next/image"
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import Image from "next/image";
+import { useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 export default function RegisterPage() {
+  const router = useRouter();
+
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
     confirmPassword: "",
     acceptTerms: false,
-  })
+  });
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (formData.password !== formData.confirmPassword) {
-      alert("Las contraseñas no coinciden")
-      return
+  const createUser = useMutation(api.auth.createUser);
+
+  const emailOk = formData.email.trim().length > 5 && formData.email.includes("@");
+  const passOk = formData.password.length >= 6;
+  const matchOk = formData.password === formData.confirmPassword;
+  const termsOk = formData.acceptTerms === true;
+  const usernameOk = formData.username.trim().length >= 2;
+
+  const canSubmit = emailOk && passOk && matchOk && termsOk && usernameOk;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!canSubmit) {
+      if (!termsOk) alert("Debes aceptar los términos y condiciones");
+      else if (!matchOk) alert("Las contraseñas no coinciden");
+      else if (!passOk) alert("La contraseña debe tener al menos 6 caracteres");
+      else alert("Revisa los datos del formulario");
+      return;
     }
-    if (!formData.acceptTerms) {
-      alert("Debes aceptar los términos y condiciones")
-      return
+
+    setPending(true);
+    const res = await createUser({
+      name: formData.username.trim(),
+      email: formData.email.trim().toLowerCase(),
+      password: formData.password,
+      role: "free",
+    });
+    setPending(false);
+
+    if (!res?.ok) {
+      setError(res?.error ?? "No se pudo crear la cuenta");
+      return;
     }
-    // Handle registration logic here
-    console.log("Registration attempt:", formData)
-  }
+
+    // 👉 redirige con bandera de "registrado"
+    router.push("/auth/login?registered=1");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo and Title */}
         <div className="text-center mb-8 mt-7">
           <div className="flex justify-center mb-4">
             <Image
@@ -43,14 +73,14 @@ export default function RegisterPage() {
               alt="PlayVerse"
               width={120}
               height={80}
-              className="object-contain"
+              className="object-contain h-auto"
+              priority
             />
           </div>
           <h1 className="text-4xl font-bold text-orange-400 mb-2">PLAYVERSE</h1>
           <p className="text-slate-300">Únete y elige tu próxima aventura</p>
         </div>
 
-        {/* Registration Form */}
         <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
           <div className="flex items-center gap-2 mb-6">
             <div className="text-orange-400">
@@ -86,13 +116,16 @@ export default function RegisterPage() {
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
               />
+              {!emailOk && formData.email.length > 0 && (
+                <p className="text-xs text-red-400 mt-1">Email inválido</p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Contraseña</label>
               <Input
                 type="password"
-                placeholder="Tu contraseña"
+                placeholder="Mínimo 6 caracteres"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
@@ -110,13 +143,18 @@ export default function RegisterPage() {
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
               />
+              {!matchOk && formData.confirmPassword.length > 0 && (
+                <p className="text-xs text-red-400 mt-1">No coinciden</p>
+              )}
             </div>
 
             <div className="flex items-start space-x-2">
               <Checkbox
                 id="terms"
                 checked={formData.acceptTerms}
-                onCheckedChange={(checked) => setFormData({ ...formData, acceptTerms: checked as boolean })}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, acceptTerms: checked === true })
+                }
                 className="border-slate-600 data-[state=checked]:bg-orange-400 data-[state=checked]:border-orange-400 mt-1"
               />
               <label htmlFor="terms" className="text-sm text-slate-300">
@@ -127,18 +165,14 @@ export default function RegisterPage() {
               </label>
             </div>
 
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
             <Button
               type="submit"
-              className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3"
+              disabled={!canSubmit || pending}
+              className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Registrarse
+              {pending ? "Creando..." : "Registrarse"}
             </Button>
           </form>
 
@@ -151,5 +185,5 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
