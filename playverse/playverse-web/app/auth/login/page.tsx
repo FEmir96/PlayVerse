@@ -1,3 +1,4 @@
+// playverse-web/app/auth/login/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -9,7 +10,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Image from "next/image";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { useToast } from "@/components/ui/use-toast";
+
+// ✅ usa el hook correcto de shadcn
+import { useToast } from "@/hooks/use-toast";
+
+// store de sesión
+import { useAuthStore } from "@/lib/useAuthStore";
+import type { AuthState } from "@/lib/useAuthStore";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,9 +31,11 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
+  const setUser = useAuthStore((s: AuthState) => s.setUser);
+
   const authLogin = useMutation(api.auth.authLogin);
 
-  // Toast si viene de registro exitoso
+  // Toast si viene de registro exitoso (?registered=1)
   useEffect(() => {
     const registered = searchParams?.get("registered");
     if (registered === "1") {
@@ -58,14 +67,19 @@ export default function LoginPage() {
 
     if (!res?.ok) {
       setError(res?.error ?? "No se pudo iniciar sesión");
+      // (opcional) toast de error
+      // toast({ title: "Error", description: res?.error ?? "No se pudo iniciar sesión" });
       return;
     }
 
-    // ✅ LOG del usuario y todos los datos del perfil devueltos por la mutación
-    console.log("[LOGIN OK] Perfil recibido desde Convex:", res.profile);
+    setUser(res.profile);
+    console.log("[LOGIN OK] Perfil recibido:", res.profile);
 
-    // (Opcional) guardar el perfil para debug o estado “simple” de sesión
-    // localStorage.setItem("pv_profile", JSON.stringify(res.profile));
+    // ✅ toast arriba-centro (sale del Toaster global en layout)
+    toast({
+      title: `¡Bienvenido, ${res.profile.name}!`,
+      description: "Inicio de sesión exitoso.",
+    });
 
     if (formData.remember) {
       localStorage.setItem("pv_email", formData.email.trim().toLowerCase());
@@ -73,7 +87,8 @@ export default function LoginPage() {
       localStorage.removeItem("pv_email");
     }
 
-    router.push("/");
+    // pequeño delay para ver el toast antes de navegar
+    setTimeout(() => router.push("/"), 80);
   };
 
   return (
