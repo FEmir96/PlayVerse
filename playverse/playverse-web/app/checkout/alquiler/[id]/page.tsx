@@ -52,7 +52,7 @@ export default function RentalCheckoutPage() {
         <Button
           variant="outline"
           onClick={() => router.back()}
-          className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+          className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
         >
           <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path
@@ -79,31 +79,33 @@ export default function RentalCheckoutPage() {
           </div>
 
           <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-8">
+          <h2 className="text-2xl font-bold text-white mb-6">{gameData.title}</h2>
             <div className="grid lg:grid-cols-2 gap-8">
               {/* Game Info */}
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-white">{gameData.title}</h2>
-
                 <div className="bg-slate-700/50 rounded-lg p-4">
                   <Image
                     src={gameData.image || "/placeholder.svg"}
                     alt={gameData.title}
                     width={300}
                     height={200}
-                    className="w-full h-48 object-cover rounded-lg mb-4"
+                    className="w-full h-full object-cover rounded-lg mb-4"
                   />
                 </div>
 
                 <div className="space-y-4">
                   <p className="text-slate-300 leading-relaxed">{gameData.description}</p>
-
-                  <div className="bg-slate-700/30 rounded-lg p-4">
-                    <div className="text-xl font-semibold text-teal-400 mb-2">${gameData.weeklyPrice}/sem</div>
-                    <p className="text-orange-400 text-sm">{gameData.premiumDiscount}</p>
-                  </div>
                 </div>
+              </div>
 
+              <div className="space-y-6">
                 {/* Rental Duration Slider */}
+                <div className="bg-slate-700/30 rounded-lg p-4">
+                  <div className="text-xl font-semibold text-teal-400 mb-2">
+                    ${gameData.weeklyPrice}/sem
+                  </div>
+                  <p className="text-orange-400 text-sm">{gameData.premiumDiscount}</p>
+                </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <label className="block text-sm font-medium text-slate-300 mb-4">
                     Semanas de alquiler: {weeks[0]}
@@ -127,10 +129,7 @@ export default function RentalCheckoutPage() {
                     })}
                   </div>
                 </div>
-              </div>
-
-              {/* Payment Form */}
-              <div className="space-y-6">
+                {/* Payment Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">Nombre del titular</label>

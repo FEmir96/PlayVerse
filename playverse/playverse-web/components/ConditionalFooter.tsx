@@ -9,7 +9,8 @@ export function ConditionalFooter() {
   const hideFooter =
     pathname?.startsWith("/auth/login") ||
     pathname?.startsWith("/auth/register") ||
-    pathname?.startsWith("/auth/forgot-password")
+    pathname?.startsWith("/auth/forgot-password") ||
+    pathname?.startsWith("/terms")
 
   if (hideFooter) {
     return null

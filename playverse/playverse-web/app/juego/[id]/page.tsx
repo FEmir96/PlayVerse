@@ -6,7 +6,8 @@ import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, Heart, Eye, EyeOff } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ChevronLeft, ChevronRight, Heart, Eye, EyeOff, Copy, Check } from "lucide-react"
 
 // Mock data - in a real app this would come from an API
 const gameData = {
@@ -66,6 +67,8 @@ export default function GameDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false)
   const [showOverlay, setShowOverlay] = useState(true)
   const [thumbnailStartIndex, setThumbnailStartIndex] = useState(0)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [copied, setCopied] = useState(false)
   const thumbnailsPerView = 4
 
   const handlePurchase = () => {
@@ -96,26 +99,23 @@ export default function GameDetailPage() {
     setShowOverlay(!showOverlay)
   }
 
+  const handleShare = () => {
+    setShowShareModal(true)
+  }
+
+  const copyToClipboard = async () => {
+    try {
+      const currentUrl = window.location.href
+      await navigator.clipboard.writeText(currentUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Error copying to clipboard:", err)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      {/* Back Button */}
-      <div className="container mx-auto px-4 pt-6">
-        <Button
-          variant="outline"
-          onClick={() => router.back()}
-          className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-        >
-          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Volver
-        </Button>
-      </div>
-
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - Images and Gallery (2/3 width) */}
@@ -327,6 +327,7 @@ export default function GameDetailPage() {
                     <path
                       fillRule="evenodd"
                       d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+
                       clipRule="evenodd"
                     />
                   </svg>
@@ -344,6 +345,7 @@ export default function GameDetailPage() {
                   </Button>
 
                   <Button
+                    onClick={handleShare}
                     variant="outline"
                     size="icon"
                     className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
@@ -407,6 +409,54 @@ export default function GameDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Share Modal */}
+      <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
+        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-orange-400 text-xl font-semibold">¡Comparte este juego!</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-slate-300 text-center">
+              Comparte este increíble juego con tus amigos y que también disfruten de esta aventura épica.
+            </p>
+
+            <div className="bg-slate-700/50 rounded-lg p-4 border border-orange-400/20">
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-400 mb-1">Link del juego:</p>
+                  <p className="text-white text-sm font-mono bg-slate-900/50 p-2 rounded border truncate">
+                    {typeof window !== "undefined" ? window.location.href : ""}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              onClick={copyToClipboard}
+              className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+              disabled={copied}
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  ¡Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copiar link
+                </>
+              )}
+            </Button>
+
+            <p className="text-xs text-slate-400 text-center">
+              El link se copiará a tu portapapeles para que puedas compartirlo fácilmente
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

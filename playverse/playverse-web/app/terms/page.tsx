@@ -1,12 +1,12 @@
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
+    <div className="min-h-screen bg-gradient-to-b from-slate-800 to-slate-900 text-white">
       <div className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl font-bold text-orange-400 mb-8">Términos y Condiciones</h1>
 
           <div className="prose prose-invert max-w-none">
-            <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-8 space-y-6">
+            <div className="bg-slate-900/50 border border-orange-400/30 rounded-lg p-8 space-y-6">
               <section>
                 <h2 className="text-2xl font-semibold text-teal-400 mb-4">1. Aceptación de los Términos</h2>
                 <p className="text-slate-300 leading-relaxed">
