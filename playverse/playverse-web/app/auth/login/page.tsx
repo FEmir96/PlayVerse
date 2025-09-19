@@ -112,6 +112,21 @@ export default function LoginPage() {
 
         {/* Form */}
         <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
+        <div className="flex items-center gap-2 mb-6">
+            <div className="text-orange-400">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-orange-400">Iniciar sesión</h2>
+          </div>
+
+          <p className="text-slate-400 text-center mb-6">Bienvenido de vuelta, gamer</p>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
@@ -120,6 +135,7 @@ export default function LoginPage() {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="tu@email.com"
+                className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
               />
             </div>
@@ -131,6 +147,7 @@ export default function LoginPage() {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="Tu contraseña"
+                className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
               />
             </div>
