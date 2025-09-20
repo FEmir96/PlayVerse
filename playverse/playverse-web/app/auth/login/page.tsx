@@ -1,4 +1,3 @@
-// playverse-web/app/auth/login/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,11 +9,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Image from "next/image";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-
-// ✅ usa el hook correcto de shadcn
 import { useToast } from "@/hooks/use-toast";
 
-// store de sesión
+// (tu store local)
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
 
@@ -32,10 +29,9 @@ export default function LoginPage() {
   const [pending, setPending] = useState(false);
 
   const setUser = useAuthStore((s: AuthState) => s.setUser);
-
   const authLogin = useMutation(api.auth.authLogin);
 
-  // Toast si viene de registro exitoso (?registered=1)
+  // Si venís de registro exitoso: ?registered=1
   useEffect(() => {
     const registered = searchParams?.get("registered");
     if (registered === "1") {
@@ -67,15 +63,10 @@ export default function LoginPage() {
 
     if (!res?.ok) {
       setError(res?.error ?? "No se pudo iniciar sesión");
-      // (opcional) toast de error
-      // toast({ title: "Error", description: res?.error ?? "No se pudo iniciar sesión" });
       return;
     }
 
     setUser(res.profile);
-    console.log("[LOGIN OK] Perfil recibido:", res.profile);
-
-    // ✅ toast arriba-centro (sale del Toaster global en layout)
     toast({
       title: `¡Bienvenido, ${res.profile.name}!`,
       description: "Inicio de sesión exitoso.",
@@ -87,8 +78,7 @@ export default function LoginPage() {
       localStorage.removeItem("pv_email");
     }
 
-    // pequeño delay para ver el toast antes de navegar
-    setTimeout(() => router.push("/"), 80);
+    setTimeout(() => router.push("/"), 120);
   };
 
   return (
@@ -110,9 +100,9 @@ export default function LoginPage() {
           <p className="text-slate-300">Únete y elige tu próxima aventura</p>
         </div>
 
-        {/* Form */}
+        {/* Card */}
         <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-2 mb-6">
             <div className="text-orange-400">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -125,15 +115,22 @@ export default function LoginPage() {
             <h2 className="text-xl font-semibold text-orange-400">Iniciar sesión</h2>
           </div>
 
-          <p className="text-slate-400 text-center mb-6">Bienvenido de vuelta, gamer</p>
+          <p className="text-slate-400 text-center mb-6">
+            Bienvenido de vuelta, gamer
+          </p>
 
+          {/* FORM email / password */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Email
+              </label>
               <Input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
                 placeholder="tu@email.com"
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
@@ -141,11 +138,15 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Contraseña</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Contraseña
+              </label>
               <Input
                 type="password"
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
                 placeholder="Tu contraseña"
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
@@ -161,7 +162,10 @@ export default function LoginPage() {
                     setFormData({ ...formData, remember: checked === true })
                   }
                 />
-                <label htmlFor="remember" className="text-sm text-slate-300 cursor-pointer">
+                <label
+                  htmlFor="remember"
+                  className="text-sm text-slate-300 cursor-pointer"
+                >
                   Recuérdame
                 </label>
               </div>
@@ -184,6 +188,38 @@ export default function LoginPage() {
               {pending ? "Ingresando..." : "Ingresar"}
             </Button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center my-4">
+            <div className="h-px bg-slate-700 flex-1" />
+            <span className="text-slate-400 px-3 text-sm">o continuar con</span>
+            <div className="h-px bg-slate-700 flex-1" />
+          </div>
+
+          {/* Botón Google */}
+          <div className="grid">
+            <button
+              type="button"
+              onClick={() =>
+                import("next-auth/react").then(({ signIn }) =>
+                  signIn("google", { callbackUrl: "/?login=ok" })
+                )
+              }
+              className="w-full flex items-center justify-center gap-3 rounded-md border border-orange-400/40 bg-slate-800/60 px-4 py-2.5 text-[15px] font-medium text-slate-200 transition
+                         hover:bg-slate-800 hover:border-orange-400/70 active:scale-[0.99] cursor-pointer"
+              aria-label="Continuar con Google"
+              title="Continuar con Google"
+            >
+              {/* Si preferís archivo: <img src="/icons/google.svg" alt="Google" className="w-5 h-5" /> */}
+              <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107" d="M43.6 20.5h-1.9V20H24v8h11.3C33.9 31 29.4 34 24 34c-6.6 0-12-5.4-12-12S17.4 10 24 10c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 3.7 29.2 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.1-.1-2.2-.4-3.5z"/>
+                <path fill="#FF3D00" d="M6.3 14.7L13 19c2-4 6.1-7 11-7 3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 3.7 29.2 2 24 2 15 2 7.4 7.3 4.1 14.7z"/>
+                <path fill="#4CAF50" d="M24 46c5.2 0 9.9-1.7 13.6-4.6l-6.3-5.2C29.2 38 26.7 39 24 39c-5.4 0-9.9-3-12.3-7.4l-6.5 5C7.4 40.7 15 46 24 46z"/>
+                <path fill="#1976D2" d="M43.6 20.5H24v8h11.3c-1.6 3.8-5.6 6.5-10.3 6.5-5.4 0-9.9-3-12.3-7.4l-6.5 5C7.4 40.7 15 46 24 46c11 0 21-8 21-22 0-1.1-.1-2.2-.4-3.5z"/>
+              </svg>
+              Continuar con Google
+            </button>
+          </div>
         </div>
       </div>
     </div>

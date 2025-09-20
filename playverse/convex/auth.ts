@@ -21,9 +21,7 @@ export const createUser = mutation({
       return { ok: false, error: "El email ya está registrado" } as const;
     }
 
-    // 👇 versión síncrona (NO usa timers)
     const passwordHash = bcrypt.hashSync(password, 10);
-
     const now = Date.now();
     const _id = await db.insert("profiles", {
       name,
@@ -60,7 +58,6 @@ export const authLogin = mutation({
       } as const;
     }
 
-    // 👇 versión síncrona
     const match = bcrypt.compareSync(password, user.passwordHash);
     if (!match) return { ok: false, error: "Credenciales inválidas" } as const;
 
@@ -69,5 +66,51 @@ export const authLogin = mutation({
       ok: true,
       profile: { _id, name, email: user.email, role, createdAt },
     } as const;
+  },
+});
+
+/**
+ * 🔐 Usado por NextAuth (Google OAuth):
+ * - upsert por email
+ * - actualiza name / avatar si llegan
+ */
+export const oauthUpsert = mutation({
+  args: {
+    email: v.string(),
+    name: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    provider: v.string(),           // "google"
+    providerId: v.optional(v.string()),
+  },
+  handler: async ({ db }, args) => {
+    const email = args.email.toLowerCase();
+
+    const existing = await db
+      .query("profiles")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+
+    if (!existing) {
+      const _id = await db.insert("profiles", {
+        name: args.name ?? "",
+        email,
+        role: "free",
+        createdAt: Date.now(),
+        passwordHash: undefined, // opcional en tu schema
+        avatarUrl: args.avatarUrl,
+      });
+      return { created: true, _id };
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (args.name && args.name !== existing.name) patch.name = args.name;
+    if (args.avatarUrl && args.avatarUrl !== (existing as any).avatarUrl) {
+      patch.avatarUrl = args.avatarUrl;
+    }
+    if (Object.keys(patch).length) {
+      await db.patch(existing._id, patch);
+    }
+
+    return { created: false, _id: existing._id };
   },
 });

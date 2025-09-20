@@ -1,19 +1,21 @@
 // playverse-web/components/header.tsx
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
-import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Heart, User, LogOut } from "lucide-react"
-import { FavoritesDropdown } from "./favorites-dropdown"
-import { NotificationsDropdown } from "./notifications-dropdown"
+import { useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Heart, User, LogOut } from "lucide-react";
+import { FavoritesDropdown } from "./favorites-dropdown";
+import { NotificationsDropdown } from "./notifications-dropdown";
 
+// auth store (para login con email/password)
+import { useAuthStore } from "@/lib/useAuthStore";
+import type { AuthState } from "@/lib/useAuthStore";
 
-// auth store
-import { useAuthStore } from "@/lib/useAuthStore"
-import type { AuthState } from "@/lib/useAuthStore"
+// next-auth
+import { useSession } from "next-auth/react";
 
 // shadcn dropdown
 import {
@@ -22,41 +24,56 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 
 export function Header() {
-  const router = useRouter()
+  const router = useRouter();
+  const pathname = usePathname() ?? "/";
 
-  // ✅ fallback si pathname viniera null
-  const pathname = usePathname() ?? "/"
+  const [showFavorites, setShowFavorites] = useState(false);
 
-  const [showFavorites, setShowFavorites] = useState(false)
+  // store local (email/password)
+  const localUser = useAuthStore((s: AuthState) => s.user);
+  const clearAuth = useAuthStore((s: AuthState) => s.clear);
 
-  // ✅ selectores tipados (evita "implicitly any")
-  const user = useAuthStore((s: AuthState) => s.user)
-  const clearAuth = useAuthStore((s: AuthState) => s.clear)
+  // sesión OAuth (Google)
+  const { data: session } = useSession();
 
-  // 👉 estado controlado para abrir por hover o click
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const logged = Boolean(session?.user || localUser);
+
+  const displayName =
+    session?.user?.name ?? localUser?.name ?? undefined;
+  const displayEmail =
+    session?.user?.email ?? localUser?.email ?? undefined;
+  const avatarUrl =
+    (session?.user as any)?.image ?? undefined;
 
   const isActiveLink = (href: string) => {
-    if (href === "/") return pathname === "/"
-    return pathname.startsWith(href)
-  }
+    if (href === "/") return pathname === "/";
+    return pathname.startsWith(href);
+  };
 
   const getLinkClasses = (href: string) => {
-    const baseClasses = "font-medium transition-all duration-200 px-3 py-2 relative"
+    const baseClasses =
+      "font-medium transition-all duration-200 px-3 py-2 relative";
     if (isActiveLink(href)) {
-      return `${baseClasses} text-orange-400 after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-orange-400 after:rounded-full after:font-bold`
+      return `${baseClasses} text-orange-400 after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-orange-400 after:rounded-full after:font-bold`;
     }
-    return `${baseClasses} text-orange-400 hover:text-yellow-400`
-  }
+    return `${baseClasses} text-orange-400 hover:text-yellow-400`;
+  };
 
-  const handleLogout = () => {
-    clearAuth()
-    localStorage.removeItem("pv_email")
-    router.push("/auth/login")
-  }
+  const handleLogout = async () => {
+    // si hay sesión de NextAuth => usar signOut y redirigir con ?logout=1
+    if (session?.user) {
+      const { signOut } = await import("next-auth/react");
+      await signOut({ callbackUrl: "/?logout=1" });
+      return;
+    }
+    // si era login local => limpiar store y mandar al home con ?logout=1
+    clearAuth();
+    localStorage.removeItem("pv_email");
+    router.push("/?logout=1");
+  };
 
   return (
     <header className="bg-slate-900 border-b border-slate-700 relative">
@@ -64,7 +81,13 @@ export function Header() {
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center">
-            <Image src="/images/playverse-logo.png" alt="PlayVerse" width={80} height={40} className="h-10 w-auto" />
+            <Image
+              src="/images/playverse-logo.png"
+              alt="PlayVerse"
+              width={80}
+              height={40}
+              className="h-10 w-auto"
+            />
           </Link>
 
           {/* Navigation */}
@@ -88,7 +111,7 @@ export function Header() {
 
           {/* Right side */}
           <div className="flex items-center space-x-3">
-            {user && (
+            {logged && (
               <>
                 <NotificationsDropdown />
 
@@ -102,13 +125,16 @@ export function Header() {
                   >
                     <Heart className="w-5 h-5" />
                   </Button>
-                  <FavoritesDropdown isOpen={showFavorites} onClose={() => setShowFavorites(false)} />
+                  <FavoritesDropdown
+                    isOpen={showFavorites}
+                    onClose={() => setShowFavorites(false)}
+                  />
                 </div>
               </>
             )}
 
             {/* Auth UI */}
-            {!user ? (
+            {!logged ? (
               <>
                 <Link href="/auth/login">
                   <Button
@@ -126,16 +152,15 @@ export function Header() {
               </>
             ) : (
               <DropdownMenu>
-                {/* Abrir por hover o click */}
                 <DropdownMenuTrigger asChild>
                   <div>
                     <Button
                       size="icon"
                       variant="ghost"
                       className="text-orange-400 hover:text-orange-300"
-                      title={user.name}
-                      onClick={() => setUserMenuOpen(!userMenuOpen)}
+                      title={displayName}
                     >
+                      {/* Si tenés avatar, podrías mostrarlo; por ahora mantenemos el ícono */}
                       <User className="w-5 h-5" />
                     </Button>
                   </div>
@@ -144,22 +169,27 @@ export function Header() {
                   align="end"
                   sideOffset={8}
                   className="z-50 bg-slate-900 border border-slate-700 text-orange-400"
-                  onMouseEnter={() => setUserMenuOpen(true)}
-                  onMouseLeave={() => setUserMenuOpen(false)}
                 >
                   <div className="px-3 py-2 text-sm">
-                    <div className="font-semibold">{user.name}</div>
-                    <div className="text-xs text-slate-400">{user.email}</div>
+                    {displayName && (
+                      <div className="font-semibold">{displayName}</div>
+                    )}
+                    {displayEmail && (
+                      <div className="text-xs text-slate-400">{displayEmail}</div>
+                    )}
                   </div>
                   <DropdownMenuSeparator className="bg-slate-700" />
                   <DropdownMenuItem asChild className="cursor-pointer">
-                      <Link href="/perfil" className="w-full">
-                        <User className="w-4 h-4" />
-                        Ver perfil
-                      </Link>
+                    <Link href="/perfil" className="w-full">
+                      <User className="w-4 h-4" />
+                      Ver perfil
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-slate-700" />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-400 cursor-pointer">
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="text-red-400 focus:text-red-400 cursor-pointer"
+                  >
                     <LogOut className="w-4 h-4" />
                     Cerrar sesión
                   </DropdownMenuItem>
@@ -170,5 +200,5 @@ export function Header() {
         </div>
       </div>
     </header>
-  )
+  );
 }

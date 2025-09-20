@@ -10,9 +10,11 @@ export type UserProfile = {
   email: string;
   role: "free" | "premium" | "admin";
   createdAt: number;
+  /** opcional: usado cuando el login viene por Google */
+  avatarUrl?: string | null;
 };
 
-export type AuthState = {      // 👈 export (lo usamos en el login)
+export type AuthState = {
   user: UserProfile | null;
   setUser: (u: UserProfile) => void;
   clear: () => void;
@@ -25,5 +27,8 @@ const creator: StateCreator<AuthState> = (set) => ({
 });
 
 export const useAuthStore = create<AuthState>()(
-  persist(creator, { name: "pv_auth" })
+  persist(creator, {
+    name: "pv_auth",
+    version: 1,
+  })
 );

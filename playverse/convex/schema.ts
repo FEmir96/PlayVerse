@@ -6,14 +6,14 @@ export default defineSchema({
   profiles: defineTable({
     name: v.string(),
     email: v.string(),
-    role: v.union(
-      v.literal("free"),
-      v.literal("premium"),
-      v.literal("admin")
-    ),
+    role: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
     createdAt: v.number(),
-    // 👇 Nuevo campo para login seguro (opcional para no romper datos existentes)
+
+    // Login con contraseña (opcional)
     passwordHash: v.optional(v.string()),
+
+    // 👇 Nuevo para OAuth (Google/Microsoft) — opcional
+    avatarUrl: v.optional(v.string()),
   }).index("by_email", ["email"]),
 
   games: defineTable({
@@ -48,16 +48,8 @@ export default defineSchema({
 
   upgrades: defineTable({
     userId: v.id("profiles"),
-    fromRole: v.union(
-      v.literal("free"),
-      v.literal("premium"),
-      v.literal("admin")
-    ),
-    toRole: v.union(
-      v.literal("free"),
-      v.literal("premium"),
-      v.literal("admin")
-    ),
+    fromRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
+    toRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
     effectiveAt: v.number(),
     paymentId: v.optional(v.id("payments")),
   }).index("by_user", ["userId"]),

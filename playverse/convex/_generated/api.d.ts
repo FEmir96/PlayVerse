@@ -29,6 +29,7 @@ import type * as mutations_simulateRental from "../mutations/simulateRental.js";
 import type * as mutations_updateGame from "../mutations/updateGame.js";
 import type * as mutations_updateUser from "../mutations/updateUser.js";
 import type * as mutations_upgradePlan from "../mutations/upgradePlan.js";
+import type * as profiles from "../profiles.js";
 import type * as queries_getAdmins from "../queries/getAdmins.js";
 import type * as queries_getAllUsers from "../queries/getAllUsers.js";
 import type * as queries_getAuditLogs from "../queries/getAuditLogs.js";
@@ -36,7 +37,6 @@ import type * as queries_getAvailableGames from "../queries/getAvailableGames.js
 import type * as queries_getFreeGames from "../queries/getFreeGames.js";
 import type * as queries_getGames from "../queries/getGames.js";
 import type * as queries_getPremiumGames from "../queries/getPremiumGames.js";
-import type * as queries_getUserByEmail from "../queries/getUserByEmail.js";
 import type * as queries_getUserPayments from "../queries/getUserPayments.js";
 import type * as queries_getUserRentals from "../queries/getUserRentals.js";
 import type * as queries_getUserUpgrades from "../queries/getUserUpgrades.js";
@@ -66,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/updateGame": typeof mutations_updateGame;
   "mutations/updateUser": typeof mutations_updateUser;
   "mutations/upgradePlan": typeof mutations_upgradePlan;
+  profiles: typeof profiles;
   "queries/getAdmins": typeof queries_getAdmins;
   "queries/getAllUsers": typeof queries_getAllUsers;
   "queries/getAuditLogs": typeof queries_getAuditLogs;
@@ -73,7 +74,6 @@ declare const fullApi: ApiFromModules<{
   "queries/getFreeGames": typeof queries_getFreeGames;
   "queries/getGames": typeof queries_getGames;
   "queries/getPremiumGames": typeof queries_getPremiumGames;
-  "queries/getUserByEmail": typeof queries_getUserByEmail;
   "queries/getUserPayments": typeof queries_getUserPayments;
   "queries/getUserRentals": typeof queries_getUserRentals;
   "queries/getUserUpgrades": typeof queries_getUserUpgrades;

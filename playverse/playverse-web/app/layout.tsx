@@ -9,8 +9,10 @@ import { Header } from "@/components/header";
 import { ConditionalFooter } from "@/components/ConditionalFooter";
 import { Suspense } from "react";
 
-// ✅ Convex: usamos un wrapper client en lugar de usar ConvexProvider acá
-import ConvexProviderClient from "./providers/convex-provider"; // 👈 este es el correcto
+// ✅ Convex: wrapper client
+import ConvexProviderClient from "./providers/convex-provider";
+// ✅ NextAuth: provider de sesión
+import SessionProviderClient from "./providers/auth-provider";
 
 // shadcn/ui
 import { Toaster } from "@/components/ui/toaster";
@@ -28,13 +30,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`font-sans ${GeistSans.variable} ${GeistMono.variable} bg-slate-900 text-white`}
       >
         <ConvexProviderClient>
-          <Suspense fallback={<div>Loading...</div>}>
-            <Header />
-            <main className="min-h-screen">{children}</main>
-            <ConditionalFooter />
-          </Suspense>
-          <Analytics />
-          <Toaster /> {/* toasts */}
+          <SessionProviderClient>
+            <Suspense fallback={<div>Loading...</div>}>
+              <Header />
+              <main className="min-h-screen">{children}</main>
+              <ConditionalFooter />
+            </Suspense>
+            <Analytics />
+            <Toaster /> {/* toasts */}
+          </SessionProviderClient>
         </ConvexProviderClient>
       </body>
     </html>

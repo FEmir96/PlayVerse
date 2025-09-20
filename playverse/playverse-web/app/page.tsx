@@ -1,3 +1,4 @@
+// playverse-web/app/page.tsx
 "use client"
 
 import { Button } from "@/components/ui/button"
@@ -8,11 +9,17 @@ import Link from "next/link"
 import GameCard from "@/components/game-card"
 import { useAuthStore } from "@/lib/useAuthStore"
 
+// 👇 agrega este import
+import ShowLoginToast from "@/components/show-login-toast"
+
 export default function HomePage() {
   const { user } = useAuthStore()
 
   return (
     <div className="min-h-screen">
+      {/* 👇 muestra toasts de login/logout y limpia los query params */}
+      <ShowLoginToast />
+
       {/* Hero Section */}
       <section className="relative bg-gradient-to-b from-slate-800 to-slate-900 py-20 overflow-hidden">
         {/* Gaming Icons Background */}
