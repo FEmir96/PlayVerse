@@ -2,6 +2,41 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import bcrypt from "bcryptjs";
+// --- 👇 NUEVO: actualizar perfil (nombre, password y/o avatar) ---
+import { Id } from "./_generated/dataModel"; // si ya lo importaste arriba, podés omitir esta línea
+
+export const updateProfile = mutation({
+  args: {
+    userId: v.id("profiles"),
+    name: v.optional(v.string()),
+    newPassword: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+  },
+  handler: async ({ db }, { userId, name, newPassword, avatarUrl }) => {
+    const current = await db.get(userId as Id<"profiles">);
+    if (!current) {
+      throw new Error("Perfil no encontrado");
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (typeof name === "string" && name.trim() && name !== current.name) {
+      patch.name = name.trim();
+    }
+    if (typeof avatarUrl === "string" && avatarUrl !== (current as any).avatarUrl) {
+      patch.avatarUrl = avatarUrl;
+    }
+    if (typeof newPassword === "string" && newPassword.length > 0) {
+      // usa el mismo bcrypt ya importado en este archivo
+      patch.passwordHash = bcrypt.hashSync(newPassword, 10);
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await db.patch(current._id, patch);
+    }
+
+    return { ok: true } as const;
+  },
+});
 
 export const createUser = mutation({
   args: {
@@ -74,6 +109,7 @@ export const authLogin = mutation({
  * - upsert por email
  * - actualiza name / avatar si llegan
  */
+// 👇 Reemplaza SOLO esta función en convex/auth.ts
 export const oauthUpsert = mutation({
   args: {
     email: v.string(),
@@ -90,6 +126,7 @@ export const oauthUpsert = mutation({
       .withIndex("by_email", (q) => q.eq("email", email))
       .unique();
 
+    // ⚡ Si no existe -> crear y setear avatarUrl inicial (si viene)
     if (!existing) {
       const _id = await db.insert("profiles", {
         name: args.name ?? "",
@@ -97,16 +134,22 @@ export const oauthUpsert = mutation({
         role: "free",
         createdAt: Date.now(),
         passwordHash: undefined, // opcional en tu schema
-        avatarUrl: args.avatarUrl,
+        avatarUrl: args.avatarUrl, // solo al crear
       });
       return { created: true, _id };
     }
 
+    // ⚡ Si existe -> NO sobreescribimos avatarUrl si el usuario ya tiene uno.
+    //    - Actualizamos name si cambió
+    //    - Solo seteamos avatarUrl si hoy NO tiene ninguno
     const patch: Record<string, unknown> = {};
     if (args.name && args.name !== existing.name) patch.name = args.name;
-    if (args.avatarUrl && args.avatarUrl !== (existing as any).avatarUrl) {
+
+    const hasAvatar = Boolean((existing as any).avatarUrl && String((existing as any).avatarUrl).trim() !== "");
+    if (!hasAvatar && args.avatarUrl) {
       patch.avatarUrl = args.avatarUrl;
     }
+
     if (Object.keys(patch).length) {
       await db.patch(existing._id, patch);
     }

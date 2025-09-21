@@ -12,9 +12,10 @@ export default defineSchema({
     // Login con contraseña (opcional)
     passwordHash: v.optional(v.string()),
 
-    // 👇 Nuevo para OAuth (Google/Microsoft) — opcional
+    // Para OAuth (Google/Microsoft) — opcional
     avatarUrl: v.optional(v.string()),
-  }).index("by_email", ["email"]),
+  })
+    .index("by_email", ["email"]), // ✅ ya lo usás con .unique()
 
   games: defineTable({
     title: v.string(),
@@ -23,15 +24,23 @@ export default defineSchema({
     trailer_url: v.optional(v.string()),
     plan: v.union(v.literal("free"), v.literal("premium")),
     createdAt: v.number(),
-  }).index("by_title", ["title"]),
+  })
+    .index("by_title", ["title"])
+    // 🔎 útil para listados de “Nuevos juegos”
+    .index("by_createdAt", ["createdAt"]),
 
   transactions: defineTable({
     userId: v.id("profiles"),
     gameId: v.id("games"),
     type: v.union(v.literal("rental"), v.literal("purchase")),
-    expiresAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()), // solo rentals
     createdAt: v.number(),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    // 🔎 para getUserRentals / getUserPurchases sin filtrar en memoria
+    .index("by_user_type", ["userId", "type"])
+    // 🔎 para ver transacciones por juego (admin / analytics)
+    .index("by_game", ["gameId"]),
 
   payments: defineTable({
     userId: v.id("profiles"),
@@ -44,7 +53,10 @@ export default defineSchema({
     ),
     provider: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    // 🔎 para listar/ordenar pagos del usuario por fecha
+    .index("by_user_time", ["userId", "createdAt"]),
 
   upgrades: defineTable({
     userId: v.id("profiles"),
@@ -52,14 +64,34 @@ export default defineSchema({
     toRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
     effectiveAt: v.number(),
     paymentId: v.optional(v.id("payments")),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"]),
 
   audits: defineTable({
     action: v.string(),
-    entity: v.string(),
+    entity: v.string(), // "profiles" | "games" | ...
     entityId: v.union(v.id("games"), v.id("profiles")),
     requesterId: v.id("profiles"),
     timestamp: v.number(),
     details: v.optional(v.any()),
-  }),
+  })
+    // 🔎 consultar historial por entidad puntual
+    .index("by_entity", ["entity", "entityId"]),
+
+    // ⬇️ al final, antes del cierre de defineSchema({...})
+  paymentMethods: defineTable({
+    userId: v.id("profiles"),
+    brand: v.union(
+      v.literal("visa"),
+      v.literal("mastercard"),
+      v.literal("amex"),
+      v.literal("otro")
+    ),
+    last4: v.string(),          // solo guardamos últimos 4
+    expMonth: v.number(),       // 1..12
+    expYear: v.number(),        // ej. 2027
+    panHash: v.optional(v.string()), // hash SHA-256 del PAN (opcional para dedupe)
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+
 });

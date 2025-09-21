@@ -37,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <ConditionalFooter />
             </Suspense>
             <Analytics />
-            <Toaster /> {/* toasts */}
+            <Toaster />
           </SessionProviderClient>
         </ConvexProviderClient>
       </body>
