@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Heart, User, LogOut } from "lucide-react";
+import { Heart, User, LogOut, Shield } from "lucide-react";
 import { FavoritesDropdown } from "./favorites-dropdown";
 import { NotificationsDropdown } from "./notifications-dropdown";
 
@@ -179,12 +179,22 @@ export function Header() {
                     )}
                   </div>
                   <DropdownMenuSeparator className="bg-slate-700" />
+
                   <DropdownMenuItem asChild className="cursor-pointer">
-                    <Link href="/perfil" className="w-full">
+                    <Link href="/perfil" className="w-full flex items-center gap-2">
                       <User className="w-4 h-4" />
                       Ver perfil
                     </Link>
                   </DropdownMenuItem>
+
+                  {/* Nuevo item: Panel Administrador */}
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/admin" className="w-full flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Panel Administrador
+                    </Link>
+                  </DropdownMenuItem>
+
                   <DropdownMenuSeparator className="bg-slate-700" />
                   <DropdownMenuItem
                     onClick={handleLogout}

@@ -853,9 +853,6 @@ export default function ProfilePage() {
                 >
                   Subir desde tu PC
                 </Button>
-                <span className="text-slate-400 text-sm">
-                  Se reescala automáticamente para verse nítida.
-                </span>
               </div>
 
               <Separator className="bg-slate-700" />

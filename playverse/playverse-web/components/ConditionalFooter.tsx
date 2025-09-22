@@ -10,7 +10,8 @@ export function ConditionalFooter() {
     pathname?.startsWith("/auth/login") ||
     pathname?.startsWith("/auth/register") ||
     pathname?.startsWith("/auth/forgot-password") ||
-    pathname?.startsWith("/terms")
+    pathname?.startsWith("/terms") ||
+    pathname?.startsWith("/admin") 
 
   if (hideFooter) {
     return null
