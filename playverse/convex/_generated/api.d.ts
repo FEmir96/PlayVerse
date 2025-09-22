@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as actions_backfillCoversFromIGDB from "../actions/backfillCoversFromIGDB.js";
 import type * as auth from "../auth.js";
 import type * as mutations_addGame from "../mutations/addGame.js";
 import type * as mutations_addGamesBatch from "../mutations/addGamesBatch.js";
@@ -27,6 +28,8 @@ import type * as mutations_promoteToAdmin from "../mutations/promoteToAdmin.js";
 import type * as mutations_rentGame from "../mutations/rentGame.js";
 import type * as mutations_savePaymentMethod from "../mutations/savePaymentMethod.js";
 import type * as mutations_seed from "../mutations/seed.js";
+import type * as mutations_setGameCoverUrl from "../mutations/setGameCoverUrl.js";
+import type * as mutations_setGameTrailerUrl from "../mutations/setGameTrailerUrl.js";
 import type * as mutations_simulateRental from "../mutations/simulateRental.js";
 import type * as mutations_updateGame from "../mutations/updateGame.js";
 import type * as mutations_updateUser from "../mutations/updateUser.js";
@@ -44,6 +47,8 @@ import type * as queries_getUserByEmail from "../queries/getUserByEmail.js";
 import type * as queries_getUserPayments from "../queries/getUserPayments.js";
 import type * as queries_getUserRentals from "../queries/getUserRentals.js";
 import type * as queries_getUserUpgrades from "../queries/getUserUpgrades.js";
+import type * as queries_listGamesWithoutCover from "../queries/listGamesWithoutCover.js";
+import type * as queries_listGamesWithoutTrailer from "../queries/listGamesWithoutTrailer.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -54,6 +59,7 @@ import type * as queries_getUserUpgrades from "../queries/getUserUpgrades.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "actions/backfillCoversFromIGDB": typeof actions_backfillCoversFromIGDB;
   auth: typeof auth;
   "mutations/addGame": typeof mutations_addGame;
   "mutations/addGamesBatch": typeof mutations_addGamesBatch;
@@ -68,6 +74,8 @@ declare const fullApi: ApiFromModules<{
   "mutations/rentGame": typeof mutations_rentGame;
   "mutations/savePaymentMethod": typeof mutations_savePaymentMethod;
   "mutations/seed": typeof mutations_seed;
+  "mutations/setGameCoverUrl": typeof mutations_setGameCoverUrl;
+  "mutations/setGameTrailerUrl": typeof mutations_setGameTrailerUrl;
   "mutations/simulateRental": typeof mutations_simulateRental;
   "mutations/updateGame": typeof mutations_updateGame;
   "mutations/updateUser": typeof mutations_updateUser;
@@ -85,6 +93,8 @@ declare const fullApi: ApiFromModules<{
   "queries/getUserPayments": typeof queries_getUserPayments;
   "queries/getUserRentals": typeof queries_getUserRentals;
   "queries/getUserUpgrades": typeof queries_getUserUpgrades;
+  "queries/listGamesWithoutCover": typeof queries_listGamesWithoutCover;
+  "queries/listGamesWithoutTrailer": typeof queries_listGamesWithoutTrailer;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
