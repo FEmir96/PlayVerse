@@ -14,6 +14,8 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as actions_backfillCoversFromIGDB from "../actions/backfillCoversFromIGDB.js";
+import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetailsFromIGDB.js";
+import type * as actions_translateExistingDescriptions from "../actions/translateExistingDescriptions.js";
 import type * as auth from "../auth.js";
 import type * as mutations_addGame from "../mutations/addGame.js";
 import type * as mutations_addGamesBatch from "../mutations/addGamesBatch.js";
@@ -29,6 +31,7 @@ import type * as mutations_rentGame from "../mutations/rentGame.js";
 import type * as mutations_savePaymentMethod from "../mutations/savePaymentMethod.js";
 import type * as mutations_seed from "../mutations/seed.js";
 import type * as mutations_setGameCoverUrl from "../mutations/setGameCoverUrl.js";
+import type * as mutations_setGameDetails from "../mutations/setGameDetails.js";
 import type * as mutations_setGameTrailerUrl from "../mutations/setGameTrailerUrl.js";
 import type * as mutations_simulateRental from "../mutations/simulateRental.js";
 import type * as mutations_updateGame from "../mutations/updateGame.js";
@@ -48,6 +51,7 @@ import type * as queries_getUserPayments from "../queries/getUserPayments.js";
 import type * as queries_getUserRentals from "../queries/getUserRentals.js";
 import type * as queries_getUserUpgrades from "../queries/getUserUpgrades.js";
 import type * as queries_listGamesWithoutCover from "../queries/listGamesWithoutCover.js";
+import type * as queries_listGamesWithoutDetails from "../queries/listGamesWithoutDetails.js";
 import type * as queries_listGamesWithoutTrailer from "../queries/listGamesWithoutTrailer.js";
 
 /**
@@ -60,6 +64,8 @@ import type * as queries_listGamesWithoutTrailer from "../queries/listGamesWitho
  */
 declare const fullApi: ApiFromModules<{
   "actions/backfillCoversFromIGDB": typeof actions_backfillCoversFromIGDB;
+  "actions/backfillDetailsFromIGDB": typeof actions_backfillDetailsFromIGDB;
+  "actions/translateExistingDescriptions": typeof actions_translateExistingDescriptions;
   auth: typeof auth;
   "mutations/addGame": typeof mutations_addGame;
   "mutations/addGamesBatch": typeof mutations_addGamesBatch;
@@ -75,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/savePaymentMethod": typeof mutations_savePaymentMethod;
   "mutations/seed": typeof mutations_seed;
   "mutations/setGameCoverUrl": typeof mutations_setGameCoverUrl;
+  "mutations/setGameDetails": typeof mutations_setGameDetails;
   "mutations/setGameTrailerUrl": typeof mutations_setGameTrailerUrl;
   "mutations/simulateRental": typeof mutations_simulateRental;
   "mutations/updateGame": typeof mutations_updateGame;
@@ -94,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   "queries/getUserRentals": typeof queries_getUserRentals;
   "queries/getUserUpgrades": typeof queries_getUserUpgrades;
   "queries/listGamesWithoutCover": typeof queries_listGamesWithoutCover;
+  "queries/listGamesWithoutDetails": typeof queries_listGamesWithoutDetails;
   "queries/listGamesWithoutTrailer": typeof queries_listGamesWithoutTrailer;
 }>;
 export declare const api: FilterApi<

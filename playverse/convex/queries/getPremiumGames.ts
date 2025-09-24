@@ -1,17 +1,10 @@
-// convex/functions/queries/getPremiumGames.ts
 import { query } from "../_generated/server";
+import type { Doc } from "../_generated/dataModel";
 
-type Game = {
-  _id: string;
-  title: string;
-  description: string;
-  cover_url?: string;
-  trailer_url?: string;
-  plan: "free" | "premium";
-  createdAt: number;
-};
-
-export const getPremiumGames = query(async ({ db }): Promise<Game[]> => {
-  const games = await db.query("games").collect();
-  return games.filter((game) => game.plan === "premium") as Game[];
+export const getPremiumGames = query({
+  args: {},
+  handler: async (ctx): Promise<Doc<"games">[]> => {
+    const all = await ctx.db.query("games").collect();
+    return all.filter(g => g.plan === "premium");
+  },
 });
