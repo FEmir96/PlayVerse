@@ -14,8 +14,7 @@ export default defineSchema({
 
     // Para OAuth (Google/Microsoft) — opcional
     avatarUrl: v.optional(v.string()),
-  })
-    .index("by_email", ["email"]), // ✅ ya lo usás con .unique()
+  }).index("by_email", ["email"]), // ✅ ya lo usás con .unique()
 
   games: defineTable({
     title: v.string(),
@@ -24,6 +23,8 @@ export default defineSchema({
     trailer_url: v.optional(v.string()),
     plan: v.union(v.literal("free"), v.literal("premium")),
     createdAt: v.number(),
+    // 👇 NUEVO: géneros normalizados para tus filtros
+    genres: v.optional(v.array(v.string())),
   })
     .index("by_title", ["title"])
     // 🔎 útil para listados de “Nuevos juegos”
@@ -60,12 +61,19 @@ export default defineSchema({
 
   upgrades: defineTable({
     userId: v.id("profiles"),
-    fromRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
-    toRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
+    fromRole: v.union(
+      v.literal("free"),
+      v.literal("premium"),
+      v.literal("admin")
+    ),
+    toRole: v.union(
+      v.literal("free"),
+      v.literal("premium"),
+      v.literal("admin")
+    ),
     effectiveAt: v.number(),
     paymentId: v.optional(v.id("payments")),
-  })
-    .index("by_user", ["userId"]),
+  }).index("by_user", ["userId"]),
 
   audits: defineTable({
     action: v.string(),
@@ -74,11 +82,9 @@ export default defineSchema({
     requesterId: v.id("profiles"),
     timestamp: v.number(),
     details: v.optional(v.any()),
-  })
-    // 🔎 consultar historial por entidad puntual
-    .index("by_entity", ["entity", "entityId"]),
+  }).index("by_entity", ["entity", "entityId"]),
 
-    // ⬇️ al final, antes del cierre de defineSchema({...})
+  // ⬇️ al final, antes del cierre de defineSchema({...})
   paymentMethods: defineTable({
     userId: v.id("profiles"),
     brand: v.union(
@@ -87,11 +93,10 @@ export default defineSchema({
       v.literal("amex"),
       v.literal("otro")
     ),
-    last4: v.string(),          // solo guardamos últimos 4
-    expMonth: v.number(),       // 1..12
-    expYear: v.number(),        // ej. 2027
+    last4: v.string(), // solo guardamos últimos 4
+    expMonth: v.number(), // 1..12
+    expYear: v.number(), // ej. 2027
     panHash: v.optional(v.string()), // hash SHA-256 del PAN (opcional para dedupe)
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
-
 });
