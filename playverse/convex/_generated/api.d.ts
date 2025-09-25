@@ -16,6 +16,7 @@ import type {
 import type * as actions_backfillCoversFromIGDB from "../actions/backfillCoversFromIGDB.js";
 import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetailsFromIGDB.js";
 import type * as actions_email from "../actions/email.js";
+import type * as actions_fillUpcomingCoversFromIGDB from "../actions/fillUpcomingCoversFromIGDB.js";
 import type * as actions_translateExistingDescriptions from "../actions/translateExistingDescriptions.js";
 import type * as auth from "../auth.js";
 import type * as lib_emailTemplates from "../lib/emailTemplates.js";
@@ -76,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   "actions/backfillCoversFromIGDB": typeof actions_backfillCoversFromIGDB;
   "actions/backfillDetailsFromIGDB": typeof actions_backfillDetailsFromIGDB;
   "actions/email": typeof actions_email;
+  "actions/fillUpcomingCoversFromIGDB": typeof actions_fillUpcomingCoversFromIGDB;
   "actions/translateExistingDescriptions": typeof actions_translateExistingDescriptions;
   auth: typeof auth;
   "lib/emailTemplates": typeof lib_emailTemplates;

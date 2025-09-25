@@ -6,8 +6,8 @@ import type { Doc } from "@convex/_generated/dataModel";
 import CarouselRail from "@/components/rails/carousel-rail";
 
 const WANTED = [
-  "Resident Evil 9: Requiem",
-  "Resident Evil Director's Cut",
+  "Resident Evil: Requiem",
+  "Resident Evil: Director's Cut",
   "Marvel's Spider-Man: Miles Morales",
   "Marvel's Spider-Man 2",
   "Star Wars Jedi Survivor",

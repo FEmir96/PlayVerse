@@ -141,8 +141,7 @@ function UpcomingCard({ item }: { item: UpcomingItem }) {
 function formatDate(ms: number) {
   try {
     return new Date(ms).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
+
       year: "numeric",
     });
   } catch {
