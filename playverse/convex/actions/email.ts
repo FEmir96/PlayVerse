@@ -2,26 +2,15 @@
 
 import { action } from "../_generated/server";
 import { v } from "convex/values";
+import nodemailer from "nodemailer";
 
-const RESEND_API_URL = "https://api.resend.com/emails";
-
-// --- helpers --------------------------------------------------------
-
-function normalizeEmail(raw?: string) {
-  const s = (raw ?? "").trim();
-  return /^[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+$/.test(s) ? s : "";
-}
+let cachedTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
 function normalizeFrom(raw?: string) {
   const s = (raw ?? "").trim().replace(/\s{2,}/g, " ");
   if (!s) return "";
-
-  // válido: "Nombre <email>" o solo email
-  if (/^.+<[^>]+>$/.test(s) || /^[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+$/.test(s)) {
-    return s;
-  }
-
-  // "Nombre email@dominio" -> "Nombre <email@dominio>"
+  // "Nombre <mail@dominio>" o solo mail
+  if (/^.+<[^>]+>$/.test(s) || /^[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+$/.test(s)) return s;
   const parts = s.split(/\s+/);
   const last = parts[parts.length - 1] ?? "";
   if (/^[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+$/.test(last)) {
@@ -31,59 +20,51 @@ function normalizeFrom(raw?: string) {
   return s;
 }
 
-// Usa el remitente del .env; si accidentalmente pusiste un gmail, cae al de Resend onboarding.
-function resolveFrom() {
-  const raw = process.env.RESEND_FROM || "";
-  let from = normalizeFrom(raw);
-  if (!from) throw new Error("Falta RESEND_FROM");
-  if (/@gmail\.com>?$/i.test(from) || /<[^>]*@gmail\.com>/i.test(from)) {
-    // Resend no permite enviar 'from' @gmail.com a terceros → fallback dev
-    from = "PlayVerse <onboarding@resend.dev>";
-  }
-  return from;
-}
+function getTransporter() {
+  if (cachedTransporter) return cachedTransporter;
 
-// --- action principal -----------------------------------------------
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port = Number(process.env.SMTP_PORT || "465");
+  const user = (process.env.SMTP_USER || "").trim();
+  const pass = (process.env.SMTP_PASS || "").trim();
+
+  if (!host || !port || !user || !pass) {
+    throw new Error("Faltan variables SMTP_* en Convex (SMTP_HOST/PORT/USER/PASS)");
+  }
+
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465, // Gmail: 465 = SSL
+    auth: { user, pass },
+  });
+
+  return cachedTransporter;
+}
 
 export const sendReceiptEmail = action({
   args: {
-    to: v.string(),           // destinatario final (el email del usuario logueado)
+    to: v.string(),
     subject: v.string(),
     html: v.string(),
-    replyTo: v.optional(v.string()), // opcional: si querés forzar un Reply-To específico
+    replyTo: v.optional(v.string()),
   },
   handler: async (_ctx, { to, subject, html, replyTo }) => {
-    const apiKey = (process.env.RESEND_API_KEY || "").trim();
-    if (!apiKey) throw new Error("Falta RESEND_API_KEY");
+    const transporter = getTransporter();
 
-    const toAddr = normalizeEmail(to);
-    if (!toAddr) throw new Error("Destinatario inválido");
+    const from =
+      normalizeFrom(process.env.MAIL_FROM) ||
+      normalizeFrom(process.env.SMTP_USER) ||
+      "PlayVerse <no-reply@playverse.com>";
 
-    const from = resolveFrom();
-
-    // Reply-To: primero el que te pasan, luego REPLY_TO, si no, omitido.
-    const rtFromArg = normalizeEmail(replyTo);
-    const rtFromEnv = normalizeEmail(process.env.REPLY_TO);
-    const reply_to = rtFromArg || rtFromEnv || undefined;
-
-    const payload: Record<string, any> = { from, to: toAddr, subject, html };
-    if (reply_to) payload.reply_to = reply_to;
-
-    const res = await fetch(RESEND_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+    const info = await transporter.sendMail({
+      from,
+      to,
+      subject,
+      html,
+      replyTo: replyTo?.trim() || undefined,
     });
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Resend falló: ${res.status} – ${text}`);
-    }
-
-    const data = await res.json().catch(() => ({}));
-    return { ok: true, id: data?.id ?? null, from, reply_to: reply_to ?? null };
+    return { ok: true as const, messageId: info.messageId, to, subject };
   },
 });

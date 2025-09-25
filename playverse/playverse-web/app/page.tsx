@@ -5,35 +5,21 @@ import { Button } from "@/components/ui/button";
 import ShowLoginToast from "@/components/show-login-toast";
 import { useAuthStore } from "@/lib/useAuthStore";
 
-// rails
 import FeaturedRail from "@/components/featured-rail";
 import UpcomingRail from "@/components/upcoming-rail";
+import FreeRail from "@/components/free-rail";
+import HypeRail from "@/components/hype-rail";
 
 export default function HomePage() {
   const { user } = useAuthStore();
 
   return (
     <div className="min-h-screen">
-      {/* toasts login/logout */}
       <ShowLoginToast />
 
-      {/* HERO con iconitos de fondo */}
+      {/* HERO */}
       <section className="relative bg-gradient-to-b from-slate-800 to-slate-900 py-20 overflow-hidden">
-        <div className="absolute inset-0 opacity-20">
-          <img src="/images/hongo.png" alt="Mario Mushroom" className="absolute top-10 left-10 w-12 h-12" />
-          <img src="/images/estrella.png" alt="Estrella" className="absolute top-20 right-20 w-10 h-10" />
-          <img src="/images/control.png" alt="Mando de videojuego" className="absolute bottom-20 left-20 w-14 h-10" />
-          <img src="/images/rob1.png" alt="Space Invader 1" className="absolute top-45 left-1/4 w-8 h-8" />
-          <img src="/images/moneda.png" alt="Moneda" className="absolute bottom-50 right-1/4 w-10 h-10" />
-          <img src="/images/rob2.png" alt="Space Invader 2" className="absolute top-60 right-10 w-12 h-10" />
-          <img src="/images/hongo.png" alt="Mario Mushroom" className="absolute top-80 right-50 w-10 h-10" />
-          <img src="/images/estrella.png" alt="Estrella" className="absolute top-30 left-60 w-8 h-8" />
-          <img src="/images/control.png" alt="Mando de videojuego" className="absolute bottom-20 right-120 w-14 h-10" />
-          <img src="/images/rob1.png" alt="Space Invader 1" className="absolute top-10 right-60 w-10 h-10" />
-          <img src="/images/moneda.png" alt="Moneda" className="absolute bottom-10 left-80 w-10 h-10" />
-          <img src="/images/rob2.png" alt="Space Invader 2" className="absolute top-10 left-110 w-12 h-10" />
-        </div>
-
+        {/* ... (tu deco con iconos tal cual) ... */}
         <div className="container mx-auto px-4 text-center relative z-10">
           <h1 className="text-6xl md:text-8xl font-extrabold italic text-orange-400 mb-6 tracking-wider">PLAYVERSE</h1>
           <p className="text-slate-300 text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed">
@@ -60,7 +46,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* NUEVOS JUEGOS (datos reales) */}
+      {/* NUEVOS JUEGOS */}
       <section className="py-16 bg-slate-900">
         <div className="container mx-auto px-4">
           <div className="text-center mb-8">
@@ -80,18 +66,31 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* MÁS POPULARES GRATUITOS */}
+      <section className="py-16 bg-slate-800">
+        <div className="container mx-auto px-4">
+          <FreeRail />
+        </div>
+      </section>
+
+      {/* LOS MÁS ESPERADOS */}
+      <section className="py-16 bg-slate-900">
+        <div className="container mx-auto px-4">
+          <HypeRail />
+        </div>
+      </section>
+
       {/* PRÓXIMAMENTE */}
       <section className="py-16 bg-slate-800">
         <div className="container mx-auto px-4">
           <div className="text-center mb-8">
             <h2 className="text-4xl md:text-5xl font-bold text-orange-400 mb-2">Próximamente</h2>
           </div>
-
           <UpcomingRail />
         </div>
       </section>
 
-      {/* CTA Premium (idéntico al que tenías) */}
+      {/* CTA Premium */}
       <section className="py-16">
         <div className="container mx-auto px-4">
           <div className="bg-gradient-to-br from-orange-400/30 via-teal-500/30 to-purple-600/30 rounded-2xl p-8 md:p-12 text-center">

@@ -18,6 +18,7 @@ import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetail
 import type * as actions_email from "../actions/email.js";
 import type * as actions_translateExistingDescriptions from "../actions/translateExistingDescriptions.js";
 import type * as auth from "../auth.js";
+import type * as lib_emailTemplates from "../lib/emailTemplates.js";
 import type * as mutations_addGame from "../mutations/addGame.js";
 import type * as mutations_addGamesBatch from "../mutations/addGamesBatch.js";
 import type * as mutations_authLogin from "../mutations/authLogin.js";
@@ -54,6 +55,7 @@ import type * as queries_getUpcomingGames from "../queries/getUpcomingGames.js";
 import type * as queries_getUserByEmail from "../queries/getUserByEmail.js";
 import type * as queries_getUserLibrary from "../queries/getUserLibrary.js";
 import type * as queries_getUserPayments from "../queries/getUserPayments.js";
+import type * as queries_getUserPurchases from "../queries/getUserPurchases.js";
 import type * as queries_getUserRentals from "../queries/getUserRentals.js";
 import type * as queries_getUserUpgrades from "../queries/getUserUpgrades.js";
 import type * as queries_listGamesWithoutCover from "../queries/listGamesWithoutCover.js";
@@ -76,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   "actions/email": typeof actions_email;
   "actions/translateExistingDescriptions": typeof actions_translateExistingDescriptions;
   auth: typeof auth;
+  "lib/emailTemplates": typeof lib_emailTemplates;
   "mutations/addGame": typeof mutations_addGame;
   "mutations/addGamesBatch": typeof mutations_addGamesBatch;
   "mutations/authLogin": typeof mutations_authLogin;
@@ -112,6 +115,7 @@ declare const fullApi: ApiFromModules<{
   "queries/getUserByEmail": typeof queries_getUserByEmail;
   "queries/getUserLibrary": typeof queries_getUserLibrary;
   "queries/getUserPayments": typeof queries_getUserPayments;
+  "queries/getUserPurchases": typeof queries_getUserPurchases;
   "queries/getUserRentals": typeof queries_getUserRentals;
   "queries/getUserUpgrades": typeof queries_getUserUpgrades;
   "queries/listGamesWithoutCover": typeof queries_listGamesWithoutCover;

@@ -1,45 +1,17 @@
-// convex/transactions.ts
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+// import type { Id } from "./_generated/dataModel"; // si no lo usás, podés borrarlo
 
-/* ---- helpers html simples ---- */
-function rentalEmailHTML(args: {
-  userName: string;
-  gameTitle: string;
-  weeks: number;
-  expiresAt: number;
-}) {
-  const expires = new Date(args.expiresAt).toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  return `
-  <div style="font-family:Inter,Arial,sans-serif">
-    <h2>¡Alquiler confirmado!</h2>
-    <p>Hola ${args.userName || "jugador/a"},</p>
-    <p>Alquilaste <strong>${args.gameTitle}</strong> por <strong>${args.weeks}</strong> semana(s).</p>
-    <p>Vencimiento: <strong>${expires}</strong></p>
-    <p>Gracias por usar <strong>PlayVerse</strong> 🎮</p>
-  </div>`;
-}
+// ⬇️ Helpers del template de email (archivo: convex/actions/email.ts)
+import {
+  buildPurchaseEmail,
+  buildRentalEmail,
+  buildExtendEmail,
+} from "./lib/emailTemplates";
 
-function purchaseEmailHTML(args: {
-  userName: string;
-  gameTitle: string;
-  amount: number;
-}) {
-  return `
-  <div style="font-family:Inter,Arial,sans-serif">
-    <h2>¡Compra confirmada!</h2>
-    <p>Hola ${args.userName || "jugador/a"},</p>
-    <p>Compraste <strong>${args.gameTitle}</strong>.</p>
-    <p>Monto: <strong>USD $${args.amount.toFixed(2)}</strong></p>
-    <p>¡A disfrutar! – <strong>PlayVerse</strong></p>
-  </div>`;
-}
+// URL pública de tu app para el botón del mail
+const APP_URL = process.env.APP_URL || "https://playverse.com";
 
 /** Inicia alquiler */
 export const startRental = mutation({
@@ -78,17 +50,33 @@ export const startRental = mutation({
     // email
     const user = await db.get(userId);
     const game = await db.get(gameId);
+
     if (user?.email) {
-      await scheduler.runAfter(0, api.actions.email.sendReceiptEmail, {
-        to: user.email,
-        subject: `PlayVerse – Alquiler confirmado: ${game?.title ?? "Juego"}`,
-        html: rentalEmailHTML({
-          userName: user.name ?? "",
-          gameTitle: game?.title ?? "",
-          weeks,
-          expiresAt,
-        }),
-      });
+      const coverUrl = (game as any)?.cover_url ?? null;
+      const amount = (weeklyPrice || 0) * weeks;
+
+      await scheduler.runAfter(
+        0,
+        // 👇 casteo a any para evitar el error de TS si el codegen no ve la acción
+        (api as any).actions.email.sendReceiptEmail,
+        {
+          to: user.email,
+          subject: `PlayVerse – Alquiler confirmado: ${game?.title ?? "Juego"}`,
+          html: buildRentalEmail({
+            userName: user.name ?? "",
+            gameTitle: game?.title ?? "",
+            coverUrl,
+            amount,
+            currency: "USD",
+            method: "Tarjeta guardada",
+            orderId: null,
+            appUrl: APP_URL,
+            weeks,
+            expiresAt,
+          }),
+          replyTo: user.email,
+        }
+      );
     }
 
     return { ok: true as const, expiresAt };
@@ -144,17 +132,32 @@ export const extendRental = mutation({
 
     const user = await db.get(userId);
     const game = await db.get(gameId);
+
     if (user?.email) {
-      await scheduler.runAfter(0, api.actions.email.sendReceiptEmail, {
-        to: user.email,
-        subject: `PlayVerse – Extensión de alquiler: ${game?.title ?? "Juego"}`,
-        html: rentalEmailHTML({
-          userName: user.name ?? "",
-          gameTitle: game?.title ?? "",
-          weeks,
-          expiresAt: newExpiresAt,
-        }),
-      });
+      const coverUrl = (game as any)?.cover_url ?? null;
+      const amount = (weeklyPrice || 0) * weeks;
+
+      await scheduler.runAfter(
+        0,
+        (api as any).actions.email.sendReceiptEmail,
+        {
+          to: user.email,
+          subject: `PlayVerse – Extensión de alquiler: ${game?.title ?? "Juego"}`,
+          html: buildExtendEmail({
+            userName: user.name ?? "",
+            gameTitle: game?.title ?? "",
+            coverUrl,
+            amount,
+            currency: "USD",
+            method: "Tarjeta guardada",
+            orderId: null,
+            appUrl: APP_URL,
+            weeks,
+            expiresAt: newExpiresAt,
+          }),
+          replyTo: user.email,
+        }
+      );
     }
 
     return { ok: true as const, expiresAt: newExpiresAt };
@@ -191,15 +194,27 @@ export const purchaseGame = mutation({
     const game = await db.get(gameId);
 
     if (user?.email) {
-      await scheduler.runAfter(0, api.actions.email.sendReceiptEmail, {
-        to: user.email,
-        subject: `PlayVerse – Compra confirmada: ${game?.title ?? "Juego"}`,
-        html: purchaseEmailHTML({
-          userName: user.name ?? "",
-          gameTitle: game?.title ?? "",
-          amount,
-        }),
-      });
+      const coverUrl = (game as any)?.cover_url ?? null;
+
+      await scheduler.runAfter(
+        0,
+        (api as any).actions.email.sendReceiptEmail,
+        {
+          to: user.email,
+          subject: `PlayVerse – Compra confirmada: ${game?.title ?? "Juego"}`,
+          html: buildPurchaseEmail({
+            userName: user.name ?? "",
+            gameTitle: game?.title ?? "",
+            coverUrl,
+            amount,
+            currency: "USD",
+            method: "AMEX •••• 4542", // si tenés brand/last4, ponelo acá
+            orderId: null,
+            appUrl: APP_URL,
+          }),
+          replyTo: user.email,
+        }
+      );
     }
 
     return { ok: true as const };

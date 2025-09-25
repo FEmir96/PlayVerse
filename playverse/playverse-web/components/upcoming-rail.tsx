@@ -17,8 +17,6 @@ type UpcomingItem = {
 };
 
 export default function UpcomingRail({ limit = 8 }: { limit?: number }) {
-  // --- Resolución robusta del nombre del query (sin romper si falta) ---
-  // Prioriza getUpcomingGames; si no está, prueba listUpcoming; si no hay ninguno, queda undefined.
   const getUpcomingFn =
     ((api as any).queries?.getUpcomingGames &&
       (((api as any).queries.getUpcomingGames as any).getUpcomingGames ||
@@ -30,8 +28,8 @@ export default function UpcomingRail({ limit = 8 }: { limit?: number }) {
 
   if (!getUpcomingFn && process.env.NODE_ENV !== "production") {
     console.warn(
-      "[UpcomingRail] No encontré queries.getUpcomingGames ni queries.listUpcoming en el codegen. " +
-        "Ejecutá: npx convex dev (en /convex) y reiniciá el servidor de Next."
+      "[UpcomingRail] Falta queries.getUpcomingGames o queries.listUpcoming. " +
+        "Corré `npx convex dev` en /convex y reiniciá Next."
     );
   }
 
@@ -47,7 +45,7 @@ export default function UpcomingRail({ limit = 8 }: { limit?: number }) {
             key={i}
             className="bg-slate-800 border-slate-700 overflow-hidden animate-pulse"
           >
-            <div className="relative h-[220px] md:h-[260px] bg-slate-700" />
+            <div className="relative aspect-[4/3] bg-slate-700" />
             <CardContent className="p-4">
               <div className="h-5 bg-slate-700 rounded w-1/3 mb-3" />
               <div className="h-4 bg-slate-700 rounded w-2/3" />
@@ -68,6 +66,8 @@ export default function UpcomingRail({ limit = 8 }: { limit?: number }) {
 }
 
 function UpcomingCard({ item }: { item: UpcomingItem }) {
+  const cover = item.cover_url || "/placeholder_game.jpg";
+
   return (
     <Card className="bg-slate-800 border-slate-700 overflow-hidden">
       <div className="relative">
@@ -77,16 +77,34 @@ function UpcomingCard({ item }: { item: UpcomingItem }) {
           </Badge>
         )}
 
-        {/* PORTADA — altura fija + object-cover para que “llene” sin bandas */}
-        <div className="relative h-[220px] md:h-[260px] bg-slate-700">
+        {/* PORTADA — Más alta (4/3) + imagen nítida (object-contain) */}
+        <div className="relative aspect-[4/3] bg-slate-700 overflow-hidden">
+          {/* Fondo borroso para no dejar franjas vacías */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={item.cover_url || "/placeholder_game.jpg"}
-            alt={item.title}
-            className="absolute inset-0 w-full h-full object-cover object-[center_top]"
+            src={cover}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 h-full w-full object-cover blur-sm scale-110 opacity-35"
             loading="lazy"
+            decoding="async"
           />
-          <div className="absolute inset-0 bg-slate-900/45 flex items-center justify-center">
+
+          {/* Imagen principal sin recorte */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={cover}
+            alt={item.title}
+            className="absolute inset-0 h-full w-full object-contain"
+            loading="lazy"
+            decoding="async"
+          />
+
+          {/* Degradado SOLO desde abajo para el chip (no “lava” toda la imagen) */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/10 to-transparent" />
+
+          {/* Chip de fecha */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
             <div className="bg-slate-800/95 px-3 py-1 rounded-full flex items-center gap-2">
               <Clock className="w-4 h-4 text-cyan-400" />
               <span className="text-cyan-400 text-sm font-medium">

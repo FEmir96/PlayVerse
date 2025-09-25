@@ -29,6 +29,7 @@ import {
   Eye,
   UploadCloud,
   ShieldAlert,
+  CheckCircle2,
 } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
@@ -41,12 +42,14 @@ import { api } from "@convex";
 
 // ⚙️ Referencias robustas (siguiendo tu patrón actual)
 const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"]
-    .getUserByEmail as FunctionReference<"query">;
+  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
 
 const getUserRentalsRef =
-  (api as any)["queries/getUserRentals"]
-    .getUserRentals as FunctionReference<"query">;
+  (api as any)["queries/getUserRentals"].getUserRentals as FunctionReference<"query">;
+
+/** ✅ NUEVO: compras del usuario */
+const getUserPurchasesRef =
+  (api as any)["queries/getUserPurchases"].getUserPurchases as FunctionReference<"query">;
 
 const updateProfileRef =
   (api as any).auth.updateProfile as FunctionReference<"mutation">;
@@ -62,8 +65,7 @@ const HAS_PM_QUERY = Boolean(
 const getPaymentMethodsRef = HAS_PM_QUERY
   ? ((api as any)["queries/getPaymentMethods"]
       .getPaymentMethods as FunctionReference<"query">)
-  : // ref alternativo estable solo para permitir `useQuery(ref, "skip")`
-    ((api as any)["queries/getUserByEmail"]
+  : ((api as any)["queries/getUserByEmail"]
       .getUserByEmail as FunctionReference<"query">);
 
 // ——— Tipos UI ———
@@ -82,7 +84,7 @@ function formatCardNumber(v: string) {
 }
 function formatExpLoose(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 4);
-  if (d.length <= 2) return d; // NO agrega 0 ni 01, deja "0" o "1" si el user quiere
+  if (d.length <= 2) return d;
   return d.slice(0, 2) + "/" + d.slice(2);
 }
 
@@ -105,10 +107,7 @@ async function fileToSquareDataUrl(file: File, size = 512): Promise<string> {
   canvas.height = size;
 
   const srcRatio = img.width / img.height;
-  let sx = 0,
-    sy = 0,
-    sw = img.width,
-    sh = img.height;
+  let sx = 0, sy = 0, sw = img.width, sh = img.height;
   if (srcRatio > 1) {
     const newW = img.height;
     sx = (img.width - newW) / 2;
@@ -163,7 +162,6 @@ export default function ProfilePage() {
     }
   }, [convexProfile]);
 
-  // Cerrar menú del FAB al clickear fuera
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!avatarWrapRef.current?.contains(e.target as Node)) {
@@ -179,22 +177,17 @@ export default function ProfilePage() {
   useEffect(() => {
     const raw = localStorage.getItem("pv_payment_methods_ui");
     if (raw) {
-      try {
-        setLocalMethods(JSON.parse(raw));
-      } catch {
-        setLocalMethods([]);
-      }
+      try { setLocalMethods(JSON.parse(raw)); } catch { setLocalMethods([]); }
     }
   }, []);
   useEffect(() => {
     localStorage.setItem("pv_payment_methods_ui", JSON.stringify(localMethods));
   }, [localMethods]);
 
-  // 👉 Hook SIEMPRE (sin condicional). Si no hay userId o no existe la query, pasamos "skip".
-const methodsFromDb = useQuery(
-  getPaymentMethodsRef as any,
-  HAS_PM_QUERY && convexProfile?._id ? { userId: convexProfile._id } : undefined
-) as PaymentMethodUI[] | undefined;
+  const methodsFromDb = useQuery(
+    getPaymentMethodsRef as any,
+    HAS_PM_QUERY && convexProfile?._id ? { userId: convexProfile._id } : undefined
+  ) as PaymentMethodUI[] | undefined;
 
   const displayMethods = methodsFromDb ?? localMethods;
 
@@ -216,18 +209,11 @@ const methodsFromDb = useQuery(
         newPassword: editedPassword || undefined,
         avatarUrl: avatarInput || undefined,
       });
-      toast({
-        title: "Perfil actualizado",
-        description: "Tus cambios se guardaron correctamente.",
-      });
+      toast({ title: "Perfil actualizado", description: "Tus cambios se guardaron correctamente." });
       setIsEditing(false);
       setEditedPassword("");
     } catch (e: any) {
-      toast({
-        title: "No se pudo guardar",
-        description: e?.message ?? "Intentá nuevamente.",
-        variant: "destructive",
-      });
+      toast({ title: "No se pudo guardar", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
     }
   };
 
@@ -243,13 +229,15 @@ const methodsFromDb = useQuery(
     getUserRentalsRef,
     convexProfile?._id ? { userId: convexProfile._id } : "skip"
   ) as
-    | Array<{
-        _id: string;
-        game?: { title?: string; cover_url?: string };
-        expiresAt?: number | null;
-        title?: string;
-        cover_url?: string;
-      }>
+    | Array<{ _id: string; game?: { title?: string; cover_url?: string }; expiresAt?: number | null; title?: string; cover_url?: string; }>
+    | undefined;
+
+  /** ✅ NUEVO: Compras del usuario */
+  const purchases = useQuery(
+    getUserPurchasesRef,
+    convexProfile?._id ? { userId: convexProfile._id } : "skip"
+  ) as
+    | Array<{ _id: string; game?: { title?: string; cover_url?: string }; createdAt?: number; title?: string; cover_url?: string; }>
     | undefined;
 
   // Nombre e imagen “finales” para UI
@@ -263,16 +251,8 @@ const methodsFromDb = useQuery(
     "/images/avatar-placeholder.png";
 
   // --- Avatar helpers ---
-  const openUpload = (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setAvatarUploadOpen(true);
-    setFabOpen(false);
-  };
-  const openView = (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setAvatarViewOpen(true);
-    setFabOpen(false);
-  };
+  const openUpload = (e?: React.MouseEvent) => { e?.stopPropagation(); setAvatarUploadOpen(true); setFabOpen(false); };
+  const openView = (e?: React.MouseEvent) => { e?.stopPropagation(); setAvatarViewOpen(true); setFabOpen(false); };
 
   const handleFilePick = async (evt: React.ChangeEvent<HTMLInputElement>) => {
     const f = evt.target.files?.[0];
@@ -281,37 +261,22 @@ const methodsFromDb = useQuery(
       const dataUrl = await fileToSquareDataUrl(f, 512);
       setAvatarInput(dataUrl);
       if (convexProfile?._id) {
-        await updateProfile({
-          userId: convexProfile._id,
-          avatarUrl: dataUrl,
-        });
-        toast({
-          title: "Foto actualizada",
-          description: "Tu nueva foto de perfil se guardó correctamente.",
-        });
+        await updateProfile({ userId: convexProfile._id, avatarUrl: dataUrl });
+        toast({ title: "Foto actualizada", description: "Tu nueva foto de perfil se guardó correctamente." });
       }
       setAvatarUploadOpen(false);
     } catch (err: any) {
-      toast({
-        title: "Error al procesar la imagen",
-        description: err?.message ?? "Probá con otro archivo.",
-        variant: "destructive",
-      });
+      toast({ title: "Error al procesar la imagen", description: err?.message ?? "Probá con otro archivo.", variant: "destructive" });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const diceBearSuggestions = useMemo(() => {
-    const seed = (loginEmail || displayName || "playverse").replace(
-      /[^a-z0-9]/gi,
-      ""
-    );
+    const seed = (loginEmail || displayName || "playverse").replace(/[^a-z0-9]/gi, "");
     return Array.from({ length: 6 }).map((_, i) => {
       const s = `${seed}-${i + 1}`;
-      return `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${encodeURIComponent(
-        s
-      )}&radius=50`;
+      return `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${encodeURIComponent(s)}&radius=50`;
     });
   }, [loginEmail, displayName]);
 
@@ -319,22 +284,12 @@ const methodsFromDb = useQuery(
     try {
       setAvatarInput(url);
       if (convexProfile?._id) {
-        await updateProfile({
-          userId: convexProfile._id,
-          avatarUrl: url,
-        });
-        toast({
-          title: "Foto actualizada",
-          description: "Se aplicó el avatar sugerido.",
-        });
+        await updateProfile({ userId: convexProfile._id, avatarUrl: url });
+        toast({ title: "Foto actualizada", description: "Se aplicó el avatar sugerido." });
       }
       setAvatarUploadOpen(false);
     } catch (e: any) {
-      toast({
-        title: "No se pudo guardar",
-        description: e?.message ?? "Intentá nuevamente.",
-        variant: "destructive",
-      });
+      toast({ title: "No se pudo guardar", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
     }
   };
 
@@ -357,11 +312,7 @@ const methodsFromDb = useQuery(
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!convexProfile?._id) {
-      toast({
-        title: "No se pudo guardar",
-        description: "No se encontró el perfil del usuario.",
-        variant: "destructive",
-      });
+      toast({ title: "No se pudo guardar", description: "No se encontró el perfil del usuario.", variant: "destructive" });
       return;
     }
 
@@ -374,7 +325,6 @@ const methodsFromDb = useQuery(
         brand: pmBrand,
       });
 
-      // UI inmediata
       const clean = pmNumber.replace(/\D/g, "");
       const last4 = clean.slice(-4);
       const [mm, yy] = pmExp.split("/");
@@ -388,22 +338,16 @@ const methodsFromDb = useQuery(
       setLocalMethods((arr) => [uiItem, ...arr]);
 
       setPayOpen(false);
-      setPmBrand("visa");
-      setPmNumber("");
-      setPmExp("");
-      setPmCvv("");
+      setPmBrand("visa"); setPmNumber(""); setPmExp(""); setPmCvv("");
 
       toast({
         title: "Método agregado",
-        description:
-          "Se guardó tu tarjeta de forma segura. Mostramos solo últimos 4 dígitos.",
+        description: "Se guardó tu tarjeta de forma segura. Mostramos solo últimos 4 dígitos.",
       });
     } catch (err: any) {
       toast({
         title: "No se pudo guardar",
-        description:
-          err?.message ??
-          "Revisá los datos e intentá otra vez. Para pruebas usá 4111 1111 1111 1111 o 5555 5555 5555 4444.",
+        description: err?.message ?? "Revisá los datos e intentá otra vez. Para pruebas usá 4111 1111 1111 1111 o 5555 5555 5555 4444.",
         variant: "destructive",
       });
     }
@@ -422,13 +366,8 @@ const methodsFromDb = useQuery(
       ? "bg-orange-400 text-slate-900"
       : "bg-slate-600 text-white";
   const roleIcon =
-    role === "admin" ? (
-      <ShieldAlert className="w-3 h-3 mr-1" />
-    ) : (
-      <Crown className="w-3 h-3 mr-1" />
-    );
-  const roleLabel =
-    role === "admin" ? "Admin" : role === "premium" ? "Premium" : "Free";
+    role === "admin" ? <ShieldAlert className="w-3 h-3 mr-1" /> : <Crown className="w-3 h-3 mr-1" />;
+  const roleLabel = role === "admin" ? "Admin" : role === "premium" ? "Premium" : "Free";
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -445,19 +384,11 @@ const methodsFromDb = useQuery(
             >
               {/* Avatar circular */}
               <div className="w-28 h-28 rounded-full overflow-hidden border border-slate-700 relative">
-                <img
-                  src={currentAvatar}
-                  alt="Avatar"
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
+                <img src={currentAvatar} alt="Avatar" className="w-full h-full object-cover" draggable={false} />
                 {/* FAB centrado (aparece en hover) */}
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFabOpen((s) => !s);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); setFabOpen((s) => !s); }}
                   className={`absolute inset-0 m-auto h-12 w-12 rounded-full grid place-items-center
                     bg-[#ffb900] text-slate-900 ring-2 ring-white/40 shadow
                     transition-opacity duration-150
@@ -492,13 +423,9 @@ const methodsFromDb = useQuery(
             </div>
 
             <div>
-              <h1 className="text-3xl md:text-4xl font-extrabold text-orange-400 mb-2">
-                {displayName}
-              </h1>
+              <h1 className="text-3xl md:text-4xl font-extrabold text-orange-400 mb-2">{displayName}</h1>
               <div className="flex items-center gap-3">
-                <span
-                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${roleStyle}`}
-                >
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${roleStyle}`}>
                   {roleIcon}
                   {roleLabel}
                 </span>
@@ -513,35 +440,18 @@ const methodsFromDb = useQuery(
             {/* Personal Information */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-orange-400">
-                  Información Personal
-                </CardTitle>
+                <CardTitle className="text-orange-400">Información Personal</CardTitle>
 
                 {!isEditing ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setIsEditing(true)}
-                    className="text-orange-400 hover:text-orange-300"
-                  >
+                  <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} className="text-orange-400 hover:text-orange-300">
                     <Edit2 className="w-4 h-4" />
                   </Button>
                 ) : (
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleSave}
-                      disabled={!canSave}
-                      className="bg-orange-400 hover:bg-orange-500 text-slate-900"
-                    >
+                    <Button size="sm" onClick={handleSave} disabled={!canSave} className="bg-orange-400 hover:bg-orange-500 text-slate-900">
                       <Save className="w-4 h-4" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleCancel}
-                      className="text-slate-400"
-                    >
+                    <Button size="sm" variant="ghost" onClick={handleCancel} className="text-slate-400">
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
@@ -549,32 +459,23 @@ const methodsFromDb = useQuery(
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {/* Nombre */}
                 <div>
                   <Label className="text-slate-300">Nombre de usuario</Label>
                   {isEditing ? (
-                    <Input
-                      value={editedName}
-                      onChange={(e) => setEditedName(e.target.value)}
-                      className="bg-slate-700 border-slate-600 text-white mt-1"
-                    />
+                    <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="bg-slate-700 border-slate-600 text-white mt-1" />
                   ) : (
                     <p className="text-white mt-1">{displayName}</p>
                   )}
                 </div>
 
-                {/* Email */}
                 <div>
                   <Label className="text-slate-300">Email</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <Mail className="w-4 h-4 text-slate-400" />
-                    <p className="text-slate-400">
-                      {loginEmail ?? "email@ejemplo.com"}
-                    </p>
+                    <p className="text-slate-400">{loginEmail ?? "email@ejemplo.com"}</p>
                   </div>
                 </div>
 
-                {/* Contraseña */}
                 <div>
                   <Label className="text-slate-300">Contraseña</Label>
                   {isEditing ? (
@@ -593,7 +494,6 @@ const methodsFromDb = useQuery(
                   )}
                 </div>
 
-                {/* URL avatar (solo cuando edita PERFIL; subir archivo está en el modal) */}
                 {isEditing && (
                   <div>
                     <Label className="text-slate-300">URL de avatar</Label>
@@ -611,25 +511,18 @@ const methodsFromDb = useQuery(
             {/* Subscription Management */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader>
-                <CardTitle className="text-orange-400">
-                  Suscripción Premium
-                </CardTitle>
+                <CardTitle className="text-orange-400">Suscripción Premium</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-white font-medium">Plan Premium</p>
-                    <p className="text-slate-400 text-sm">
-                      Renovación: 15 de enero, 2025
-                    </p>
+                    <p className="text-slate-400 text-sm">Renovación: 15 de enero, 2025</p>
                   </div>
                   <Badge className="bg-orange-400 text-slate-900">Activo</Badge>
                 </div>
                 <Separator className="bg-slate-700" />
-                <Button
-                  variant="outline"
-                  className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
-                >
+                <Button variant="outline" className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent">
                   Cancelar suscripción
                 </Button>
               </CardContent>
@@ -638,55 +531,33 @@ const methodsFromDb = useQuery(
             {/* Payment Methods */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-orange-400">
-                  Métodos de Pago
-                </CardTitle>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setPayOpen(true)}
-                  className="text-orange-400 hover:text-orange-300"
-                  title="Agregar método"
-                >
+                <CardTitle className="text-orange-400">Métodos de Pago</CardTitle>
+                <Button size="icon" variant="ghost" onClick={() => setPayOpen(true)} className="text-orange-400 hover:text-orange-300" title="Agregar método">
                   <Plus className="w-4 h-4" />
                 </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 {displayMethods && displayMethods.length > 0 ? (
                   displayMethods.map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex items-center justify-between p-3 bg-slate-700 rounded-lg"
-                    >
+                    <div key={m.id} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg">
                       <div className="flex items-center gap-3">
                         <CreditCard className="w-5 h-5 text-orange-400" />
                         <div>
-                          <p className="text-white text-sm">
-                            {m.brand.toUpperCase()} •••• {m.last4}
-                          </p>
+                          <p className="text-white text-sm">{m.brand.toUpperCase()} •••• {m.last4}</p>
                           <p className="text-slate-400 text-xs">
-                            Expira {String(m.expMonth).padStart(2, "0")}/
-                            {String(m.expYear).slice(-2)}
+                            Expira {String(m.expMonth).padStart(2, "0")}/{String(m.expYear).slice(-2)}
                           </p>
                         </div>
                       </div>
-                      {/* Solo remueve del listado local (UI) si no estás leyendo del server */}
                       {!methodsFromDb && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeLocalMethod(m.id)}
-                          className="text-red-400 hover:text-red-300"
-                        >
+                        <Button size="sm" variant="ghost" onClick={() => removeLocalMethod(m.id)} className="text-red-400 hover:text-red-300">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       )}
                     </div>
                   ))
                 ) : (
-                  <p className="text-slate-400 text-sm">
-                    No agregaste métodos todavía.
-                  </p>
+                  <p className="text-slate-400 text-sm">No agregaste métodos todavía.</p>
                 )}
               </CardContent>
             </Card>
@@ -694,7 +565,7 @@ const methodsFromDb = useQuery(
 
           {/* Second Row - Games Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Purchased Games */}
+            {/* Purchased Games — ✅ AHORA CON LISTADO REAL */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-orange-400 flex items-center gap-2">
@@ -702,24 +573,47 @@ const methodsFromDb = useQuery(
                   Juegos Comprados
                 </CardTitle>
                 <Link href="/mis-juegos">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-orange-400 hover:text-orange-300"
-                  >
+                  <Button size="sm" variant="ghost" className="text-orange-400 hover:text-orange-300">
                     <Settings className="w-4 h-4 mr-2" />
                     Administrar mis juegos
                   </Button>
                 </Link>
               </CardHeader>
+
               <CardContent>
-                <p className="text-slate-400 text-sm">
-                  Aún no hay compras registradas.
-                </p>
+                <div className="space-y-3">
+                  {(purchases ?? []).map((p) => {
+                    const title = p.game?.title || p.title || "Juego";
+                    const cover = p.game?.cover_url || p.cover_url || "/placeholder.svg";
+                    const when =
+                      typeof p.createdAt === "number"
+                        ? new Date(p.createdAt).toLocaleDateString()
+                        : null;
+
+                    return (
+                      <div key={p._id} className="bg-slate-700 rounded-lg p-4 flex items-center gap-4">
+                        <img src={cover} alt={title} className="w-16 h-16 rounded-lg object-cover" />
+                        <div className="flex-1">
+                          <h3 className="text-white font-medium">{title}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            <span className="text-emerald-400 text-sm">
+                              {when ? `Comprado el ${when}` : `Compra registrada`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {(!purchases || purchases.length === 0) && (
+                    <p className="text-slate-400 text-sm">Aún no hay compras registradas.</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
-            {/* Rented Games */}
+            {/* Rented Games — ya estaba funcional */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-orange-400 flex items-center gap-2">
@@ -727,11 +621,7 @@ const methodsFromDb = useQuery(
                   Juegos Alquilados
                 </CardTitle>
                 <Link href="/mis-juegos">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-orange-400 hover:text-orange-300"
-                  >
+                  <Button size="sm" variant="ghost" className="text-orange-400 hover:text-orange-300">
                     <Settings className="w-4 h-4 mr-2" />
                     Administrar mis juegos
                   </Button>
@@ -742,23 +632,15 @@ const methodsFromDb = useQuery(
                 <div className="space-y-3">
                   {(rentals ?? []).map((r) => {
                     const title = r.game?.title || r.title || "Juego";
-                    const cover =
-                      r.game?.cover_url || r.cover_url || "/placeholder.svg";
+                    const cover = r.game?.cover_url || r.cover_url || "/placeholder.svg";
                     const exp =
                       typeof r.expiresAt === "number"
                         ? new Date(r.expiresAt).toLocaleDateString()
                         : null;
 
                     return (
-                      <div
-                        key={r._id}
-                        className="bg-slate-700 rounded-lg p-4 flex items-center gap-4"
-                      >
-                        <img
-                          src={cover}
-                          alt={title}
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
+                      <div key={r._id} className="bg-slate-700 rounded-lg p-4 flex items-center gap-4">
+                        <img src={cover} alt={title} className="w-16 h-16 rounded-lg object-cover" />
                         <div className="flex-1">
                           <h3 className="text-white font-medium">{title}</h3>
                           <div className="flex items-center gap-2 mt-1">
@@ -773,9 +655,7 @@ const methodsFromDb = useQuery(
                   })}
 
                   {(!rentals || rentals.length === 0) && (
-                    <p className="text-slate-400 text-sm">
-                      Aún no tenés alquileres activos.
-                    </p>
+                    <p className="text-slate-400 text-sm">Aún no tenés alquileres activos.</p>
                   )}
                 </div>
               </CardContent>
@@ -786,71 +666,36 @@ const methodsFromDb = useQuery(
 
       {/* === MODAL: Ver foto (visor) === */}
       {avatarViewOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-          onClick={() => setAvatarViewOpen(false)}
-        >
-          <div
-            className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setAvatarViewOpen(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-orange-400 font-semibold">Foto de perfil</h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-slate-300"
-                onClick={() => setAvatarViewOpen(false)}
-              >
+              <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => setAvatarViewOpen(false)}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
             <div className="flex items-center justify-center">
-              <img
-                src={currentAvatar}
-                alt="Avatar"
-                className="max-h-[60vh] max-w-full rounded-lg object-contain"
-              />
+              <img src={currentAvatar} alt="Avatar" className="max-h-[60vh] max-w-full rounded-lg object-contain" />
             </div>
           </div>
         </div>
       )}
 
-      {/* === MODAL: Cambiar foto (upload + sugerencias) === */}
+      {/* === MODAL: Cambiar foto === */}
       {avatarUploadOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-          onClick={() => setAvatarUploadOpen(false)}
-        >
-          <div
-            className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-lg w-full"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setAvatarUploadOpen(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-orange-400 font-semibold">Cambiar foto</h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-slate-300"
-                onClick={() => setAvatarUploadOpen(false)}
-              >
+              <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => setAvatarUploadOpen(false)}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFilePick}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="bg-orange-400 hover:bg-orange-500 text-slate-900"
-                >
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFilePick} className="hidden" />
+                <Button onClick={() => fileInputRef.current?.click()} className="bg-orange-400 hover:bg-orange-500 text-slate-900">
                   Subir desde tu PC
                 </Button>
               </div>
@@ -858,9 +703,7 @@ const methodsFromDb = useQuery(
               <Separator className="bg-slate-700" />
 
               <div>
-                <p className="text-slate-300 text-sm mb-2">
-                  Sugerencias rápidas
-                </p>
+                <p className="text-slate-300 text-sm mb-2">Sugerencias rápidas</p>
                 <div className="grid grid-cols-6 gap-2">
                   {diceBearSuggestions.map((u) => (
                     <button
@@ -870,22 +713,14 @@ const methodsFromDb = useQuery(
                       className="rounded-full overflow-hidden border border-slate-700 hover:ring-2 hover:ring-orange-400 transition"
                       title="Usar este avatar"
                     >
-                      <img
-                        src={u}
-                        alt="Sugerencia de avatar"
-                        className="w-12 h-12 object-cover"
-                      />
+                      <img src={u} alt="Sugerencia de avatar" className="w-12 h-12 object-cover" />
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setAvatarUploadOpen(false)}
-                  className="border-slate-600 text-slate-300 bg-transparent"
-                >
+                <Button variant="outline" onClick={() => setAvatarUploadOpen(false)} className="border-slate-600 text-slate-300 bg-transparent">
                   Cerrar
                 </Button>
               </div>
@@ -896,39 +731,21 @@ const methodsFromDb = useQuery(
 
       {/* === MODAL: Agregar método de pago === */}
       {payOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-          onClick={() => setPayOpen(false)}
-        >
-          <form
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={handlePaymentSubmit}
-            className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-lg"
-          >
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setPayOpen(false)}>
+          <form onClick={(e) => e.stopPropagation()} onSubmit={handlePaymentSubmit} className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-lg">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-orange-400 font-semibold">
-                Agregar método de pago
-              </h3>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-slate-300"
-                onClick={() => setPayOpen(false)}
-              >
+              <h3 className="text-orange-400 font-semibold">Agregar método de pago</h3>
+              <Button type="button" variant="ghost" size="icon" className="text-slate-300" onClick={() => setPayOpen(false)}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
             <div className="space-y-4">
-              {/* Marca */}
               <div>
                 <Label className="text-slate-300">Marca</Label>
                 <select
                   value={pmBrand}
-                  onChange={(e) =>
-                    setPmBrand(e.target.value as PaymentMethodUI["brand"])
-                  }
+                  onChange={(e) => setPmBrand(e.target.value as PaymentMethodUI["brand"])}
                   className="mt-1 w-full rounded-md bg-slate-700 border border-slate-600 text-white px-3 py-2"
                 >
                   <option value="visa">Visa</option>
@@ -938,7 +755,6 @@ const methodsFromDb = useQuery(
                 </select>
               </div>
 
-              {/* Número */}
               <div>
                 <Label className="text-slate-300">Número de tarjeta</Label>
                 <Input
@@ -950,12 +766,9 @@ const methodsFromDb = useQuery(
                   autoComplete="cc-number"
                   required
                 />
-                <p className="text-xs text-slate-400 mt-1">
-                  Se guarda un hash, no almacenamos el número completo.
-                </p>
+                <p className="text-xs text-slate-400 mt-1">Se guarda un hash, no almacenamos el número completo.</p>
               </div>
 
-              {/* Vencimiento + CVV */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-slate-300">Vencimiento (MM/YY)</Label>
@@ -973,9 +786,7 @@ const methodsFromDb = useQuery(
                   <Label className="text-slate-300">CVV</Label>
                   <Input
                     value={pmCvv}
-                    onChange={(e) =>
-                      setPmCvv(e.target.value.replace(/\D/g, "").slice(0, 3))
-                    }
+                    onChange={(e) => setPmCvv(e.target.value.replace(/\D/g, "").slice(0, 3))}
                     placeholder="123"
                     className="bg-slate-700 border-slate-600 text-white mt-1"
                     inputMode="numeric"
@@ -994,18 +805,10 @@ const methodsFromDb = useQuery(
                 {pmNumber ? maskCard(pmNumber) : "•••• •••• •••• ••••"}
               </div>
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setPayOpen(false)}
-                  className="border-slate-600 text-slate-300 bg-transparent"
-                >
+                <Button type="button" variant="outline" onClick={() => setPayOpen(false)} className="border-slate-600 text-slate-300 bg-transparent">
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  className="bg-orange-400 hover:bg-orange-500 text-slate-900"
-                >
+                <Button type="submit" className="bg-orange-400 hover:bg-orange-500 text-slate-900">
                   Guardar
                 </Button>
               </div>
