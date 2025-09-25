@@ -23,11 +23,13 @@ export default defineSchema({
     trailer_url: v.optional(v.string()),
     plan: v.union(v.literal("free"), v.literal("premium")),
     createdAt: v.number(),
-    // 👇 NUEVO: géneros normalizados para tus filtros
     genres: v.optional(v.array(v.string())),
+
+    // 👇 nuevos (opcionales)
+    weeklyPrice: v.optional(v.number()),    // precio semanal de alquiler
+    purchasePrice: v.optional(v.number()),  // precio de compra
   })
     .index("by_title", ["title"])
-    // 🔎 útil para listados de “Nuevos juegos”
     .index("by_createdAt", ["createdAt"]),
 
   transactions: defineTable({
@@ -99,4 +101,28 @@ export default defineSchema({
     panHash: v.optional(v.string()), // hash SHA-256 del PAN (opcional para dedupe)
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // Al final de defineSchema({...})
+favorites: defineTable({
+  userId: v.id("profiles"),
+  gameId: v.id("games"),
+  createdAt: v.number(),
+})
+  .index("by_user", ["userId"])
+  .index("by_user_game", ["userId", "gameId"]),
+
+  // Juegos próximos (curados a mano)
+  upcomingGames: defineTable({
+    title: v.string(),
+    genre: v.optional(v.string()),
+    releaseAt: v.number(),             // fecha (ms)
+    priority: v.optional(v.number()),  // para ordenar manualmente si querés
+    cover_url: v.optional(v.string()), // portada específica para "próximamente"
+    gameId: v.optional(v.id("games")), // 🔗 referencia al juego real (opcional)
+    createdAt: v.number(),
+  })
+    .index("by_releaseAt", ["releaseAt"])
+    .index("by_title", ["title"])
+    .index("by_priority", ["priority"]),
+
 });

@@ -78,7 +78,9 @@ export default function LoginPage() {
       localStorage.removeItem("pv_email");
     }
 
-    setTimeout(() => router.push("/"), 120);
+    // ⬇️ Respeta ?next=/ruta. Si no viene, va a "/"
+    const next = searchParams?.get("next");
+    setTimeout(() => router.push(next || "/"), 120);
   };
 
   return (
@@ -202,7 +204,7 @@ export default function LoginPage() {
               type="button"
               onClick={() =>
                 import("next-auth/react").then(({ signIn }) =>
-                  signIn("google", { callbackUrl: "/?login=ok" })
+                  signIn("google", { callbackUrl: searchParams?.get("next") || "/?login=ok" })
                 )
               }
               className="w-full flex items-center justify-center gap-3 rounded-md border border-orange-400/40 bg-slate-800/60 px-4 py-2.5 text-[15px] font-medium text-slate-200 transition
@@ -210,7 +212,6 @@ export default function LoginPage() {
               aria-label="Continuar con Google"
               title="Continuar con Google"
             >
-              {/* Si preferís archivo: <img src="/icons/google.svg" alt="Google" className="w-5 h-5" /> */}
               <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
                 <path fill="#FFC107" d="M43.6 20.5h-1.9V20H24v8h11.3C33.9 31 29.4 34 24 34c-6.6 0-12-5.4-12-12S17.4 10 24 10c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 3.7 29.2 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.1-.1-2.2-.4-3.5z"/>
                 <path fill="#FF3D00" d="M6.3 14.7L13 19c2-4 6.1-7 11-7 3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 3.7 29.2 2 24 2 15 2 7.4 7.3 4.1 14.7z"/>

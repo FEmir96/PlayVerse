@@ -191,10 +191,10 @@ export default function ProfilePage() {
   }, [localMethods]);
 
   // 👉 Hook SIEMPRE (sin condicional). Si no hay userId o no existe la query, pasamos "skip".
-  const methodsFromDb = useQuery(
-    getPaymentMethodsRef as any,
-    HAS_PM_QUERY && convexProfile?._id ? { userId: convexProfile._id } : "skip"
-  ) as PaymentMethodUI[] | undefined;
+const methodsFromDb = useQuery(
+  getPaymentMethodsRef as any,
+  HAS_PM_QUERY && convexProfile?._id ? { userId: convexProfile._id } : undefined
+) as PaymentMethodUI[] | undefined;
 
   const displayMethods = methodsFromDb ?? localMethods;
 

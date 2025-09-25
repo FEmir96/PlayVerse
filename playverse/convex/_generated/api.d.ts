@@ -15,6 +15,7 @@ import type {
 } from "convex/server";
 import type * as actions_backfillCoversFromIGDB from "../actions/backfillCoversFromIGDB.js";
 import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetailsFromIGDB.js";
+import type * as actions_email from "../actions/email.js";
 import type * as actions_translateExistingDescriptions from "../actions/translateExistingDescriptions.js";
 import type * as auth from "../auth.js";
 import type * as mutations_addGame from "../mutations/addGame.js";
@@ -37,22 +38,29 @@ import type * as mutations_simulateRental from "../mutations/simulateRental.js";
 import type * as mutations_updateGame from "../mutations/updateGame.js";
 import type * as mutations_updateUser from "../mutations/updateUser.js";
 import type * as mutations_upgradePlan from "../mutations/upgradePlan.js";
+import type * as mutations_upsertUpcoming from "../mutations/upsertUpcoming.js";
 import type * as profiles from "../profiles.js";
 import type * as queries_getAdmins from "../queries/getAdmins.js";
 import type * as queries_getAllUsers from "../queries/getAllUsers.js";
 import type * as queries_getAuditLogs from "../queries/getAuditLogs.js";
 import type * as queries_getAvailableGames from "../queries/getAvailableGames.js";
+import type * as queries_getFeaturedByTitles from "../queries/getFeaturedByTitles.js";
 import type * as queries_getFreeGames from "../queries/getFreeGames.js";
+import type * as queries_getGameById from "../queries/getGameById.js";
 import type * as queries_getGames from "../queries/getGames.js";
 import type * as queries_getPaymentMethods from "../queries/getPaymentMethods.js";
 import type * as queries_getPremiumGames from "../queries/getPremiumGames.js";
+import type * as queries_getUpcomingGames from "../queries/getUpcomingGames.js";
 import type * as queries_getUserByEmail from "../queries/getUserByEmail.js";
+import type * as queries_getUserLibrary from "../queries/getUserLibrary.js";
 import type * as queries_getUserPayments from "../queries/getUserPayments.js";
 import type * as queries_getUserRentals from "../queries/getUserRentals.js";
 import type * as queries_getUserUpgrades from "../queries/getUserUpgrades.js";
 import type * as queries_listGamesWithoutCover from "../queries/listGamesWithoutCover.js";
 import type * as queries_listGamesWithoutDetails from "../queries/listGamesWithoutDetails.js";
 import type * as queries_listGamesWithoutTrailer from "../queries/listGamesWithoutTrailer.js";
+import type * as queries_searchGames from "../queries/searchGames.js";
+import type * as transactions from "../transactions.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -65,6 +73,7 @@ import type * as queries_listGamesWithoutTrailer from "../queries/listGamesWitho
 declare const fullApi: ApiFromModules<{
   "actions/backfillCoversFromIGDB": typeof actions_backfillCoversFromIGDB;
   "actions/backfillDetailsFromIGDB": typeof actions_backfillDetailsFromIGDB;
+  "actions/email": typeof actions_email;
   "actions/translateExistingDescriptions": typeof actions_translateExistingDescriptions;
   auth: typeof auth;
   "mutations/addGame": typeof mutations_addGame;
@@ -87,22 +96,29 @@ declare const fullApi: ApiFromModules<{
   "mutations/updateGame": typeof mutations_updateGame;
   "mutations/updateUser": typeof mutations_updateUser;
   "mutations/upgradePlan": typeof mutations_upgradePlan;
+  "mutations/upsertUpcoming": typeof mutations_upsertUpcoming;
   profiles: typeof profiles;
   "queries/getAdmins": typeof queries_getAdmins;
   "queries/getAllUsers": typeof queries_getAllUsers;
   "queries/getAuditLogs": typeof queries_getAuditLogs;
   "queries/getAvailableGames": typeof queries_getAvailableGames;
+  "queries/getFeaturedByTitles": typeof queries_getFeaturedByTitles;
   "queries/getFreeGames": typeof queries_getFreeGames;
+  "queries/getGameById": typeof queries_getGameById;
   "queries/getGames": typeof queries_getGames;
   "queries/getPaymentMethods": typeof queries_getPaymentMethods;
   "queries/getPremiumGames": typeof queries_getPremiumGames;
+  "queries/getUpcomingGames": typeof queries_getUpcomingGames;
   "queries/getUserByEmail": typeof queries_getUserByEmail;
+  "queries/getUserLibrary": typeof queries_getUserLibrary;
   "queries/getUserPayments": typeof queries_getUserPayments;
   "queries/getUserRentals": typeof queries_getUserRentals;
   "queries/getUserUpgrades": typeof queries_getUserUpgrades;
   "queries/listGamesWithoutCover": typeof queries_listGamesWithoutCover;
   "queries/listGamesWithoutDetails": typeof queries_listGamesWithoutDetails;
   "queries/listGamesWithoutTrailer": typeof queries_listGamesWithoutTrailer;
+  "queries/searchGames": typeof queries_searchGames;
+  transactions: typeof transactions;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

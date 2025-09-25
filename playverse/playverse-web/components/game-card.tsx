@@ -1,51 +1,95 @@
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-import { Star, Crown } from "lucide-react"
-import Link from "next/link"
+// playverse-web/components/game-card.tsx
+"use client";
 
-function GameCard({ gameId, isPremium = false }: { gameId: string; isPremium?: boolean }) {
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Star } from "lucide-react";
+import type { Doc } from "@convex/_generated/dataModel";
+
+type Props = {
+  game: Doc<"games">;
+};
+
+// Heurística simple: si la URL suena a screenshot/banner la tratamos como landscape.
+function isLandscapeFromUrl(url?: string) {
+  if (!url) return false;
+  return /screenshot|artwork|banner|widescreen|hero|landscape/i.test(url);
+}
+
+export default function GameCard({ game }: Props) {
+  const isPremium = game.plan === "premium";
+  const primaryGenre = (game.genres && game.genres[0]) || "General";
+  const href = `/juego/${game._id}`; // Id<"games"> -> string por template literal
+
+  const landscape = isLandscapeFromUrl(game.cover_url);
+  const aspectClass = landscape ? "aspect-video" : "aspect-[3/4]";
+  const objectClass = landscape ? "object-cover" : "object-contain";
+
   return (
-    <Link href={`/juego/${gameId}`} className="block">
-      <Card className="bg-slate-800 border-slate-700 overflow-hidden group hover:border-orange-400/50 transition-colors gap-1 p-0 cursor-pointer">
+    <Link href={href}>
+      <Card className="bg-slate-800 border-slate-700 gap-1 p-0 overflow-hidden hover:shadow-lg hover:shadow-orange-400/10 transition">
         <div className="relative">
-          <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
+          {/* Género */}
+          <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">
+            {primaryGenre}
+          </Badge>
+
+          {/* Sello premium */}
           {isPremium && (
-            <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full p-2 shadow-lg">
-              <Crown className="w-4 h-4 text-yellow-900" />
+            <div className="absolute top-3 right-3 z-10">
+              <div className="w-8 h-8 rounded-full bg-yellow-400/90 text-slate-900 grid place-items-center font-bold">
+                ★
+              </div>
             </div>
           )}
-          <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
+
+          {/* Portada con manejo de orientación */}
+          <div className={`relative w-full ${aspectClass} bg-slate-800 overflow-hidden`}>
+            {/* Fondo blur para portrait (evita “cajas” vacías) */}
+            {!landscape && game.cover_url && (
+              <div
+                className="absolute inset-0 blur-xl opacity-30 scale-110"
+                style={{
+                  backgroundImage: `url(${game.cover_url})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+              />
+            )}
+
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/tomb-raider-game-cover.jpg"
-              alt="Tomb Raider"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              src={game.cover_url || "/placeholder_game.jpg"}
+              alt={game.title}
+              className={`relative z-[1] w-full h-full ${objectClass}`}
+              loading="lazy"
             />
           </div>
         </div>
+
         <CardContent className="p-4">
           <div className="flex items-center gap-1 mb-2">
             <Star className="w-4 h-4 fill-orange-400 text-orange-400" />
             <span className="text-orange-400 font-semibold">4.5</span>
           </div>
-          <h3 className="text-orange-400 font-semibold text-lg mb-2">Tomb Raider</h3>
+
+          <h3 className="text-orange-400 font-semibold text-lg mb-1 line-clamp-1">
+            {game.title}
+          </h3>
+
           <p className="text-slate-400 text-sm mb-4 line-clamp-2">
-            Lorem ipsum dolor sit amet consectetur adipiscing elit nulla tristique
+            {game.description || "Sin descripción por ahora."}
           </p>
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <p className="text-slate-400 text-sm">Alquiler</p>
-              <p className="text-white font-semibold">$2.99/sem</p>
-            </div>
-            <div className="text-right">
-              <p className="text-slate-400 text-sm">Compra</p>
-              <p className="text-white font-semibold">$19.99</p>
-            </div>
+
+          <div className="flex items-center justify-between text-sm text-slate-300">
+            <span>Plan</span>
+            <span className={isPremium ? "text-yellow-300" : "text-teal-300"}>
+              {isPremium ? "Premium" : "Free"}
+            </span>
           </div>
-          <p className="text-cyan-400 text-xs text-center"> "10% de descuento con PlayVerse premium" </p>
         </CardContent>
       </Card>
     </Link>
-  )
+  );
 }
-
-export default GameCard

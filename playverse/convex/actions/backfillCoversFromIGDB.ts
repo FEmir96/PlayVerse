@@ -1,191 +1,148 @@
 "use node";
 
 import { action } from "../_generated/server";
-import { api } from "../_generated/api";
 import { v } from "convex/values";
-import type { Id, Doc } from "../_generated/dataModel";
-import type { FunctionReference } from "convex/server";
+import { api } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 
-// 💡 OJO: triple nivel (carpeta → archivo → export)
-const qGetGames = (api as any).queries.getGames.getGames as FunctionReference<"query">;
-// si querés fallback por plan:
-const qGetFreeGames = (api as any).queries.getFreeGames?.getFreeGames as
-  | FunctionReference<"query">
-  | undefined;
-const qGetPremiumGames = (api as any).queries.getPremiumGames?.getPremiumGames as
-  | FunctionReference<"query">
-  | undefined;
-
-const mSetGameCoverUrl =
-  (api as any).mutations.setGameCoverUrl.setGameCoverUrl as FunctionReference<"mutation">;
-
-const IGDB_IMG_BASE = "https://images.igdb.com/igdb/image/upload/";
-const SIZE_COVER = (x2: boolean) => (x2 ? "t_cover_big_2x" : "t_cover_big");
-const ALLOWED = /^https:\/\/images\.igdb\.com\/igdb\/image\/upload\//i;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const coverUrlFromImageId = (image_id: string, x2: boolean) =>
-  `${IGDB_IMG_BASE}${SIZE_COVER(x2)}/${image_id}.jpg`;
-
-function normalizeTitle(t: string) {
-  return t
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/’/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-const TITLE_ALIASES: Record<string, string[]> = {
-  "marvel's spiderman": ["marvel's spider-man"],
-  "resident evil 8": ["resident evil village", "re8"],
+type UpcomingItem = {
+  _id: Id<"upcomingGames">;
+  title: string;
+  releaseAt: number;
+  genre?: string;
+  priority?: number;
+  cover_url?: string;
+  gameId?: Id<"games">;
 };
+
+type UpdatedItem = { _id: Id<"upcomingGames">; title: string; cover_url: string };
+type SkippedItem = { _id: Id<"upcomingGames">; title: string; reason: string };
 
 async function getIgdbToken(): Promise<{ token: string; clientId: string }> {
-  const clientId = process.env.TWITCH_CLIENT_ID!;
-  const clientSecret = process.env.TWITCH_CLIENT_SECRET!;
-  if (!clientId || !clientSecret)
-    throw new Error("Faltan TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET en Convex env");
-  const resp = await fetch(
-    `https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`,
+  const clientId =
+    process.env.IGDB_CLIENT_ID || process.env.TWITCH_CLIENT_ID || "";
+  const clientSecret =
+    process.env.IGDB_CLIENT_SECRET || process.env.TWITCH_CLIENT_SECRET || "";
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Faltan IGDB_CLIENT_ID/IGDB_CLIENT_SECRET (o TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET) en las env de Convex."
+    );
+  }
+
+  const res = await fetch(
+    "https://id.twitch.tv/oauth2/token" +
+      `?client_id=${encodeURIComponent(clientId)}` +
+      `&client_secret=${encodeURIComponent(clientSecret)}` +
+      "&grant_type=client_credentials",
     { method: "POST" }
   );
-  const json = await resp.json();
-  if (!json.access_token) throw new Error("No IGDB token (Twitch OAuth)");
-  return { token: json.access_token as string, clientId };
+  if (!res.ok) throw new Error(await res.text());
+  const data = (await res.json()) as { access_token: string };
+  return { token: data.access_token, clientId };
 }
 
-type IGDBGame = { id: number; name: string; cover?: { image_id: string } | number };
-
-async function igdbFindCoverByTitle(
-  title: string,
-  size2x: boolean
-): Promise<{ url: string; match: string } | null> {
-  const { token, clientId } = await getIgdbToken();
-
-  const base = normalizeTitle(title);
-  const simple = base.split(":")[0].split("-")[0].trim();
-  const aliases = TITLE_ALIASES[base.toLowerCase()] ?? [];
-
-  const queries = [
-    `search "${base.replace(/"/g, '\\"')}"; fields name,cover.image_id,cover; where version_parent = null; limit 1;`,
-    `search "${simple.replace(/"/g, '\\"')}"; fields name,cover.image_id,cover; limit 1;`,
-    ...aliases.map(
-      (a) =>
-        `search "${a.replace(/"/g, '\\"')}"; fields name,cover.image_id,cover; limit 1;`
-    ),
-  ];
-
-  for (const q of queries) {
-    const r = await fetch("https://api.igdb.com/v4/games", {
-      method: "POST",
-      headers: { "Client-ID": clientId, Authorization: `Bearer ${token}` },
-      body: q,
-    });
-    const data = (await r.json()) as IGDBGame[];
-
-    if (Array.isArray(data) && data[0]) {
-      const g = data[0];
-
-      if (g.cover && typeof g.cover === "object" && "image_id" in g.cover) {
-        return { url: coverUrlFromImageId((g.cover as any).image_id, size2x), match: g.name };
-      }
-      if (typeof g.cover === "number") {
-        const r2 = await fetch("https://api.igdb.com/v4/covers", {
-          method: "POST",
-          headers: { "Client-ID": clientId, Authorization: `Bearer ${token}` },
-          body: `fields image_id; where id = ${g.cover}; limit 1;`,
-        });
-        const c = (await r2.json()) as { image_id: string }[];
-        if (Array.isArray(c) && c[0]?.image_id) {
-          return { url: coverUrlFromImageId(c[0].image_id, size2x), match: g.name };
-        }
-      }
-    }
-    await sleep(250);
-  }
-  return null;
+async function igdbSearchCoverUrl(
+  token: string,
+  clientId: string,
+  title: string
+): Promise<string | null> {
+  const body = `search "${title.replace(/"/g, '\\"')}"; fields name,cover.image_id; limit 1;`;
+  const res = await fetch("https://api.igdb.com/v4/games", {
+    method: "POST",
+    headers: {
+      "Client-ID": clientId,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "text/plain",
+    },
+    body,
+  });
+  if (!res.ok) return null;
+  const arr = (await res.json()) as Array<{ cover?: { image_id?: string } }>;
+  const imageId = arr?.[0]?.cover?.image_id;
+  return imageId
+    ? `https://images.igdb.com/igdb/image/upload/t_cover_big/${imageId}.jpg`
+    : null;
 }
 
-type CoverResult = {
-  dryRun: boolean;
-  overwrite: boolean;
-  size2x: boolean;
-  candidates: number;
-  processed: number;
-  updated: number;
-  sample: any[];
-};
+// ---------- RESOLUCIÓN ROBUSTA DE RUTAS DEL CODEGEN ----------
+function resolveQueryRef<T = any>(): any {
+  // Soporta: api.queries.getUpcomingGames.getUpcomingGames  (anidado por carpeta)
+  // y        api.queries.getUpcomingGames                   (plano)
+  return (
+    (api as any)?.queries?.getUpcomingGames?.getUpcomingGames ??
+    (api as any)?.queries?.getUpcomingGames ??
+    // fallback extra si tuvieras un export plano accidental (no debería pasar)
+    (api as any)?.getUpcomingGames?.getUpcomingGames ??
+    (api as any)?.getUpcomingGames
+  );
+}
 
-export const backfillCoversFromIGDB = action({
+function resolveUpsertRef<T = any>(): any {
+  // Soporta: api.mutations.upsertUpcoming.upsertUpcoming (anidado)
+  // y        api.mutations.upsertUpcoming                (plano)
+  return (
+    (api as any)?.mutations?.upsertUpcoming?.upsertUpcoming ??
+    (api as any)?.mutations?.upsertUpcoming ??
+    (api as any)?.upsertUpcoming?.upsertUpcoming ??
+    (api as any)?.upsertUpcoming
+  );
+}
+// ------------------------------------------------------------
+
+export const fillUpcomingCoversFromIGDB = action({
   args: {
-    dryRun: v.boolean(),
-    overwrite: v.optional(v.boolean()),
-    size2x: v.optional(v.boolean()),
     limit: v.optional(v.number()),
+    dryRun: v.optional(v.boolean()),
   },
-  handler: async (
-    ctx,
-    { dryRun, overwrite = false, size2x = true, limit }
-  ): Promise<CoverResult> => {
-    // 1) Traer juegos (tu getGames.ts)
-    let all: Doc<"games">[] = [];
-    try {
-      all = (await ctx.runQuery(qGetGames, {} as any)) as Doc<"games">[];
-    } catch {
-      // opcional: fallback por plan si también los tenés
-      if (qGetFreeGames && qGetPremiumGames) {
-        const free = (await ctx.runQuery(qGetFreeGames, {} as any)) as Doc<"games">[];
-        const prem = (await ctx.runQuery(qGetPremiumGames, {} as any)) as Doc<"games">[];
-        const byId = new Map<string, Doc<"games">>();
-        for (const g of [...free, ...prem]) byId.set(g._id as unknown as string, g);
-        all = [...byId.values()];
-      } else {
-        throw new Error(
-          "No puedo invocar queries.getGames.getGames (ni los fallbacks). Verificá los paths y corré `npx convex dev`."
-        );
-      }
-    }
+  async handler(ctx, { limit = 25, dryRun = true }) {
+    const getUpcomingFn = resolveQueryRef();
+    const upsertUpcomingFn = resolveUpsertRef();
 
-    const pending = all.filter((g) => overwrite || !g.cover_url || g.cover_url.trim() === "");
-    const batch = typeof limit === "number" ? pending.slice(0, Math.max(0, limit)) : pending;
+    if (!getUpcomingFn) throw new Error("No se pudo resolver queries.getUpcomingGames");
+    if (!upsertUpcomingFn) throw new Error("No se pudo resolver mutations.upsertUpcoming");
 
-    let updated = 0;
-    const sample: any[] = [];
+    const upcoming = (await ctx.runQuery(getUpcomingFn, {
+      limit,
+    })) as UpcomingItem[];
 
-    for (const g of batch) {
-      const found = await igdbFindCoverByTitle(g.title, size2x);
-      if (!found) {
-        sample.push({ title: g.title, note: "sin match en IGDB" });
+    const { token, clientId } = await getIgdbToken();
+
+    const updated: UpdatedItem[] = [];
+    const skipped: SkippedItem[] = [];
+
+    for (const u of upcoming) {
+      if (u.cover_url) {
+        skipped.push({ _id: u._id, title: u.title, reason: "ya_tiene_cover" });
         continue;
       }
 
-      const url = found.url;
-      if (!ALLOWED.test(url)) {
-        sample.push({ title: g.title, match: found.match, note: "URL no permitida" });
+      const cover = await igdbSearchCoverUrl(token, clientId, u.title);
+      if (!cover) {
+        skipped.push({ _id: u._id, title: u.title, reason: "sin_match_en_igdb" });
         continue;
       }
 
-      if (dryRun) {
-        sample.push({ title: g.title, match: found.match, url });
-      } else {
-        await ctx.runMutation(mSetGameCoverUrl, {
-          gameId: g._id as Id<"games">,
-          coverUrl: url,
+      if (!dryRun) {
+        await ctx.runMutation(upsertUpcomingFn, {
+          title: u.title,
+          releaseAt: u.releaseAt,
+          cover_url: cover,
+          genre: u.genre,
+          priority: u.priority,
+          gameId: u.gameId,
         });
-        updated++;
       }
-      await sleep(250);
+
+      updated.push({ _id: u._id, title: u.title, cover_url: cover });
     }
 
     return {
+      total: upcoming.length,
+      updatedCount: updated.length,
       dryRun,
-      overwrite,
-      size2x,
-      candidates: all.length,
-      processed: batch.length,
       updated,
-      sample: sample.slice(0, 12),
+      skipped,
     };
   },
 });

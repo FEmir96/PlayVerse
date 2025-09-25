@@ -1,28 +1,24 @@
-// playverse-web/app/page.tsx
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Star, Clock } from "lucide-react"
-import Link from "next/link"
-import GameCard from "@/components/game-card"
-import { useAuthStore } from "@/lib/useAuthStore"
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import ShowLoginToast from "@/components/show-login-toast";
+import { useAuthStore } from "@/lib/useAuthStore";
 
-// 👇 agrega este import
-import ShowLoginToast from "@/components/show-login-toast"
+// rails
+import FeaturedRail from "@/components/featured-rail";
+import UpcomingRail from "@/components/upcoming-rail";
 
 export default function HomePage() {
-  const { user } = useAuthStore()
+  const { user } = useAuthStore();
 
   return (
     <div className="min-h-screen">
-      {/* 👇 muestra toasts de login/logout y limpia los query params */}
+      {/* toasts login/logout */}
       <ShowLoginToast />
 
-      {/* Hero Section */}
+      {/* HERO con iconitos de fondo */}
       <section className="relative bg-gradient-to-b from-slate-800 to-slate-900 py-20 overflow-hidden">
-        {/* Gaming Icons Background */}
         <div className="absolute inset-0 opacity-20">
           <img src="/images/hongo.png" alt="Mario Mushroom" className="absolute top-10 left-10 w-12 h-12" />
           <img src="/images/estrella.png" alt="Estrella" className="absolute top-20 right-20 w-10 h-10" />
@@ -64,44 +60,38 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Nuevos Juegos Section */}
+      {/* NUEVOS JUEGOS (datos reales) */}
       <section className="py-16 bg-slate-900">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-orange-400 mb-4">Nuevos juegos</h2>
-            <p className="text-slate-400 text-lg">Explora la colección. ¡Encuentra tu próxima aventura!</p>
+          <div className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold text-orange-400 mb-2">Nuevos juegos</h2>
+            <p className="text-slate-400">Explora la colección. ¡Encuentra tu próxima aventura!</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <GameCard key={i} gameId={`${i + 1}`} isPremium={i === 1 || i === 3} />
-            ))}
-          </div>
+          <FeaturedRail />
 
-          <div className="text-center">
+          <div className="text-center mt-8">
             <Link href="/catalogo">
-              <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8">Ver todo</Button>
+              <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8">
+                Ver todo
+              </Button>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Próximamente Section */}
+      {/* PRÓXIMAMENTE */}
       <section className="py-16 bg-slate-800">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-orange-400 mb-4">Próximamente</h2>
+          <div className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold text-orange-400 mb-2">Próximamente</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <ComingSoonCard key={i} />
-            ))}
-          </div>
+          <UpcomingRail />
         </div>
       </section>
 
-      {/* Premium CTA Section */}
+      {/* CTA Premium (idéntico al que tenías) */}
       <section className="py-16">
         <div className="container mx-auto px-4">
           <div className="bg-gradient-to-br from-orange-400/30 via-teal-500/30 to-purple-600/30 rounded-2xl p-8 md:p-12 text-center">
@@ -118,35 +108,5 @@ export default function HomePage() {
         </div>
       </section>
     </div>
-  )
-}
-
-function ComingSoonCard() {
-  return (
-    <Card className="bg-slate-800 border-slate-700 gap-1 p-0 overflow-hidden">
-      <div className="relative">
-        <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">Acción</Badge>
-        <div className="aspect-[4/4] bg-slate-700 relative overflow-hidden">
-          <img src="/tomb-raider-game-cover.jpg" alt="Tomb Raider" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center">
-            <div className="bg-slate-800 px-3 py-1 rounded-full flex items-center gap-2">
-              <Clock className="w-4 h-4 text-cyan-400" />
-              <span className="text-cyan-400 text-sm font-medium">Próximamente</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-1 mb-2">
-          <Star className="w-4 h-4 fill-orange-400 text-orange-400" />
-          <span className="text-orange-400 font-semibold">4.5</span>
-        </div>
-        <h3 className="text-orange-400 font-semibold text-lg mb-2">Tomb Raider</h3>
-        <p className="text-slate-400 text-sm mb-4 line-clamp-2">
-          Lorem ipsum dolor sit amet consectetur adipiscing elit nulla tristique
-        </p>
-        <p className="text-cyan-400 font-semibold mb-3">Llega el 20/07/2025</p>
-      </CardContent>
-    </Card>
-  )
+  );
 }
