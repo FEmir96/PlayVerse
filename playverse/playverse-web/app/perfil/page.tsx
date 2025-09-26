@@ -240,6 +240,22 @@ export default function ProfilePage() {
     | Array<{ _id: string; game?: { title?: string; cover_url?: string }; createdAt?: number; title?: string; cover_url?: string; }>
     | undefined;
 
+  /** ✅ Dedup de compras por juego (misma lógica que usás en Mis Juegos) */
+  const uniquePurchases = useMemo(() => {
+    const arr = Array.isArray(purchases) ? (purchases as any[]) : [];
+    const seen = new Set<string>();
+    const out: any[] = [];
+
+    for (const p of arr) {
+      // key robusta: gameId → _id del game → título → _id de la compra
+      const key = String(p?.game?._id ?? p?.gameId ?? p?.title ?? p?._id ?? "").trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+    return out;
+  }, [purchases]);
+
   // Nombre e imagen “finales” para UI
   const displayName = useMemo(
     () => editedName || convexProfile?.name || storeUser?.name || "Usuario",
@@ -565,7 +581,7 @@ export default function ProfilePage() {
 
           {/* Second Row - Games Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Purchased Games — ✅ AHORA CON LISTADO REAL */}
+            {/* Purchased Games — ✅ AHORA CON LISTADO REAL (dedupe) */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-orange-400 flex items-center gap-2">
@@ -582,7 +598,7 @@ export default function ProfilePage() {
 
               <CardContent>
                 <div className="space-y-3">
-                  {(purchases ?? []).map((p) => {
+                  {(uniquePurchases ?? []).map((p) => {
                     const title = p.game?.title || p.title || "Juego";
                     const cover = p.game?.cover_url || p.cover_url || "/placeholder.svg";
                     const when =

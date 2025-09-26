@@ -1,16 +1,12 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-// import type { Id } from "./_generated/dataModel"; // si no lo usás, podés borrarlo
-
-// ⬇️ Helpers del template de email (archivo: convex/actions/email.ts)
 import {
   buildPurchaseEmail,
   buildRentalEmail,
   buildExtendEmail,
 } from "./lib/emailTemplates";
 
-// URL pública de tu app para el botón del mail
 const APP_URL = process.env.APP_URL || "https://playverse.com";
 
 /** Inicia alquiler */
@@ -24,6 +20,19 @@ export const startRental = mutation({
   handler: async ({ db, scheduler }, { userId, gameId, weeks, weeklyPrice }) => {
     const now = Date.now();
     const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+    // 🔒 Bloqueo: si ya hay un alquiler ACTIVO del mismo juego, no permitir duplicado
+    const existingRental = await db
+      .query("transactions")
+      .withIndex("by_user_type", (q) => q.eq("userId", userId).eq("type", "rental"))
+      .filter((q) => q.eq(q.field("gameId"), gameId))
+      .first();
+
+    if (existingRental && typeof existingRental.expiresAt === "number" && existingRental.expiresAt > now) {
+      // el front puede mostrar un toast con este mensaje
+      throw new Error("ALREADY_RENTED_ACTIVE");
+    }
+
     const expiresAt = now + weeks * MS_WEEK;
 
     // transacción
@@ -57,7 +66,6 @@ export const startRental = mutation({
 
       await scheduler.runAfter(
         0,
-        // 👇 casteo a any para evitar el error de TS si el codegen no ve la acción
         (api as any).actions.email.sendReceiptEmail,
         {
           to: user.email,
@@ -174,6 +182,18 @@ export const purchaseGame = mutation({
   handler: async ({ db, scheduler }, { userId, gameId, amount }) => {
     const now = Date.now();
 
+    // 🔒 Bloqueo: si ya fue comprado antes, no permitir duplicado
+    const existingPurchase = await db
+      .query("transactions")
+      .withIndex("by_user_type", (q) => q.eq("userId", userId).eq("type", "purchase"))
+      .filter((q) => q.eq(q.field("gameId"), gameId))
+      .first();
+
+    if (existingPurchase) {
+      // el front captura "ALREADY_OWNED" y muestra un toast
+      throw new Error("ALREADY_OWNED");
+    }
+
     await db.insert("transactions", {
       userId,
       gameId,
@@ -208,7 +228,7 @@ export const purchaseGame = mutation({
             coverUrl,
             amount,
             currency: "USD",
-            method: "AMEX •••• 4542", // si tenés brand/last4, ponelo acá
+            method: "AMEX •••• 4542", // si tenés brand/last4 reales, ponelos acá
             orderId: null,
             appUrl: APP_URL,
           }),

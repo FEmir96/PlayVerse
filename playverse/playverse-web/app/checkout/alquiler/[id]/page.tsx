@@ -15,7 +15,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/lib/useAuthStore";
 
-// —— Refs (robustas) ——
 const getUserByEmailRef =
   (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
 
@@ -24,8 +23,13 @@ const getPaymentMethodsRef = (HAS_PM_QUERY
   ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
   : (api as any)["queries/getUserByEmail"].getUserByEmail) as FunctionReference<"query">;
 
-const getGameByIdRef = ((api as any)["queries/getGameById"]?.getGameById ||
-  (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
+const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
+const getGameByIdRef = (HAS_GET_BY_ID
+  ? (api as any)["queries/getGameById"].getGameById
+  : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
+
+const getUserLibraryRef =
+  (api as any)["queries/getUserLibrary"].getUserLibrary as FunctionReference<"query">;
 
 const startRentalRef = (api as any).transactions.startRental as FunctionReference<"mutation">;
 const savePaymentMethodRef =
@@ -44,45 +48,37 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   const pathname = usePathname();
   const { toast } = useToast();
 
-  // Identidad
   const { data: session } = useSession();
   const storeUser = useAuthStore((s) => s.user);
   const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
 
   useEffect(() => {
     if (!loginEmail) {
-router.replace(`/auth/login?next=${encodeURIComponent(pathname ?? "/")}`);
+      router.replace(`/auth/login?next=${encodeURIComponent(pathname ?? "/")}`);
     }
   }, [loginEmail, router, pathname]);
 
-  // Perfil (usar undefined para skip)
   const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined);
 
-  // Juego (usar undefined para skip)
-// Juego (evitar comparar refs por identidad)
-const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
+  const game = useQuery(
+    getGameByIdRef as any,
+    HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
+  ) as { _id: Id<"games">; title?: string; cover_url?: string; weekly_price?: number } | null | undefined;
 
-const game = useQuery(
-  (HAS_GET_BY_ID
-    ? (api as any)["queries/getGameById"].getGameById
-    : (api as any)["queries/getGames"]?.getGames) as any,
-  (HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : undefined) as any
-) as
-  | { _id: Id<"games">; title?: string; cover_url?: string; weekly_price?: number }
-  | null
-  | undefined;
-
-
-  // Métodos guardados (usar undefined para skip)
   const methods = useQuery(
     getPaymentMethodsRef as any,
     HAS_PM_QUERY && profile?._id ? { userId: profile._id } : undefined
   ) as PM[] | undefined;
 
+  // ✅ biblioteca para detectar alquiler activo
+  const library = useQuery(
+    getUserLibraryRef as any,
+    profile?._id ? { userId: profile._id } : undefined
+  ) as any[] | undefined;
+
   const savePaymentMethod = useMutation(savePaymentMethodRef);
   const startRental = useMutation(startRentalRef);
 
-  // UI
   const [weeks, setWeeks] = useState(2);
   const [useSaved, setUseSaved] = useState(true);
   const [rememberNew, setRememberNew] = useState(false);
@@ -94,95 +90,96 @@ const game = useQuery(
 
   const weeklyPrice = useMemo(() => {
     if (typeof (game as any)?.weekly_price === "number") return (game as any).weekly_price;
-    return 14.99; // fallback
+    return 14.99;
   }, [game]);
 
   const total = useMemo(() => weeklyPrice * weeks, [weeklyPrice, weeks]);
-// ——— helper para normalizar marca (por si quedó con otro casing) ———
-const normalizeBrand = (b?: string): PM["brand"] => {
-  const s = (b || "").toLowerCase();
-  if (s.includes("visa")) return "visa";
-  if (s.includes("master")) return "mastercard";
-  if (s.includes("amex") || s.includes("american")) return "amex";
-  return "otro";
-};
 
-// ——— fallback: si no hay métodos en la tabla, uso el guardado en el perfil ———
-const pmFromProfile: PM | null = useMemo(() => {
-  const p: any = profile;
-  if (!p) return null;
+  const normalizeBrand = (b?: string): PM["brand"] => {
+    const s = (b || "").toLowerCase();
+    if (s.includes("visa")) return "visa";
+    if (s.includes("master")) return "mastercard";
+    if (s.includes("amex") || s.includes("american")) return "amex";
+    return "otro";
+  };
 
-  // 1) Si el perfil tiene un arreglo embebido de métodos:
-  const arr = p.paymentMethods ?? p.payment_methods;
-  if (Array.isArray(arr) && arr.length > 0) {
-    const m = arr[0] || {};
-    return {
-      _id: m._id ?? "profile",
-      brand: normalizeBrand(m.brand),
-      last4: String(m.last4 ?? "").slice(-4),
-      expMonth: Number(m.expMonth ?? m.exp_month ?? 0),
-      expYear: Number(m.expYear ?? m.exp_year ?? 0),
-    };
-  }
+  const pmFromProfile: PM | null = useMemo(() => {
+    const p: any = profile;
+    if (!p) return null;
+    const arr = p.paymentMethods ?? p.payment_methods;
+    if (Array.isArray(arr) && arr.length > 0) {
+      const m = arr[0] || {};
+      return {
+        _id: m._id ?? "profile",
+        brand: normalizeBrand(m.brand),
+        last4: String(m.last4 ?? "").slice(-4),
+        expMonth: Number(m.expMonth ?? m.exp_month ?? 0),
+        expYear: Number(m.expYear ?? m.exp_year ?? 0),
+      };
+    }
+    const last4 = p.pmLast4 ?? p.cardLast4 ?? p.last4;
+    const expMonth = p.pmExpMonth ?? p.cardExpMonth ?? p.expMonth;
+    const expYear = p.pmExpYear ?? p.cardExpYear ?? p.expYear;
+    const brand = p.pmBrand ?? p.cardBrand ?? p.brand;
+    if (last4 && expMonth && expYear && brand) {
+      return {
+        _id: "profile",
+        brand: normalizeBrand(brand),
+        last4: String(last4).slice(-4),
+        expMonth: Number(expMonth),
+        expYear: Number(expYear),
+      };
+    }
+    return null;
+  }, [profile]);
 
-  // 2) Si el perfil tiene campos planos:
-  const last4 = p.pmLast4 ?? p.cardLast4 ?? p.last4;
-  const expMonth = p.pmExpMonth ?? p.cardExpMonth ?? p.expMonth;
-  const expYear = p.pmExpYear ?? p.cardExpYear ?? p.expYear;
-  const brand = p.pmBrand ?? p.cardBrand ?? p.brand;
+  const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
-  if (last4 && expMonth && expYear && brand) {
-    return {
-      _id: "profile",
-      brand: normalizeBrand(brand),
-      last4: String(last4).slice(-4),
-      expMonth: Number(expMonth),
-      expYear: Number(expYear),
-    };
-  }
-  return null;
-}, [profile]);
+  /** ✅ ¿Ya hay alquiler activo del juego? */
+  const hasActiveRental = useMemo(() => {
+    if (!library || !game?._id) return false;
+    const gid = String(game._id);
+    const now = Date.now();
+    return library.some((row: any) => {
+      const g = row?.game ?? row;
+      const id = String(g?._id ?? row?.gameId ?? "");
+      const kind = String(row?.kind ?? row?.type ?? "rental").toLowerCase();
+      const exp = Number(row?.expiresAt ?? g?.expiresAt ?? 0);
+      return id === gid && kind === "rental" && exp > now;
+    });
+  }, [library, game?._id]);
 
-// ——— prioridad: tabla payment_methods; si no hay, uso el del perfil ———
-const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
+  useEffect(() => {
+    if (hasActiveRental && game?.title) {
+      toast({ title: "Alquiler activo", description: `Ya tienes “${game.title}” alquilado actualmente.` });
+    }
+  }, [hasActiveRental, game?.title, toast]);
 
   const onRent = async () => {
     if (!profile?._id || !game?._id) return;
+    if (hasActiveRental) {
+      toast({ title: "Ya tienes un alquiler activo", description: "Extendelo desde tu biblioteca si necesitás más tiempo." });
+      return;
+    }
     try {
       if (!useSaved && rememberNew) {
-        await savePaymentMethod({
-          userId: profile._id,
-          fullNumber: number,
-          exp,
-          cvv: cvc,
-          brand: undefined,
-        });
+        await savePaymentMethod({ userId: profile._id, fullNumber: number, exp, cvv: cvc, brand: undefined });
       }
-
-      await startRental({
-        userId: profile._id,
-        gameId: game._id,
-        weeks,
-        weeklyPrice, // registra pago + email
-      });
-
+      await startRental({ userId: profile._id, gameId: game._id, weeks, weeklyPrice });
       toast({ title: "Alquiler confirmado", description: "Te enviamos un email con los detalles." });
       router.replace("/mis-juegos");
     } catch (e: any) {
-      toast({
-        title: "No se pudo completar el alquiler",
-        description: e?.message ?? "Intentá nuevamente.",
-        variant: "destructive",
-      });
+      const msg = String(e?.message || "");
+      if (msg.includes("ALREADY_RENTED_ACTIVE")) {
+        toast({ title: "Alquiler ya activo", description: "Podés extender el alquiler desde tu biblioteca." });
+        return;
+      }
+      toast({ title: "No se pudo completar el alquiler", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
     }
   };
 
   if (!loginEmail) {
-    return (
-      <div className="container mx-auto px-4 py-16">
-        <p className="text-slate-300">Redirigiendo al login…</p>
-      </div>
-    );
+    return <div className="container mx-auto px-4 py-16"><p className="text-slate-300">Redirigiendo al login…</p></div>;
   }
 
   const title = game?.title ?? "Juego";
@@ -202,21 +199,16 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
           <div className="rounded-xl overflow-hidden bg-slate-700">
             <img src={cover} alt={title} className="w-full h-[420px] object-cover" />
           </div>
+
+          {hasActiveRental && (
+            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
+              Ya tienes un alquiler activo de este juego. Podés extenderlo desde tu biblioteca.
+            </div>
+          )}
         </div>
 
-        {/* Derecha */}
+        {/* Derecha (UI sin cambios) */}
         <div className="space-y-4">
-          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-            <div className="text-2xl font-black text-emerald-300">
-              {weeklyPrice.toLocaleString("en-US", { style: "currency", currency: "USD" })}
-              <span className="text-slate-300 text-base font-medium">/sem</span>
-            </div>
-            <p className="text-sm text-amber-400 mt-2">
-              Podrías ahorrarte un 10% suscribiéndote a premium, ¡no te lo pierdas!
-            </p>
-          </div>
-
-          {/* Semanas */}
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <p className="text-slate-300 text-sm mb-2">
               Semanas de alquiler: <span className="text-white font-semibold">{weeks}</span>
@@ -224,7 +216,6 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
             <Slider value={[weeks]} min={1} max={12} step={1} onValueChange={(v) => setWeeks(v[0] ?? 1)} />
           </div>
 
-          {/* Total */}
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <div className="text-center">
               <div className="text-2xl font-extrabold text-amber-400">
@@ -233,7 +224,6 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
             </div>
           </div>
 
-          {/* Pago */}
           {primaryPM ? (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -293,7 +283,14 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
                     </div>
                     <div>
                       <label className="text-slate-300 text-sm">CVC</label>
-                      <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                      <Input
+                        value={cvc}
+                        onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                        placeholder="123"
+                        className="bg-slate-700 border-slate-600 text-white mt-1"
+                        inputMode="numeric"
+                        autoComplete="cc-csc"
+                      />
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
@@ -350,8 +347,14 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
             </div>
           )}
 
-          <Button onClick={onRent} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold">
-            Pagar {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+          <Button
+            onClick={onRent}
+            disabled={hasActiveRental}
+            className={`w-full text-slate-900 text-lg py-6 font-bold ${
+              hasActiveRental ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"
+            }`}
+          >
+            {hasActiveRental ? "Alquiler activo" : `Pagar ${total.toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
           </Button>
         </div>
       </div>
