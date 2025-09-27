@@ -1,3 +1,4 @@
+// app/checkout/extend/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -15,21 +16,33 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/lib/useAuthStore";
 
-// —— Refs
+// —— Refs robustas
 const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
+  (api as any)["queries/getUserByEmail"]
+    .getUserByEmail as FunctionReference<"query">;
 
-const HAS_PM_QUERY = Boolean((api as any)["queries/getPaymentMethods"]?.getPaymentMethods);
+const HAS_PM_QUERY = Boolean(
+  (api as any)["queries/getPaymentMethods"]?.getPaymentMethods
+);
 const getPaymentMethodsRef = (HAS_PM_QUERY
   ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
   : (api as any)["queries/getUserByEmail"].getUserByEmail) as FunctionReference<"query">;
 
-const getGameByIdRef = ((api as any)["queries/getGameById"]?.getGameById ||
-  (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
+const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
+const getGameByIdRef = (HAS_GET_BY_ID
+  ? (api as any)["queries/getGameById"].getGameById
+  : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
 
-const extendRentalRef = (api as any).transactions.extendRental as FunctionReference<"mutation">;
+const extendRentalRef =
+  (api as any).transactions.extendRental as FunctionReference<"mutation">;
+
 const savePaymentMethodRef =
-  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
+  (api as any)["mutations/savePaymentMethod"]
+    .savePaymentMethod as FunctionReference<"mutation">;
+
+const makePaymentRef =
+  (api as any)["mutations/makePayment"]
+    .makePayment as FunctionReference<"mutation">;
 
 type PM = {
   _id: string;
@@ -45,31 +58,34 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   const { toast } = useToast();
 
   // Identidad
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const storeUser = useAuthStore((s) => s.user);
-  const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
+  const loginEmail =
+    session?.user?.email?.toLowerCase() ||
+    storeUser?.email?.toLowerCase() ||
+    null;
 
+  // Guard de sesión: no patear al login mientras carga
   useEffect(() => {
+    if (status === "loading") return;
     if (!loginEmail) {
-router.replace(`/auth/login?next=${encodeURIComponent(pathname ?? "/")}`);
+      router.replace(`/auth/login?next=${encodeURIComponent(pathname ?? "/")}`);
     }
-  }, [loginEmail, router, pathname]);
+  }, [loginEmail, router, pathname, status]);
 
   // Perfil
-  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined);
+  const profile = useQuery(
+    getUserByEmailRef,
+    loginEmail ? { email: loginEmail } : "skip"
+  ) as any;
 
   // Juego
-const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
-
-const game = useQuery(
-  (HAS_GET_BY_ID
-    ? (api as any)["queries/getGameById"].getGameById
-    : (api as any)["queries/getGames"]?.getGames) as any,
-  (HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : undefined) as any
-) as
-  | { _id: Id<"games">; title?: string; cover_url?: string; weekly_price?: number }
-  | null
-  | undefined;
+  const game = useQuery(
+    getGameByIdRef as any,
+    HAS_GET_BY_ID
+      ? ({ id: params.id as Id<"games"> } as any)
+      : (undefined as any)
+  ) as { _id: Id<"games">; title?: string; cover_url?: string; weekly_price?: number } | null | undefined;
 
   // Métodos guardados
   const methods = useQuery(
@@ -79,6 +95,7 @@ const game = useQuery(
 
   const savePaymentMethod = useMutation(savePaymentMethodRef);
   const extendRental = useMutation(extendRentalRef);
+  const makePayment = useMutation(makePaymentRef);
 
   // UI
   const [weeks, setWeeks] = useState(2);
@@ -96,57 +113,57 @@ const game = useQuery(
   }, [game]);
 
   const total = useMemo(() => weeklyPrice * weeks, [weeklyPrice, weeks]);
-// ——— helper para normalizar marca (por si quedó con otro casing) ———
-const normalizeBrand = (b?: string): PM["brand"] => {
-  const s = (b || "").toLowerCase();
-  if (s.includes("visa")) return "visa";
-  if (s.includes("master")) return "mastercard";
-  if (s.includes("amex") || s.includes("american")) return "amex";
-  return "otro";
-};
 
-// ——— fallback: si no hay métodos en la tabla, uso el guardado en el perfil ———
-const pmFromProfile: PM | null = useMemo(() => {
-  const p: any = profile;
-  if (!p) return null;
+  // helper normalizar marca
+  const normalizeBrand = (b?: string): PM["brand"] => {
+    const s = (b || "").toLowerCase();
+    if (s.includes("visa")) return "visa";
+    if (s.includes("master")) return "mastercard";
+    if (s.includes("amex") || s.includes("american")) return "amex";
+    return "otro";
+  };
 
-  // 1) Si el perfil tiene un arreglo embebido de métodos:
-  const arr = p.paymentMethods ?? p.payment_methods;
-  if (Array.isArray(arr) && arr.length > 0) {
-    const m = arr[0] || {};
-    return {
-      _id: m._id ?? "profile",
-      brand: normalizeBrand(m.brand),
-      last4: String(m.last4 ?? "").slice(-4),
-      expMonth: Number(m.expMonth ?? m.exp_month ?? 0),
-      expYear: Number(m.expYear ?? m.exp_year ?? 0),
-    };
-  }
+  // fallback: método del perfil si no hay tabla de PM
+  const pmFromProfile: PM | null = useMemo(() => {
+    const p: any = profile;
+    if (!p) return null;
 
-  // 2) Si el perfil tiene campos planos:
-  const last4 = p.pmLast4 ?? p.cardLast4 ?? p.last4;
-  const expMonth = p.pmExpMonth ?? p.cardExpMonth ?? p.expMonth;
-  const expYear = p.pmExpYear ?? p.cardExpYear ?? p.expYear;
-  const brand = p.pmBrand ?? p.cardBrand ?? p.brand;
+    const arr = p.paymentMethods ?? p.payment_methods;
+    if (Array.isArray(arr) && arr.length > 0) {
+      const m = arr[0] || {};
+      return {
+        _id: m._id ?? "profile",
+        brand: normalizeBrand(m.brand),
+        last4: String(m.last4 ?? "").slice(-4),
+        expMonth: Number(m.expMonth ?? m.exp_month ?? 0),
+        expYear: Number(m.expYear ?? m.exp_year ?? 0),
+      };
+    }
 
-  if (last4 && expMonth && expYear && brand) {
-    return {
-      _id: "profile",
-      brand: normalizeBrand(brand),
-      last4: String(last4).slice(-4),
-      expMonth: Number(expMonth),
-      expYear: Number(expYear),
-    };
-  }
-  return null;
-}, [profile]);
+    const last4 = p.pmLast4 ?? p.cardLast4 ?? p.last4;
+    const expMonth = p.pmExpMonth ?? p.cardExpMonth ?? p.expMonth;
+    const expYear = p.pmExpYear ?? p.cardExpYear ?? p.expYear;
+    const brand = p.pmBrand ?? p.cardBrand ?? p.brand;
 
-// ——— prioridad: tabla payment_methods; si no hay, uso el del perfil ———
-const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
+    if (last4 && expMonth && expYear && brand) {
+      return {
+        _id: "profile",
+        brand: normalizeBrand(brand),
+        last4: String(last4).slice(-4),
+        expMonth: Number(expMonth),
+        expYear: Number(expYear),
+      };
+    }
+    return null;
+  }, [profile]);
+
+  const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
   const onExtend = async () => {
     if (!profile?._id || !game?._id) return;
+
     try {
+      // Guardar nuevo método si corresponde
       if (!useSaved && rememberNew) {
         await savePaymentMethod({
           userId: profile._id,
@@ -157,26 +174,44 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
         });
       }
 
-      await extendRental({ userId: profile._id, gameId: game._id, weeks, weeklyPrice });
+      // 1) Registrar pago (tabla payments) – SIN amountCents ni extra fields
+      await makePayment({
+        userId: profile._id,
+        amount: total,
+        currency: "USD",
+        provider: "manual",
+      });
 
+      // 2) Extender alquiler (esto actualiza expiresAt y registra transacción "rental")
+      await extendRental({
+        userId: profile._id,
+        gameId: game._id,
+        weeks,
+        weeklyPrice,
+        currency: "USD",
+      });
+
+      // OK
       toast({
         title: "Alquiler extendido",
-        description: "Te enviamos un email con el nuevo vencimiento.",
+        description: "Actualizamos la fecha de vencimiento correctamente.",
       });
       router.replace("/mis-juegos");
     } catch (e: any) {
+      const msg = String(e?.message ?? "");
       toast({
         title: "No se pudo extender el alquiler",
-        description: e?.message ?? "Intentá nuevamente.",
+        description: msg || "Intentá nuevamente.",
         variant: "destructive",
       });
     }
   };
 
-  if (!loginEmail) {
+  // Mientras no haya email (o está cargando) mostramos pantalla simple
+  if (!loginEmail || status === "loading") {
     return (
       <div className="container mx-auto px-4 py-16">
-        <p className="text-slate-300">Redirigiendo al login…</p>
+        <p className="text-slate-300">Redirigiendo o cargando sesión…</p>
       </div>
     );
   }
@@ -238,7 +273,9 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
               {useSaved ? (
                 <div className="flex items-center justify-between rounded-lg bg-slate-800 p-3">
                   <div>
-                    <p className="text-slate-200 text-sm">{primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}</p>
+                    <p className="text-slate-200 text-sm">
+                      {primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}
+                    </p>
                     <p className="text-slate-400 text-xs">
                       Expira {String(primaryPM.expMonth).padStart(2, "0")}/{String(primaryPM.expYear).slice(-2)}
                     </p>
@@ -282,7 +319,14 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
                     </div>
                     <div>
                       <label className="text-slate-300 text-sm">CVC</label>
-                      <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                      <Input
+                        value={cvc}
+                        onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                        placeholder="123"
+                        className="bg-slate-700 border-slate-600 text-white mt-1"
+                        inputMode="numeric"
+                        autoComplete="cc-csc"
+                      />
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
@@ -329,7 +373,14 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
                 </div>
                 <div>
                   <label className="text-slate-300 text-sm">CVC</label>
-                  <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                  <Input
+                    value={cvc}
+                    onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                    placeholder="123"
+                    className="bg-slate-700 border-slate-600 text-white mt-1"
+                    inputMode="numeric"
+                    autoComplete="cc-csc"
+                  />
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-1">
@@ -339,7 +390,10 @@ const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromP
             </div>
           )}
 
-          <Button onClick={onExtend} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold">
+          <Button
+            onClick={onExtend}
+            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold"
+          >
             Pagar {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
           </Button>
         </div>

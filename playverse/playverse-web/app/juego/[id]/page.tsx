@@ -7,12 +7,30 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, Heart, Copy, Check, Play } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  Copy,
+  Check,
+  Play,
+} from "lucide-react";
 
 import { useQuery, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
+
+import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/lib/useAuthStore";
+import { useToast } from "@/hooks/use-toast";
+import { useFavoritesStore } from "@/components/favoritesStore";
 
 type MediaItem = { type: "image" | "video"; src: string; thumb?: string };
 
@@ -50,6 +68,7 @@ export default function GameDetailPage() {
   const [thumbStart, setThumbStart] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isHoverMain, setIsHoverMain] = useState(false); // ⛳ pausa slideshow en hover
   const thumbsPerView = 4;
 
   // Param estable
@@ -57,14 +76,16 @@ export default function GameDetailPage() {
   const idParam = Array.isArray(idParamRaw) ? idParamRaw[0] : idParamRaw;
   const hasId = Boolean(idParam);
 
-  // Query SIEMPRE; sin id → "skip"
+  // Query de juego
   const game = useQuery(
     api.queries.getGameById.getGameById as any,
     hasId ? ({ id: idParam as Id<"games"> } as any) : "skip"
   ) as Doc<"games"> | null | undefined;
 
-  // Action screenshots
-  const fetchShots = useAction(api.actions.getIGDBScreenshots.getIGDBScreenshots as any);
+  // Action screenshots IGDB
+  const fetchShots = useAction(
+    api.actions.getIGDBScreenshots.getIGDBScreenshots as any
+  );
   const [igdbUrls, setIgdbUrls] = useState<string[] | null>(null);
 
   // Cargar screenshots IGDB cuando haya título
@@ -82,7 +103,9 @@ export default function GameDetailPage() {
           includeVideo: false,
         } as any);
         if (!cancelled) {
-          const urls = Array.isArray((res as any)?.urls) ? (res as any).urls : [];
+          const urls = Array.isArray((res as any)?.urls)
+            ? (res as any).urls
+            : [];
           setIgdbUrls(urls);
         }
       } catch {
@@ -101,14 +124,20 @@ export default function GameDetailPage() {
     return toEmbed(url);
   }, [game?.trailer_url]);
 
-  // Media combinada
+  // Media combinada (video primero, luego screenshots; fallback cover)
   const media: MediaItem[] = useMemo(() => {
     const out: MediaItem[] = [];
     if (trailerEmbed) {
-      out.push({ type: "video", src: trailerEmbed, thumb: (game as any)?.cover_url || undefined } as const);
+      out.push({
+        type: "video",
+        src: trailerEmbed,
+        thumb: (game as any)?.cover_url || undefined,
+      } as const);
     }
     if (Array.isArray(igdbUrls) && igdbUrls.length) {
-      out.push(...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const)));
+      out.push(
+        ...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const))
+      );
     }
     if (out.length === 0 && (game as any)?.cover_url) {
       out.push({ type: "image", src: (game as any).cover_url } as const);
@@ -121,6 +150,16 @@ export default function GameDetailPage() {
     if (selectedIndex >= media.length) setSelectedIndex(0);
   }, [media.length, selectedIndex]);
 
+  // Slideshow auto con wrap al trailer y pausa en hover
+  useEffect(() => {
+    if (!media.length) return;
+    if (isHoverMain) return; // pausa
+    const t = setInterval(() => {
+      setSelectedIndex((prev) => ((prev + 1) % media.length));
+    }, 4000);
+    return () => clearInterval(t);
+  }, [media.length, isHoverMain]);
+
   const nextThumbs = () => {
     if (thumbStart + thumbsPerView < media.length) setThumbStart((p) => p + 1);
   };
@@ -128,11 +167,174 @@ export default function GameDetailPage() {
     if (thumbStart > 0) setThumbStart((p) => p - 1);
   };
 
+  // ====== Sesión / Perfil / Validaciones de plan & ownership ======
+  const { data: session } = useSession();
+  const localUser = useAuthStore((s) => s.user);
+  const loggedEmail =
+    session?.user?.email?.toLowerCase() || localUser?.email?.toLowerCase() || null;
+  const isLogged = Boolean(loggedEmail);
+
+  const profile = useQuery(
+    api.queries.getUserByEmail.getUserByEmail as any,
+    loggedEmail ? { email: loggedEmail } : "skip"
+  ) as
+    | (Doc<"profiles"> & { role?: "free" | "premium" | "admin" })
+    | null
+    | undefined;
+
+  const rentals = useQuery(
+    api.queries.getUserRentals.getUserRentals as any,
+    profile?._id ? { userId: profile._id } : "skip"
+  ) as
+    | Array<{
+        _id: string;
+        game?: { _id?: Id<"games">; title?: string; cover_url?: string };
+        gameId?: Id<"games">;
+        expiresAt?: number | null;
+      }>
+    | undefined;
+
+  const purchases = useQuery(
+    api.queries.getUserPurchases.getUserPurchases as any,
+    profile?._id ? { userId: profile._id } : "skip"
+  ) as
+    | Array<{
+        _id: string;
+        game?: { _id?: Id<"games">; title?: string; cover_url?: string };
+        gameId?: Id<"games">;
+        createdAt?: number;
+      }>
+    | undefined;
+
+  const now = Date.now();
+  const hasPurchased = useMemo(() => {
+    if (!game?._id || !Array.isArray(purchases)) return false;
+    return purchases.some(
+      (p) => String(p?.game?._id ?? p?.gameId ?? "") === String(game._id)
+    );
+  }, [purchases, game?._id]);
+
+  const hasActiveRental = useMemo(() => {
+    if (!game?._id || !Array.isArray(rentals)) return false;
+    return rentals.some((r) => {
+      const same =
+        String(r?.game?._id ?? r?.gameId ?? "") === String(game._id);
+      const active =
+        typeof r.expiresAt === "number" ? r.expiresAt > now : true;
+      return same && active;
+    });
+  }, [rentals, game?._id, now]);
+
+  const canPlay = hasPurchased || hasActiveRental;
+  const canExtend = !hasPurchased && hasActiveRental;
+  const showBuyAndRent = !hasPurchased && !hasActiveRental;
+
+  const requiresPremium =
+    (game as any)?.plan === "premium" &&
+    profile &&
+    profile.role !== "premium" &&
+    profile.role !== "admin";
+
+  // ====== Toast & Favoritos ======
+  const { toast } = useToast();
+
+  const favItems = useFavoritesStore((s) => s.items);
+  const addFav = useFavoritesStore((s) => s.add);
+  const removeFav = useFavoritesStore((s) => s.remove);
+
+  const isFav = useMemo(() => {
+    return !!(game?._id && favItems.some((i) => i.id === String(game._id)));
+  }, [favItems, game?._id]);
+
+  // Modals
+  const [showAuthFav, setShowAuthFav] = useState(false); // login requerido para favoritos
+  const [showAuthAction, setShowAuthAction] = useState(false); // login requerido para comprar/alquilar/jugar
+  const [showPremiumModal, setShowPremiumModal] = useState(false); // upgrade plan
+
+  // Handlers navegación
   const handlePurchase = () => {
-    if (game?._id) router.push(`/checkout/compra/${game._id}`);
+    if (!game?._id) return;
+    if (!isLogged) {
+      setShowAuthAction(true);
+      return;
+    }
+    if (requiresPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+    router.push(`/checkout/compra/${game._id}`);
   };
+
   const handleRental = () => {
-    if (game?._id) router.push(`/checkout/alquiler/${game._id}`);
+    if (!game?._id) return;
+    if (!isLogged) {
+      setShowAuthAction(true);
+      return;
+    }
+    if (requiresPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+    router.push(`/checkout/alquiler/${game._id}`);
+  };
+
+  const handleExtend = () => {
+    if (!game?._id) return;
+    if (!isLogged) {
+      setShowAuthAction(true);
+      return;
+    }
+    // reutilizamos el checkout de alquiler como extensión
+    router.push(`/checkout/alquiler/${game._id}?extend=1`);
+  };
+
+  const handlePlay = () => {
+    if (!isLogged) {
+      setShowAuthAction(true);
+      return;
+    }
+    if (!canPlay) {
+      // fallback por si llega a apretar sin ownership
+      toast({
+        title: "No disponible",
+        description: "Necesitás comprar o alquilar el juego para jugar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Lanzando juego…",
+      description: "¡Feliz gaming! 🎮",
+    });
+  };
+
+  const onToggleFavorite = () => {
+    if (!game?._id) return;
+    if (!isLogged) {
+      setShowAuthFav(true);
+      return;
+    }
+    const item = {
+      id: String(game._id),
+      title: game.title ?? "Juego",
+      cover: (game as any).cover_url ?? "/placeholder.svg",
+      priceBuy: (game as any).price_buy ?? null,
+      priceRent: (game as any).weekly_price ?? null,
+    };
+
+    if (isFav) {
+      removeFav(item.id);
+      toast({
+        title: "Quitado de favoritos",
+        description: `${item.title} se quitó de tu lista.`,
+      });
+    } else {
+      addFav(item);
+      toast({
+        title: "Añadido a favoritos",
+        description: `${item.title} se agregó a tu lista.`,
+      });
+    }
   };
 
   const copyToClipboard = async () => {
@@ -160,7 +362,11 @@ export default function GameDetailPage() {
             {/* Columna izquierda (media) */}
             <div className="lg:col-span-2 space-y-4">
               {/* Media box */}
-              <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden">
+              <div
+                className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden"
+                onMouseEnter={() => setIsHoverMain(true)}
+                onMouseLeave={() => setIsHoverMain(false)}
+              >
                 {current?.type === "video" ? (
                   <iframe
                     src={current.src}
@@ -201,45 +407,47 @@ export default function GameDetailPage() {
                   </Button>
 
                   <div className="flex-1 grid grid-cols-4 gap-2">
-                    {media.slice(thumbStart, thumbStart + thumbsPerView).map((m, idx) => {
-                      const i = thumbStart + idx;
-                      const selected = i === selectedIndex;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => setSelectedIndex(i)}
-                          className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
-                            selected ? "border-orange-400" : "border-slate-600"
-                          }`}
-                          title={m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`}
-                        >
-                          {m.type === "video" ? (
-                            <>
+                    {media
+                      .slice(thumbStart, thumbStart + thumbsPerView)
+                      .map((m, idx) => {
+                        const i = thumbStart + idx;
+                        const selected = i === selectedIndex;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setSelectedIndex(i)}
+                            className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
+                              selected ? "border-orange-400" : "border-slate-600"
+                            }`}
+                            title={m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`}
+                          >
+                            {m.type === "video" ? (
+                              <>
+                                <Image
+                                  src={m.thumb || (game as any).cover_url || "/placeholder.svg"}
+                                  alt="Trailer"
+                                  width={120}
+                                  height={68}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/30 grid place-items-center">
+                                  <div className="bg-white/90 text-slate-900 rounded-full p-1">
+                                    <Play className="w-4 h-4" />
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
                               <Image
-                                src={m.thumb || game.cover_url || "/placeholder.svg"}
-                                alt="Trailer"
+                                src={m.src}
+                                alt={`${game.title} screenshot ${i + 1}`}
                                 width={120}
                                 height={68}
                                 className="w-full h-full object-cover"
                               />
-                              <div className="absolute inset-0 bg-black/30 grid place-items-center">
-                                <div className="bg-white/90 text-slate-900 rounded-full p-1">
-                                  <Play className="w-4 h-4" />
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <Image
-                              src={m.src}
-                              alt={`${game.title} screenshot ${i + 1}`}
-                              width={120}
-                              height={68}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
+                            )}
+                          </button>
+                        );
+                      })}
                   </div>
 
                   <Button
@@ -257,7 +465,9 @@ export default function GameDetailPage() {
               {/* Descripción */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-orange-400 mb-4">Descripción</h3>
-                <p className="text-slate-300 leading-relaxed">{game.description ?? "Sin descripción"}</p>
+                <p className="text-slate-300 leading-relaxed">
+                  {game.description ?? "Sin descripción"}
+                </p>
               </div>
             </div>
 
@@ -265,28 +475,61 @@ export default function GameDetailPage() {
             <div className="lg:col-span-1 space-y-6">
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <div className="text-center mb-4">
-                  <p className="text-orange-400 text-sm mb-2">¡Suscribite a premium para más ventajas!</p>
-                  <div className="text-xl font-semibold text-teal-400 mt-2">Alquiler semanal</div>
+                  {/* ❌ Quitado “Alquiler semanal” como pediste */}
+                  <p className="text-orange-400 text-sm">
+                    ¡Suscribite a premium para más ventajas!
+                  </p>
                 </div>
 
                 <div className="space-y-3">
-                  <Button onClick={handlePurchase} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold">
-                    Comprar ahora
-                  </Button>
-                  <Button
-                    onClick={handleRental}
-                    variant="outline"
-                    className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                  >
-                    Alquilar
-                  </Button>
+                  {canPlay ? (
+                    <>
+                      <Button
+                        onClick={handlePlay}
+                        className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                      >
+                        Jugar
+                      </Button>
+
+                      {canExtend && (
+                        <Button
+                          onClick={handleExtend}
+                          variant="outline"
+                          className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                        >
+                          Extender
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {showBuyAndRent && (
+                        <>
+                          <Button
+                            onClick={handlePurchase}
+                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                          >
+                            Comprar ahora
+                          </Button>
+                          <Button
+                            onClick={handleRental}
+                            variant="outline"
+                            className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                          >
+                            Alquilar
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => setIsFavorite((v) => !v)}
+                      onClick={onToggleFavorite}
                       variant="outline"
                       className="flex-1 border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
                     >
-                      <Heart className={`w-4 h-4 mr-2 ${isFavorite ? "fill-current" : ""}`} />
+                      <Heart className={`w-4 h-4 mr-2 ${isFav ? "fill-current" : ""}`} />
                       Favoritos
                     </Button>
                     <Button
@@ -304,7 +547,9 @@ export default function GameDetailPage() {
               </div>
 
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
-                <h3 className="text-xl font-semibold text-orange-400 mb-4">Información del juego</h3>
+                <h3 className="text-xl font-semibold text-orange-400 mb-4">
+                  Información del juego
+                </h3>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Plan:</span>
@@ -312,16 +557,22 @@ export default function GameDetailPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Géneros:</span>
-                    <span className="text-white">{((game as any).genres ?? []).join(", ") || "—"}</span>
+                    <span className="text-white">
+                      {((game as any).genres ?? []).join(", ") || "—"}
+                    </span>
                   </div>
                 </div>
               </div>
 
               <div className="bg-gradient-to-br from-orange-400/30 via-teal-500/30 to-purple-600/30 rounded-lg p-6 text-center">
                 <h3 className="text-xl font-bold text-white mb-2">¿Quieres más?</h3>
-                <p className="text-white/90 text-sm mb-4">Con premium descubrí acceso ilimitado al catálogo y descuentos exclusivos</p>
+                <p className="text-white/90 text-sm mb-4">
+                  Con premium descubrí acceso ilimitado al catálogo y descuentos exclusivos
+                </p>
                 <Link href="/premium">
-                  <Button className="bg-white text-violet-800 hover:bg-slate-100 font-semibold">Descubre premium</Button>
+                  <Button className="bg-white text-violet-800 hover:bg-slate-100 font-semibold">
+                    Descubre premium
+                  </Button>
                 </Link>
               </div>
             </div>
@@ -333,7 +584,9 @@ export default function GameDetailPage() {
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
         <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-orange-400 text-xl font-semibold">¡Comparte este juego!</DialogTitle>
+            <DialogTitle className="text-orange-400 text-xl font-semibold">
+              ¡Comparte este juego!
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-slate-300 text-center">
@@ -360,10 +613,134 @@ export default function GameDetailPage() {
               className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
               disabled={copied}
             >
-              {copied ? (<><Check className="w-4 h-4 mr-2" />¡Copiado!</>) : (<><Copy className="w-4 h-4 mr-2" />Copiar link</>)}
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  ¡Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copiar link
+                </>
+              )}
             </Button>
-            <p className="text-xs text-slate-400 text-center">El link se copió a tu portapapeles</p>
+            <p className="text-xs text-slate-400 text-center">
+              El link se copió a tu portapapeles
+            </p>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: login requerido (Favoritos) */}
+      <Dialog open={showAuthFav} onOpenChange={setShowAuthFav}>
+        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-orange-400 text-xl font-semibold">
+              Inicia sesión para continuar
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-slate-300 text-center">
+              Para añadir a favoritos debes iniciar sesión o registrarte.
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowAuthFav(false)}
+              className="border-slate-600 text-slate-300 bg-transparent"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                const next =
+                  typeof window !== "undefined"
+                    ? window.location.pathname
+                    : `/juego/${String(game?._id ?? "")}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(
+                  next
+                )}`;
+              }}
+              className="bg-orange-400 hover:bg-orange-500 text-slate-900"
+            >
+              Iniciar sesión
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: login requerido (Comprar / Alquilar / Jugar) */}
+      <Dialog open={showAuthAction} onOpenChange={setShowAuthAction}>
+        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-orange-400 text-xl font-semibold">
+              Inicia sesión para continuar
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-slate-300 text-center">
+              Para continuar debes iniciar sesión o registrarte.
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowAuthAction(false)}
+              className="border-slate-600 text-slate-300 bg-transparent"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                const next =
+                  typeof window !== "undefined"
+                    ? window.location.pathname
+                    : `/juego/${String(game?._id ?? "")}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(
+                  next
+                )}`;
+              }}
+              className="bg-orange-400 hover:bg-orange-500 text-slate-900"
+            >
+              Iniciar sesión
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: requiere plan Premium */}
+      <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
+        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-orange-400 text-xl font-semibold">
+              Se requiere PREMIUM
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-slate-300 text-center">
+              Para jugar o alquilar este título es necesario contar con la
+              suscripción <span className="text-amber-300 font-semibold">PREMIUM</span> de PlayVerse.
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowPremiumModal(false)}
+              className="border-slate-600 text-slate-300 bg-transparent"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                window.location.href = "/checkout/premium?plan=monthly";
+              }}
+              className="bg-orange-400 hover:bg-orange-500 text-slate-900"
+            >
+              Upgrade Plan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

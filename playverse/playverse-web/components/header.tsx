@@ -1,4 +1,3 @@
-// playverse-web/components/header.tsx
 "use client";
 
 import { useState } from "react";
@@ -26,6 +25,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// ✅ contador de favoritos
+import { useFavoritesStore } from "@/components/favoritesStore";
+
 export function Header() {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
@@ -45,8 +47,6 @@ export function Header() {
     session?.user?.name ?? localUser?.name ?? undefined;
   const displayEmail =
     session?.user?.email ?? localUser?.email ?? undefined;
-  const avatarUrl =
-    (session?.user as any)?.image ?? undefined;
 
   const isActiveLink = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -63,17 +63,18 @@ export function Header() {
   };
 
   const handleLogout = async () => {
-    // si hay sesión de NextAuth => usar signOut y redirigir con ?logout=1
     if (session?.user) {
       const { signOut } = await import("next-auth/react");
       await signOut({ callbackUrl: "/?logout=1" });
       return;
     }
-    // si era login local => limpiar store y mandar al home con ?logout=1
     clearAuth();
     localStorage.removeItem("pv_email");
     router.push("/?logout=1");
   };
+
+  // ✅ contador reactivo
+  const favCount = useFavoritesStore((s) => s.items.length);
 
   return (
     <header className="bg-slate-900 border-b border-slate-700 relative">
@@ -120,10 +121,16 @@ export function Header() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="text-orange-400 hover:text-orange-300"
+                    className="relative text-orange-400 hover:text-orange-300"
                     onClick={() => setShowFavorites(!showFavorites)}
+                    title="Favoritos"
                   >
                     <Heart className="w-5 h-5" />
+                    {favCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-400 text-slate-900 text-[11px] font-extrabold grid place-items-center leading-[18px]">
+                        {favCount > 99 ? "99+" : favCount}
+                      </span>
+                    )}
                   </Button>
                   <FavoritesDropdown
                     isOpen={showFavorites}
@@ -160,7 +167,6 @@ export function Header() {
                       className="text-orange-400 hover:text-orange-300"
                       title={displayName}
                     >
-                      {/* Si tenés avatar, podrías mostrarlo; por ahora mantenemos el ícono */}
                       <User className="w-5 h-5" />
                     </Button>
                   </div>
@@ -187,7 +193,6 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
 
-                  {/* Nuevo item: Panel Administrador */}
                   <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/admin" className="w-full flex items-center gap-2">
                       <Shield className="w-4 h-4" />

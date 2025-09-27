@@ -1,65 +1,32 @@
-// convex/functions/mutations/upgradePlan.ts
+// convex/mutations/upgradePlan.ts
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 
 export const upgradePlan = mutation({
   args: {
-    userId: v.id("profiles"),                  // usuario afectado
-    toRole: v.union(v.literal("free"), v.literal("premium")),
-    paymentId: v.optional(v.id("payments")),   // si hay pago simulado
-    requesterId: v.optional(v.id("profiles")), // quién ejecuta (si no se pasa, es el mismo userId)
+    userId: v.id("profiles"),
+    toRole: v.union(v.literal("premium"), v.literal("free")),
+    plan: v.optional(v.string()),          // opcional (hoy no se guarda en profiles)
+    trial: v.optional(v.boolean()),        // opcional (hoy no se guarda en profiles)
+    paymentId: v.optional(v.id("payments"))// opcional (por si querés enlazarlo luego)
   },
-  handler: async ({ db }, { userId, toRole, paymentId, requesterId }) => {
-    const now = Date.now();
-
-    const user = await db.get(userId);
+  handler: async (ctx, { userId, toRole /* plan, trial, paymentId */ }) => {
+    const user = await ctx.db.get(userId);
     if (!user) throw new Error("Usuario no encontrado");
 
-    const fromRole = user.role;
-    if (fromRole === toRole) {
-      return { changed: false, message: "El usuario ya tiene ese plan." };
-    }
-    if (fromRole === "admin") {
-      throw new Error("No se puede cambiar el plan de un administrador desde aquí.");
+    // Evitamos escribir campos que NO existen en el schema de profiles
+    // (no premiumPlan, no updatedAt, etc.)
+    if (user.role !== toRole) {
+      await ctx.db.patch(userId, { role: toRole });
     }
 
-    // Actualizar perfil
-    await db.patch(userId, { role: toRole });
+    // ⚠️ IMPORTANTE:
+    // No insertamos en "transactions" porque tu schema de esa colección
+    // obliga a type: "rental" | "purchase" y rompería el tipado.
+    // Cuando quieras loguear la suscripción:
+    //  - opción A: crear colección "subscriptions" con su propio schema
+    //  - opción B: agregar "subscription" al union del campo "type" de esa colección
 
-    // Registrar upgrade/downgrade funcional
-    const upgradeId = await db.insert("upgrades", {
-      userId,
-      fromRole,
-      toRole,
-      effectiveAt: now,
-      paymentId,
-    });
-
-    // Auditoría
-    const actorId = requesterId ?? userId; // Id<"profiles">
-    const actor = await db.get(actorId);
-    await db.insert("audits", {
-      action: "upgrade_plan",
-      entity: "user",
-      entityId: userId,   // <-- PASAMOS LA Id (NO string)
-      requesterId: actorId,
-      timestamp: now,
-      details: {
-        requesterName: actor?.name ?? "(desconocido)",
-        userEmail: user.email,
-        fromRole,
-        toRole,
-        upgradeId: String(upgradeId),         // en details, string OK
-        paymentId: paymentId ? String(paymentId) : undefined,
-      },
-    });
-
-    return {
-      changed: true,
-      upgradeId,
-      message: toRole === "premium"
-        ? "¡Upgrade a Premium aplicado!"
-        : "Cambio aplicado a plan Free.",
-    };
+    return { ok: true, role: toRole };
   },
 });

@@ -1,9 +1,10 @@
-"use client"
+// app/premium/page.tsx
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const premiumPlans = [
   {
@@ -34,7 +35,7 @@ const premiumPlans = [
     popular: false,
     features: ["Acceso ilimitado de por vida", "Todos los beneficios", "Sin renovaciones", "Máximo valor"],
   },
-]
+];
 
 const premiumBenefits = [
   {
@@ -72,19 +73,19 @@ const premiumBenefits = [
     title: "Descuentos exclusivos",
     description: "Hasta 10% de descuento en compras y alquileres de juegos",
   },
-]
+];
 
 export default function PremiumPage() {
-  const router = useRouter()
-  const [selectedPlan, setSelectedPlan] = useState("annual")
+  const router = useRouter();
+  const [selectedPlan, setSelectedPlan] = useState("annual");
 
   const handleSubscribe = (planId: string) => {
-    router.push(`/checkout/premium?plan=${planId}`)
-  }
+    router.push(`/checkout/premium?plan=${planId}`);
+  };
 
   const handleFreeTrial = () => {
-    router.push("/checkout/premium?plan=monthly&trial=true")
-  }
+    router.push("/checkout/premium?plan=monthly&trial=true");
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -127,7 +128,7 @@ export default function PremiumPage() {
         </div>
       </div>
 
-      {/* Benefits Section */}
+      {/* Benefits */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">¿Por qué elegir Premium?</h2>
@@ -147,11 +148,10 @@ export default function PremiumPage() {
         </div>
       </div>
 
-      {/* Pricing Plans */}
+      {/* Pricing */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">Elige tu plan</h2>
-          <p className="text-slate-400 text-lg">Encuentra el plan perfecto para tu estilo de juego</p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -176,8 +176,8 @@ export default function PremiumPage() {
                   <span className="text-4xl font-bold text-teal-400">{plan.price}</span>
                   <span className="text-slate-400">{plan.period}</span>
                 </div>
-                {plan.originalPrice && (
-                  <div className="text-sm text-slate-500 line-through mb-1">{plan.originalPrice}</div>
+                {"originalPrice" in plan && (plan as any).originalPrice && (
+                  <div className="text-sm text-slate-500 line-through mb-1">{(plan as any).originalPrice}</div>
                 )}
                 <p className="text-slate-400 text-sm">{plan.description}</p>
               </div>
@@ -210,47 +210,10 @@ export default function PremiumPage() {
               </Button>
             </div>
           ))}
-        </div>  
-      </div>
-
-      {/* FAQ Section */}
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">Preguntas frecuentes</h2>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">
-                ¿Puedo cancelar mi suscripción en cualquier momento?
-              </h3>
-              <p className="text-slate-400">
-                Sí, puedes cancelar tu suscripción Premium en cualquier momento desde tu perfil. Tu acceso continuará
-                hasta el final del período de facturación actual.
-              </p>
-            </div>
-
-            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">¿Qué incluye la prueba gratuita?</h3>
-              <p className="text-slate-400">
-                La prueba gratuita de 7 días incluye acceso completo a todas las funciones Premium: biblioteca
-                ilimitada, sin anuncios y descuentos exclusivos.
-              </p>
-            </div>
-
-            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">¿Los descuentos se aplican automáticamente?</h3>
-              <p className="text-slate-400">
-                Sí, todos los descuentos Premium se aplican automáticamente al momento de la compra o alquiler. No
-                necesitas códigos especiales.
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* CTA Section */}
+      {/* CTA */}
       <div className="bg-gradient-to-r from-orange-400/10 to-teal-400/10 border-t border-orange-400/20">
         <div className="container mx-auto px-4 py-16">
           <div className="text-center max-w-2xl mx-auto">
@@ -271,5 +234,5 @@ export default function PremiumPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

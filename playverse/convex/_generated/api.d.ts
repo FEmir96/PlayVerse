@@ -24,6 +24,7 @@ import type * as lib_emailTemplates from "../lib/emailTemplates.js";
 import type * as mutations_addGame from "../mutations/addGame.js";
 import type * as mutations_addGamesBatch from "../mutations/addGamesBatch.js";
 import type * as mutations_authLogin from "../mutations/authLogin.js";
+import type * as mutations_cancelPremiumPlan from "../mutations/cancelPremiumPlan.js";
 import type * as mutations_createGame from "../mutations/createGame.js";
 import type * as mutations_createUser from "../mutations/createUser.js";
 import type * as mutations_deleteGame from "../mutations/deleteGame.js";
@@ -55,6 +56,7 @@ import type * as queries_getPaymentMethods from "../queries/getPaymentMethods.js
 import type * as queries_getPremiumGames from "../queries/getPremiumGames.js";
 import type * as queries_getUpcomingGames from "../queries/getUpcomingGames.js";
 import type * as queries_getUserByEmail from "../queries/getUserByEmail.js";
+import type * as queries_getUserById from "../queries/getUserById.js";
 import type * as queries_getUserLibrary from "../queries/getUserLibrary.js";
 import type * as queries_getUserPayments from "../queries/getUserPayments.js";
 import type * as queries_getUserPurchases from "../queries/getUserPurchases.js";
@@ -86,6 +88,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/addGame": typeof mutations_addGame;
   "mutations/addGamesBatch": typeof mutations_addGamesBatch;
   "mutations/authLogin": typeof mutations_authLogin;
+  "mutations/cancelPremiumPlan": typeof mutations_cancelPremiumPlan;
   "mutations/createGame": typeof mutations_createGame;
   "mutations/createUser": typeof mutations_createUser;
   "mutations/deleteGame": typeof mutations_deleteGame;
@@ -117,6 +120,7 @@ declare const fullApi: ApiFromModules<{
   "queries/getPremiumGames": typeof queries_getPremiumGames;
   "queries/getUpcomingGames": typeof queries_getUpcomingGames;
   "queries/getUserByEmail": typeof queries_getUserByEmail;
+  "queries/getUserById": typeof queries_getUserById;
   "queries/getUserLibrary": typeof queries_getUserLibrary;
   "queries/getUserPayments": typeof queries_getUserPayments;
   "queries/getUserPurchases": typeof queries_getUserPurchases;

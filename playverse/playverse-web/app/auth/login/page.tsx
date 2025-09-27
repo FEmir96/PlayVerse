@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,15 @@ export default function LoginPage() {
 
   const setUser = useAuthStore((s: AuthState) => s.setUser);
   const authLogin = useMutation(api.auth.authLogin);
+
+  // ✅ Decodificamos y saneamos ?next
+  const nextUrl = useMemo(() => {
+    const raw = searchParams?.get("next") || "";
+    const decoded = raw ? decodeURIComponent(raw) : "/";
+    // solo permitimos rutas relativas internas
+    if (!decoded.startsWith("/")) return "/";
+    return decoded;
+  }, [searchParams]);
 
   // Si venís de registro exitoso: ?registered=1
   useEffect(() => {
@@ -78,9 +87,8 @@ export default function LoginPage() {
       localStorage.removeItem("pv_email");
     }
 
-    // ⬇️ Respeta ?next=/ruta. Si no viene, va a "/"
-    const next = searchParams?.get("next");
-    setTimeout(() => router.push(next || "/"), 120);
+    // ✅ volvemos al juego (o a / si no hay next)
+    setTimeout(() => router.push(nextUrl), 120);
   };
 
   return (
@@ -204,7 +212,8 @@ export default function LoginPage() {
               type="button"
               onClick={() =>
                 import("next-auth/react").then(({ signIn }) =>
-                  signIn("google", { callbackUrl: searchParams?.get("next") || "/?login=ok" })
+                  // ✅ usar la misma next decodificada como callbackUrl
+                  signIn("google", { callbackUrl: nextUrl })
                 )
               }
               className="w-full flex items-center justify-center gap-3 rounded-md border border-orange-400/40 bg-slate-800/60 px-4 py-2.5 text-[15px] font-medium text-slate-200 transition

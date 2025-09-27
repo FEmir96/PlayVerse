@@ -1,3 +1,4 @@
+// app/perfil/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  User,
   Mail,
   Lock,
   Edit2,
@@ -40,14 +40,13 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { api } from "@convex";
 
-// ⚙️ Referencias robustas (siguiendo tu patrón actual)
+// === Refs robustas a Convex ===
 const getUserByEmailRef =
   (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
 
 const getUserRentalsRef =
   (api as any)["queries/getUserRentals"].getUserRentals as FunctionReference<"query">;
 
-/** ✅ NUEVO: compras del usuario */
 const getUserPurchasesRef =
   (api as any)["queries/getUserPurchases"].getUserPurchases as FunctionReference<"query">;
 
@@ -58,7 +57,6 @@ const savePaymentMethodRef =
   (api as any)["mutations/savePaymentMethod"]
     .savePaymentMethod as FunctionReference<"mutation">;
 
-// Si existe la query en tu backend la usamos; si no, ponemos un ref estable alternativo
 const HAS_PM_QUERY = Boolean(
   (api as any)["queries/getPaymentMethods"]?.getPaymentMethods
 );
@@ -67,6 +65,11 @@ const getPaymentMethodsRef = HAS_PM_QUERY
       .getPaymentMethods as FunctionReference<"query">)
   : ((api as any)["queries/getUserByEmail"]
       .getUserByEmail as FunctionReference<"query">);
+
+// ⬇️ NUEVO: cancelar premium
+const cancelPremiumRef =
+  (api as any)["mutations/cancelPremiumPlan"]
+    .cancelPremiumPlan as FunctionReference<"mutation">;
 
 // ——— Tipos UI ———
 type PaymentMethodUI = {
@@ -224,7 +227,7 @@ export default function ProfilePage() {
     setIsEditing(false);
   };
 
-  // 6) Alquileres del usuario
+  // 6) Alquileres y Compras
   const rentals = useQuery(
     getUserRentalsRef,
     convexProfile?._id ? { userId: convexProfile._id } : "skip"
@@ -232,7 +235,6 @@ export default function ProfilePage() {
     | Array<{ _id: string; game?: { title?: string; cover_url?: string }; expiresAt?: number | null; title?: string; cover_url?: string; }>
     | undefined;
 
-  /** ✅ NUEVO: Compras del usuario */
   const purchases = useQuery(
     getUserPurchasesRef,
     convexProfile?._id ? { userId: convexProfile._id } : "skip"
@@ -240,14 +242,12 @@ export default function ProfilePage() {
     | Array<{ _id: string; game?: { title?: string; cover_url?: string }; createdAt?: number; title?: string; cover_url?: string; }>
     | undefined;
 
-  /** ✅ Dedup de compras por juego (misma lógica que usás en Mis Juegos) */
   const uniquePurchases = useMemo(() => {
     const arr = Array.isArray(purchases) ? (purchases as any[]) : [];
     const seen = new Set<string>();
     const out: any[] = [];
 
     for (const p of arr) {
-      // key robusta: gameId → _id del game → título → _id de la compra
       const key = String(p?.game?._id ?? p?.gameId ?? p?.title ?? p?._id ?? "").trim();
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -384,6 +384,9 @@ export default function ProfilePage() {
   const roleIcon =
     role === "admin" ? <ShieldAlert className="w-3 h-3 mr-1" /> : <Crown className="w-3 h-3 mr-1" />;
   const roleLabel = role === "admin" ? "Admin" : role === "premium" ? "Premium" : "Free";
+
+  // ⬇️ NUEVO: cancelación
+  const cancelPremium = useMutation(cancelPremiumRef);
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -530,17 +533,57 @@ export default function ProfilePage() {
                 <CardTitle className="text-orange-400">Suscripción Premium</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-medium">Plan Premium</p>
-                    <p className="text-slate-400 text-sm">Renovación: 15 de enero, 2025</p>
-                  </div>
-                  <Badge className="bg-orange-400 text-slate-900">Activo</Badge>
-                </div>
-                <Separator className="bg-slate-700" />
-                <Button variant="outline" className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent">
-                  Cancelar suscripción
-                </Button>
+                {role === "premium" ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-white font-medium">Plan Premium</p>
+                        <p className="text-slate-400 text-sm">Renovación automática activa</p>
+                      </div>
+                      <Badge className="bg-orange-400 text-slate-900">Activo</Badge>
+                    </div>
+                    <Separator className="bg-slate-700" />
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        if (!convexProfile?._id) return;
+                        try {
+                          await cancelPremium({ userId: convexProfile._id, reason: "user_click" } as any);
+                          toast({
+                            title: "Suscripción cancelada",
+                            description: "Tu cuenta volvió a Free. Podés suscribirte otra vez cuando quieras.",
+                          });
+                        } catch (e: any) {
+                          toast({
+                            title: "No se pudo cancelar",
+                            description: e?.message ?? "Intentá nuevamente.",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
+                    >
+                      Cancelar suscripción
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-slate-300 text-sm">
+                      Pasate a Premium para desbloquear la biblioteca completa, sin anuncios y con descuentos.
+                    </p>
+                    <Link
+                      href={
+                        convexProfile?._id
+                          ? `/checkout/premium/${convexProfile._id}?plan=monthly`
+                          : "/premium"
+                      }
+                    >
+                      <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900">
+                        Suscribirme ahora
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -581,7 +624,7 @@ export default function ProfilePage() {
 
           {/* Second Row - Games Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Purchased Games — ✅ AHORA CON LISTADO REAL (dedupe) */}
+            {/* Purchased Games */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-orange-400 flex items-center gap-2">
@@ -629,7 +672,7 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
-            {/* Rented Games — ya estaba funcional */}
+            {/* Rented Games */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-orange-400 flex items-center gap-2">
@@ -691,7 +734,7 @@ export default function ProfilePage() {
               </Button>
             </div>
             <div className="flex items-center justify-center">
-              <img src={currentAvatar} alt="Avatar" className="max-h-[60vh] max-w-full rounded-lg object-contain" />
+              <img src={currentAvatar} alt="Avatar" className="max-h:[60vh] max-w-full rounded-lg object-contain" />
             </div>
           </div>
         </div>
