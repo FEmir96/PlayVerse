@@ -1,4 +1,3 @@
-// playverse-web/components/favorites-dropdown.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -19,7 +18,6 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
   const items = useFavoritesStore((s) => s.items);
   const remove = useFavoritesStore((s) => s.remove);
 
-  // Mantengo tu listener (por si lo usás en otro lado)
   useEffect(() => {
     const handler = () => {};
     window.addEventListener("pv:favorites:changed", handler);
@@ -44,9 +42,14 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                 {items.length}
               </span>
             </div>
+            {/* ❗Solo hover: glow suave */}
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-orange-300 transition-colors"
+              className="text-slate-400 rounded-md transition-all duration-200
+                         hover:text-orange-300 hover:bg-orange-400/10
+                         hover:shadow-[0_0_12px_rgba(251,146,60,0.30)]
+                         hover:ring-1 hover:ring-orange-400/30
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60"
               aria-label="Cerrar"
               title="Cerrar"
             >
@@ -62,7 +65,12 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
               </div>
             ) : (
               items.map((g) => (
-                <div key={g.id} className="p-3 hover:bg-slate-800/50 transition">
+                <div
+                  key={g.id}
+                  className="p-3 transition-all duration-200 rounded-none
+                             hover:bg-slate-800/50 hover:shadow-[0_0_14px_rgba(251,146,60,0.15)]
+                             hover:ring-1 hover:ring-orange-400/20"
+                >
                   <div className="flex gap-3">
                     <div className="shrink-0 rounded-lg overflow-hidden ring-1 ring-slate-700">
                       <Image
@@ -76,17 +84,18 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        {/* 🔶 Título clickeable y en naranja */}
+                        {/* Título */}
                         <Link
                           href={`/juego/${g.id}`}
                           onClick={onClose}
-                          className="text-orange-400 hover:text-orange-300 hover:underline font-medium truncate"
+                          className="text-orange-400 hover:text-orange-300 hover:underline font-medium truncate
+                                     transition-colors"
                           title={g.title}
                         >
                           {g.title}
                         </Link>
 
-                        {/* Papelera */}
+                        {/* Papelera con glow en hover */}
                         <button
                           onClick={() => {
                             remove(g.id);
@@ -96,19 +105,24 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                               description: `${g.title} se quitó de tu lista.`,
                             });
                           }}
-                          className="text-slate-400 hover:text-red-400 transition"
+                          className="text-slate-400 rounded-md transition-all duration-200
+                                     hover:text-red-400 hover:bg-red-400/10
+                                     hover:shadow-[0_0_12px_rgba(248,113,113,0.25)]
+                                     hover:ring-1 hover:ring-red-400/30
+                                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
                           title="Quitar de favoritos"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
 
-                      {/* Acciones: Alquiler / Compra */}
+                      {/* Acciones */}
                       <div className="flex items-center justify-between mt-2">
                         <Link
                           href={`/checkout/alquiler/${g.id}`}
                           onClick={onClose}
-                          className="text-cyan-300 hover:text-cyan-200 text-sm inline-flex items-center gap-1"
+                          className="text-cyan-300 hover:text-cyan-200 text-sm inline-flex items-center gap-1
+                                     transition-colors"
                         >
                           <PlaySquare className="w-4 h-4" />
                           Alquiler
@@ -116,7 +130,8 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                         <Link
                           href={`/checkout/compra/${g.id}`}
                           onClick={onClose}
-                          className="text-emerald-300 hover:text-emerald-200 text-sm inline-flex items-center gap-1"
+                          className="text-emerald-300 hover:text-emerald-200 text-sm inline-flex items-center gap-1
+                                     transition-colors"
                         >
                           <ShoppingCart className="w-4 h-4" />
                           Compra

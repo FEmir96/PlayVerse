@@ -1,3 +1,4 @@
+// app/checkout/compra/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -28,7 +29,7 @@ const getGameByIdRef = (HAS_GET_BY_ID
   ? (api as any)["queries/getGameById"].getGameById
   : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
 
-// ✅ usamos la biblioteca para chequear propiedad
+// ✅ biblioteca para chequear propiedad
 const getUserLibraryRef =
   (api as any)["queries/getUserLibrary"].getUserLibrary as FunctionReference<"query">;
 
@@ -43,6 +44,25 @@ type PM = {
   expMonth: number;
   expYear: number;
 };
+
+/* === TÍTULO “Boca naranja” reutilizable === */
+function CheckoutTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-center mb-6">
+      <h1
+        className="
+          text-3xl md:text-4xl font-black tracking-tight
+          bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300
+          bg-clip-text text-transparent
+          drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]
+        "
+      >
+        {children}
+      </h1>
+      <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
+    </div>
+  );
+}
 
 export default function PurchaseCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -99,7 +119,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   const formatMoney = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
-  // ——— helper para normalizar marca ———
   const normalizeBrand = (b?: string): PM["brand"] => {
     const s = (b || "").toLowerCase();
     if (s.includes("visa")) return "visa";
@@ -108,7 +127,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     return "otro";
   };
 
-  // ——— fallback: si no hay métodos en la tabla, uso uno del perfil ———
+  // fallback: si no hay métodos en la tabla, uso uno del perfil
   const pmFromProfile: PM | null = useMemo(() => {
     const p: any = profile;
     if (!p) return null;
@@ -143,7 +162,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
-  /** ✅ ¿Ya es dueño del juego? (chequea en la biblioteca) */
+  /** ✅ ¿Ya es dueño del juego? */
   const alreadyOwned = useMemo(() => {
     if (!library || !game?._id) return false;
     const gid = String(game._id);
@@ -155,7 +174,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     });
   }, [library, game?._id]);
 
-  // Aviso apenas detectamos que ya lo tiene
   useEffect(() => {
     if (alreadyOwned && game?.title) {
       toast({
@@ -168,7 +186,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const onPay = async () => {
     if (!profile?._id || !game?._id) return;
 
-    // 🚫 bloqueo extra en el cliente
     if (alreadyOwned) {
       toast({
         title: "Compra no necesaria",
@@ -193,7 +210,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
       toast({ title: "Compra confirmada", description: "Te enviamos un email con los detalles." });
       router.replace("/mis-juegos");
     } catch (e: any) {
-      // Si el backend protege con ALREADY_OWNED, mostramos un mensaje elegante
       const msg = String(e?.message || "");
       if (msg.includes("ALREADY_OWNED")) {
         toast({ title: "Ya tienes este juego", description: "No es necesario volver a comprarlo." });
@@ -220,18 +236,32 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   return (
     <div className="container mx-auto px-4 py-10">
-      <h1 className="text-3xl md:text-4xl font-extrabold text-orange-400 text-center mb-2">Confirmar compra</h1>
+      {/* === Título bonito === */}
+      <CheckoutTitle>Confirmar compra</CheckoutTitle>
       <p className="text-slate-300 text-center mb-8">Estás comprando:</p>
 
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Izquierda */}
+        {/* Izquierda — COVER escalado y con buen encuadre */}
         <div>
-          <h2 className="text-2xl font-bold text-white mb-4">{title}</h2>
-          <div className="rounded-xl overflow-hidden bg-slate-700">
-            <img src={cover} alt={title} className="w-full h-[420px] object-cover" />
+          <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
+
+          {/* Wrapper para controlar tamaño */}
+          <div className="mx-auto max-w-[380px] md:max-w-[420px]">
+            {/* Marco con relación de aspecto 3/4 y borde */}
+            <div
+              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
+              style={{ aspectRatio: "3 / 4" }}
+            >
+              <img
+                src={cover}
+                alt={title}
+                className="absolute inset-0 w-full h-full object-contain"
+                draggable={false}
+              />
+            </div>
           </div>
 
-          {/* 🔶 Banner si ya lo tiene */}
+          {/* Aviso si ya lo tiene (sin cambios) */}
           {alreadyOwned && (
             <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
               Ya tienes este juego en tu biblioteca. No es necesario volver a comprarlo.
@@ -239,7 +269,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
           )}
         </div>
 
-        {/* Derecha (sin cambios visuales) */}
+        {/* Derecha (igual que antes) */}
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <div className="text-3xl font-black text-emerald-300">{formatMoney(price)}</div>
@@ -248,7 +278,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
             </p>
           </div>
 
-          {/* Pago (idéntico a tu versión; solo lógica arriba) */}
           {(() => {
             const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
             if (primaryPM) {
@@ -377,9 +406,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
             onClick={onPay}
             disabled={alreadyOwned}
             className={`w-full text-slate-900 text-lg py-6 font-bold ${
-              alreadyOwned
-                ? "bg-slate-600 cursor-not-allowed"
-                : "bg-orange-400 hover:bg-orange-500"
+              alreadyOwned ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"
             }`}
           >
             {alreadyOwned ? "Ya tienes este juego" : `Pagar ${formatMoney(price)}`}

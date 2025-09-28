@@ -11,7 +11,6 @@ import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 
-// (tu store local)
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
 
@@ -35,9 +34,7 @@ export default function LoginPage() {
   const nextUrl = useMemo(() => {
     const raw = searchParams?.get("next") || "";
     const decoded = raw ? decodeURIComponent(raw) : "/";
-    // solo permitimos rutas relativas internas
-    if (!decoded.startsWith("/")) return "/";
-    return decoded;
+    return decoded.startsWith("/") ? decoded : "/";
   }, [searchParams]);
 
   // Si venís de registro exitoso: ?registered=1
@@ -57,6 +54,14 @@ export default function LoginPage() {
     const saved = localStorage.getItem("pv_email");
     if (saved) setFormData((s) => ({ ...s, email: saved, remember: true }));
   }, []);
+
+  // Helper: agrega oauth=provider a la callback (para mostrar toast al volver)
+  const buildCallback = (base: string, provider: "google" | "xbox") => {
+    // base es relativo, construyo con origin sólo para manipular params
+    const u = new URL(base, typeof window !== "undefined" ? window.location.origin : "http://local");
+    u.searchParams.set("oauth", provider);
+    return u.pathname + (u.search ? u.search : "");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +92,6 @@ export default function LoginPage() {
       localStorage.removeItem("pv_email");
     }
 
-    // ✅ volvemos al juego (o a / si no hay next)
     setTimeout(() => router.push(nextUrl), 120);
   };
 
@@ -132,15 +136,11 @@ export default function LoginPage() {
           {/* FORM email / password */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
               <Input
                 type="email"
                 value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="tu@email.com"
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
@@ -148,15 +148,11 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Contraseña
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Contraseña</label>
               <Input
                 type="password"
                 value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="Tu contraseña"
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
@@ -172,18 +168,12 @@ export default function LoginPage() {
                     setFormData({ ...formData, remember: checked === true })
                   }
                 />
-                <label
-                  htmlFor="remember"
-                  className="text-sm text-slate-300 cursor-pointer"
-                >
+                <label htmlFor="remember" className="text-sm text-slate-300 cursor-pointer">
                   Recuérdame
                 </label>
               </div>
 
-              <Link
-                href="/auth/register"
-                className="text-sm text-orange-400 hover:text-orange-300"
-              >
+              <Link href="/auth/register" className="text-sm text-orange-400 hover:text-orange-300">
                 ¿No tenés cuenta?
               </Link>
             </div>
@@ -206,18 +196,17 @@ export default function LoginPage() {
             <div className="h-px bg-slate-700 flex-1" />
           </div>
 
-          {/* Botón Google */}
-          <div className="grid">
+          {/* Botones OAuth */}
+          <div className="grid gap-3">
+            {/* Google */}
             <button
               type="button"
               onClick={() =>
                 import("next-auth/react").then(({ signIn }) =>
-                  // ✅ usar la misma next decodificada como callbackUrl
-                  signIn("google", { callbackUrl: nextUrl })
+                  signIn("google", { callbackUrl: buildCallback(nextUrl, "google") })
                 )
               }
-              className="w-full flex items-center justify-center gap-3 rounded-md border border-orange-400/40 bg-slate-800/60 px-4 py-2.5 text-[15px] font-medium text-slate-200 transition
-                         hover:bg-slate-800 hover:border-orange-400/70 active:scale-[0.99] cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 rounded-md border border-orange-400/40 bg-slate-800/60 px-4 py-2.5 text-[15px] font-medium text-slate-200 transition hover:bg-slate-800 hover:border-orange-400/70 active:scale-[0.99] cursor-pointer"
               aria-label="Continuar con Google"
               title="Continuar con Google"
             >
@@ -229,6 +218,33 @@ export default function LoginPage() {
               </svg>
               Continuar con Google
             </button>
+
+            {/* Xbox / Microsoft (estilo transparente) */}
+              <button
+                type="button"
+                onClick={() =>
+                  import("next-auth/react").then(({ signIn }) =>
+                    signIn("azure-ad", { callbackUrl: buildCallback(nextUrl, "xbox") })
+                  )
+                }
+                className="w-full flex items-center justify-center gap-3 rounded-md
+                          border border-[#107C10]/50 bg-slate-800/60 px-4 py-2.5
+                          text-[15px] font-medium text-slate-200 transition
+                          hover:bg-slate-800 hover:border-[#107C10]/80
+                          hover:shadow-[0_0_14px_rgba(16,124,16,0.35)]
+                          active:scale-[0.99] cursor-pointer"
+                aria-label="Continuar con Xbox"
+                title="Continuar con Xbox"
+              >
+                {/* Logo Xbox real (Bootstrap Icons) */}
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                    viewBox="0 0 16 16" aria-hidden="true"
+                    className="text-[#107C10]">
+                  <path fill="currentColor" d="M7.202 15.967a8 8 0 0 1-3.552-1.26c-.898-.585-1.101-.826-1.101-1.306 0-.965 1.062-2.656 2.879-4.583C6.459 7.723 7.897 6.44 8.052 6.475c.302.068 2.718 2.423 3.622 3.531 1.43 1.753 2.088 3.189 1.754 3.829-.254.486-1.83 1.437-2.987 1.802-.954.301-2.207.429-3.239.33m-5.866-3.57C.589 11.253.212 10.127.03 8.497c-.06-.539-.038-.846.137-1.95.218-1.377 1.002-2.97 1.945-3.95.401-.417.437-.427.926-.263.595.2 1.23.638 2.213 1.528l.574.519-.313.385C4.056 6.553 2.52 9.086 1.94 10.653c-.315.852-.442 1.707-.306 2.063.091.24.007.15-.3-.319Zm13.101.195c.074-.36-.019-1.02-.238-1.687-.473-1.443-2.055-4.128-3.508-5.953l-.457-.575.494-.454c.646-.593 1.095-.948 1.58-1.25.381-.237.927-.448 1.161-.448.145 0 .654.528 1.065 1.104a8.4 8.4 0 0 1 1.343 3.102c.153.728.166 2.286.024 3.012a9.5 9.5 0 0 1-.6 1.893c-.179.393-.624 1.156-.82 1.404-.1.128-.1.127-.043-.148ZM7.335 1.952c-.67-.34-1.704-.705-2.276-.803a4 4 0 0 0-.759-.043c-.471.024-.45 0 .306-.358A7.8 7.8 0 0 1 6.47.128c.8-.169 2.306-.17 3.094-.005.85.18 1.853.552 2.418.9l.168.103-.385-.02c-.766-.038-1.88.27-3.078.853-.361.176-.676.316-.699.312a12 12 0 0 1-.654-.319Z"/>
+                </svg>
+
+                Continuar con Xbox
+              </button>
           </div>
         </div>
       </div>

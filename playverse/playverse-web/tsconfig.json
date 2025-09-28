@@ -24,7 +24,8 @@
       "@convex/_generated/*": ["../convex/_generated/*"],
       "@convex/*": ["../convex/*"],
 
-      "@/convex/*": ["../convex/*"]  // ⬅️ clave para import "@/convex/_generated/dataModel"
+      "@/convex/*": ["../convex/*"],
+        // ⬅️ clave para import "@/convex/_generated/dataModel"
     }
   },
   "include": [

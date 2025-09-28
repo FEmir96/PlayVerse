@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/lib/useAuthStore";
 
+// —— Refs
 const getUserByEmailRef =
   (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
 
@@ -28,9 +29,6 @@ const getGameByIdRef = (HAS_GET_BY_ID
   ? (api as any)["queries/getGameById"].getGameById
   : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
 
-const getUserLibraryRef =
-  (api as any)["queries/getUserLibrary"].getUserLibrary as FunctionReference<"query">;
-
 const startRentalRef = (api as any).transactions.startRental as FunctionReference<"mutation">;
 const savePaymentMethodRef =
   (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
@@ -43,11 +41,31 @@ type PM = {
   expYear: number;
 };
 
+/* === TÍTULO “Boca naranja” reutilizable === */
+function CheckoutTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-center mb-6">
+      <h1
+        className="
+          text-3xl md:text-4xl font-black tracking-tight
+          bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300
+          bg-clip-text text-transparent
+          drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]
+        "
+      >
+        {children}
+      </h1>
+      <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
+    </div>
+  );
+}
+
 export default function RentCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
 
+  // Identidad
   const { data: session } = useSession();
   const storeUser = useAuthStore((s) => s.user);
   const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
@@ -58,27 +76,25 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
     }
   }, [loginEmail, router, pathname]);
 
+  // Perfil
   const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined);
 
+  // Juego
   const game = useQuery(
     getGameByIdRef as any,
     HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
   ) as { _id: Id<"games">; title?: string; cover_url?: string; weekly_price?: number } | null | undefined;
 
+  // Métodos guardados
   const methods = useQuery(
     getPaymentMethodsRef as any,
     HAS_PM_QUERY && profile?._id ? { userId: profile._id } : undefined
   ) as PM[] | undefined;
 
-  // ✅ biblioteca para detectar alquiler activo
-  const library = useQuery(
-    getUserLibraryRef as any,
-    profile?._id ? { userId: profile._id } : undefined
-  ) as any[] | undefined;
-
   const savePaymentMethod = useMutation(savePaymentMethodRef);
   const startRental = useMutation(startRentalRef);
 
+  // UI
   const [weeks, setWeeks] = useState(2);
   const [useSaved, setUseSaved] = useState(true);
   const [rememberNew, setRememberNew] = useState(false);
@@ -135,51 +151,36 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
   const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
-  /** ✅ ¿Ya hay alquiler activo del juego? */
-  const hasActiveRental = useMemo(() => {
-    if (!library || !game?._id) return false;
-    const gid = String(game._id);
-    const now = Date.now();
-    return library.some((row: any) => {
-      const g = row?.game ?? row;
-      const id = String(g?._id ?? row?.gameId ?? "");
-      const kind = String(row?.kind ?? row?.type ?? "rental").toLowerCase();
-      const exp = Number(row?.expiresAt ?? g?.expiresAt ?? 0);
-      return id === gid && kind === "rental" && exp > now;
-    });
-  }, [library, game?._id]);
-
-  useEffect(() => {
-    if (hasActiveRental && game?.title) {
-      toast({ title: "Alquiler activo", description: `Ya tienes “${game.title}” alquilado actualmente.` });
-    }
-  }, [hasActiveRental, game?.title, toast]);
-
   const onRent = async () => {
     if (!profile?._id || !game?._id) return;
-    if (hasActiveRental) {
-      toast({ title: "Ya tienes un alquiler activo", description: "Extendelo desde tu biblioteca si necesitás más tiempo." });
-      return;
-    }
     try {
       if (!useSaved && rememberNew) {
-        await savePaymentMethod({ userId: profile._id, fullNumber: number, exp, cvv: cvc, brand: undefined });
+        await savePaymentMethod({
+          userId: profile._id,
+          fullNumber: number,
+          exp,
+          cvv: cvc,
+          brand: undefined,
+        });
       }
       await startRental({ userId: profile._id, gameId: game._id, weeks, weeklyPrice });
-      toast({ title: "Alquiler confirmado", description: "Te enviamos un email con los detalles." });
+      toast({ title: "Alquiler confirmado", description: "¡Que lo disfrutes!" });
       router.replace("/mis-juegos");
     } catch (e: any) {
-      const msg = String(e?.message || "");
-      if (msg.includes("ALREADY_RENTED_ACTIVE")) {
-        toast({ title: "Alquiler ya activo", description: "Podés extender el alquiler desde tu biblioteca." });
-        return;
-      }
-      toast({ title: "No se pudo completar el alquiler", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
+      toast({
+        title: "No se pudo iniciar el alquiler",
+        description: e?.message ?? "Intentá nuevamente.",
+        variant: "destructive",
+      });
     }
   };
 
   if (!loginEmail) {
-    return <div className="container mx-auto px-4 py-16"><p className="text-slate-300">Redirigiendo al login…</p></div>;
+    return (
+      <div className="container mx-auto px-4 py-16">
+        <p className="text-slate-300">Redirigiendo al login…</p>
+      </div>
+    );
   }
 
   const title = game?.title ?? "Juego";
@@ -187,27 +188,30 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
   return (
     <div className="container mx-auto px-4 py-10">
-      <h1 className="text-3xl md:text-4xl font-extrabold text-orange-400 text-center mb-2">
-        Confirmar alquiler
-      </h1>
+      <CheckoutTitle>Confirmar alquiler</CheckoutTitle>
       <p className="text-slate-300 text-center mb-8">Estás alquilando:</p>
 
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Izquierda */}
+        {/* Izquierda — COVER escalado y con buen encuadre */}
         <div>
-          <h2 className="text-2xl font-bold text-white mb-4">{title}</h2>
-          <div className="rounded-xl overflow-hidden bg-slate-700">
-            <img src={cover} alt={title} className="w-full h-[420px] object-cover" />
-          </div>
+          <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
 
-          {hasActiveRental && (
-            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
-              Ya tienes un alquiler activo de este juego. Podés extenderlo desde tu biblioteca.
+          <div className="mx-auto max-w-[380px] md:max-w-[420px]">
+            <div
+              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
+              style={{ aspectRatio: "3 / 4" }}
+            >
+              <img
+                src={cover}
+                alt={title}
+                className="absolute inset-0 w-full h-full object-contain"
+                draggable={false}
+              />
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Derecha (UI sin cambios) */}
+        {/* Derecha */}
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <p className="text-slate-300 text-sm mb-2">
@@ -224,6 +228,7 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
             </div>
           </div>
 
+          {/* Pago */}
           {primaryPM ? (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -283,14 +288,7 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
                     </div>
                     <div>
                       <label className="text-slate-300 text-sm">CVC</label>
-                      <Input
-                        value={cvc}
-                        onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                        placeholder="123"
-                        className="bg-slate-700 border-slate-600 text-white mt-1"
-                        inputMode="numeric"
-                        autoComplete="cc-csc"
-                      />
+                      <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
@@ -347,14 +345,8 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
             </div>
           )}
 
-          <Button
-            onClick={onRent}
-            disabled={hasActiveRental}
-            className={`w-full text-slate-900 text-lg py-6 font-bold ${
-              hasActiveRental ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"
-            }`}
-          >
-            {hasActiveRental ? "Alquiler activo" : `Pagar ${total.toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
+          <Button onClick={onRent} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold">
+            Pagar {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
           </Button>
         </div>
       </div>

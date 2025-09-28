@@ -9,80 +9,33 @@ import {
 } from "./lib/emailTemplates";
 
 const APP_URL = process.env.APP_URL || "https://playverse.com";
-const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
 
-/** Inicia alquiler (o extiende si ya hay uno activo) */
+/** Inicia alquiler */
 export const startRental = mutation({
   args: {
     userId: v.id("profiles"),
     gameId: v.id("games"),
     weeks: v.number(),
     weeklyPrice: v.optional(v.number()),
+    currency: v.optional(v.string()), // ✅ ahora permitido
   },
-  handler: async ({ db, scheduler }, { userId, gameId, weeks, weeklyPrice }) => {
+  handler: async ({ db, scheduler }, { userId, gameId, weeks, weeklyPrice, currency }) => {
     const now = Date.now();
+    const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
+    const cur = currency || "USD";
 
-    // ¿Hay un alquiler (transaction type="rental") de este juego para este usuario?
-    const existingTx = await db
+    // 🔒 evitar duplicado si ya hay alquiler activo del mismo juego
+    const existingRental = await db
       .query("transactions")
       .withIndex("by_user_type", (q) => q.eq("userId", userId).eq("type", "rental"))
       .filter((q) => q.eq(q.field("gameId"), gameId))
       .first();
 
-    let expiresAt: number;
-
-    if (existingTx && typeof existingTx.expiresAt === "number" && existingTx.expiresAt > now) {
-      // ✅ Ya hay un alquiler ACTIVO → EXTENDER
-      expiresAt = existingTx.expiresAt + weeks * MS_WEEK;
-      await db.patch(existingTx._id, { expiresAt });
-
-      // Pago (opcional)
-      if (weeklyPrice) {
-        await db.insert("payments", {
-          userId,
-          amount: weeklyPrice * weeks,
-          currency: "USD",
-          status: "completed",
-          provider: "manual",
-          createdAt: now,
-        });
-      }
-
-      // Email de extensión
-      const user = await db.get(userId);
-      const game = await db.get(gameId);
-      if (user?.email) {
-        const coverUrl = (game as any)?.cover_url ?? null;
-        const amount = (weeklyPrice || 0) * weeks;
-
-        await scheduler.runAfter(
-          0,
-          (api as any).actions.email.sendReceiptEmail,
-          {
-            to: user.email,
-            subject: `PlayVerse – Extensión de alquiler: ${game?.title ?? "Juego"}`,
-            html: buildExtendEmail({
-              userName: user.name ?? "",
-              gameTitle: game?.title ?? "",
-              coverUrl,
-              amount,
-              currency: "USD",
-              method: "Tarjeta guardada",
-              orderId: null,
-              appUrl: APP_URL,
-              weeks,
-              expiresAt,
-            }),
-            replyTo: user.email,
-          }
-        );
-      }
-
-      return { ok: true as const, expiresAt };
+    if (existingRental && typeof existingRental.expiresAt === "number" && existingRental.expiresAt > now) {
+      throw new Error("ALREADY_RENTED_ACTIVE");
     }
 
-    // 🆕 No había alquiler activo (o no existía) → CREAR
-    expiresAt = now + weeks * MS_WEEK;
+    const expiresAt = now + weeks * MS_WEEK;
 
     await db.insert("transactions", {
       userId,
@@ -96,7 +49,7 @@ export const startRental = mutation({
       await db.insert("payments", {
         userId,
         amount: weeklyPrice * weeks,
-        currency: "USD",
+        currency: cur,
         status: "completed",
         provider: "manual",
         createdAt: now,
@@ -110,27 +63,23 @@ export const startRental = mutation({
       const coverUrl = (game as any)?.cover_url ?? null;
       const amount = (weeklyPrice || 0) * weeks;
 
-      await scheduler.runAfter(
-        0,
-        (api as any).actions.email.sendReceiptEmail,
-        {
-          to: user.email,
-          subject: `PlayVerse – Alquiler confirmado: ${game?.title ?? "Juego"}`,
-          html: buildRentalEmail({
-            userName: user.name ?? "",
-            gameTitle: game?.title ?? "",
-            coverUrl,
-            amount,
-            currency: "USD",
-            method: "Tarjeta guardada",
-            orderId: null,
-            appUrl: APP_URL,
-            weeks,
-            expiresAt,
-          }),
-          replyTo: user.email,
-        }
-      );
+      await scheduler.runAfter(0, (api as any).actions.email.sendReceiptEmail, {
+        to: user.email,
+        subject: `PlayVerse – Alquiler confirmado: ${game?.title ?? "Juego"}`,
+        html: buildRentalEmail({
+          userName: user.name ?? "",
+          gameTitle: game?.title ?? "",
+          coverUrl,
+          amount,
+          currency: cur,
+          method: "Tarjeta guardada",
+          orderId: null,
+          appUrl: APP_URL,
+          weeks,
+          expiresAt,
+        }),
+        replyTo: user.email,
+      });
     }
 
     return { ok: true as const, expiresAt };
@@ -144,16 +93,16 @@ export const extendRental = mutation({
     gameId: v.id("games"),
     weeks: v.number(),
     weeklyPrice: v.optional(v.number()),
+    currency: v.optional(v.string()), // ✅ ahora permitido
   },
-  handler: async ({ db, scheduler }, { userId, gameId, weeks, weeklyPrice }) => {
+  handler: async ({ db, scheduler }, { userId, gameId, weeks, weeklyPrice, currency }) => {
+    const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
     const now = Date.now();
+    const cur = currency || "USD";
 
-    // alquiler actual del usuario para ese juego
     const tx = await db
       .query("transactions")
-      .withIndex("by_user_type", (q) =>
-        q.eq("userId", userId).eq("type", "rental")
-      )
+      .withIndex("by_user_type", (q) => q.eq("userId", userId).eq("type", "rental"))
       .filter((q) => q.eq(q.field("gameId"), gameId))
       .first();
 
@@ -176,7 +125,7 @@ export const extendRental = mutation({
       await db.insert("payments", {
         userId,
         amount: weeklyPrice * weeks,
-        currency: "USD",
+        currency: cur,
         status: "completed",
         provider: "manual",
         createdAt: now,
@@ -190,44 +139,42 @@ export const extendRental = mutation({
       const coverUrl = (game as any)?.cover_url ?? null;
       const amount = (weeklyPrice || 0) * weeks;
 
-      await scheduler.runAfter(
-        0,
-        (api as any).actions.email.sendReceiptEmail,
-        {
-          to: user.email,
-          subject: `PlayVerse – Extensión de alquiler: ${game?.title ?? "Juego"}`,
-          html: buildExtendEmail({
-            userName: user.name ?? "",
-            gameTitle: game?.title ?? "",
-            coverUrl,
-            amount,
-            currency: "USD",
-            method: "Tarjeta guardada",
-            orderId: null,
-            appUrl: APP_URL,
-            weeks,
-            expiresAt: newExpiresAt,
-          }),
-          replyTo: user.email,
-        }
-      );
+      await scheduler.runAfter(0, (api as any).actions.email.sendReceiptEmail, {
+        to: user.email,
+        subject: `PlayVerse – Extensión de alquiler: ${game?.title ?? "Juego"}`,
+        html: buildExtendEmail({
+          userName: user.name ?? "",
+          gameTitle: game?.title ?? "",
+          coverUrl,
+          amount,
+          currency: cur,
+          method: "Tarjeta guardada",
+          orderId: null,
+          appUrl: APP_URL,
+          weeks,
+          expiresAt: newExpiresAt,
+        }),
+        replyTo: user.email,
+      });
     }
 
     return { ok: true as const, expiresAt: newExpiresAt };
   },
 });
 
-/** Compra del juego (sin cambios) */
+/** Compra del juego */
 export const purchaseGame = mutation({
   args: {
     userId: v.id("profiles"),
     gameId: v.id("games"),
     amount: v.number(),
+    currency: v.optional(v.string()), // ✅ opcional para homogeneizar
   },
-  handler: async ({ db, scheduler }, { userId, gameId, amount }) => {
+  handler: async ({ db, scheduler }, { userId, gameId, amount, currency }) => {
     const now = Date.now();
+    const cur = currency || "USD";
 
-    // 🔒 Bloqueo: si ya fue comprado antes, no permitir duplicado
+    // 🔒 evitar compra duplicada
     const existingPurchase = await db
       .query("transactions")
       .withIndex("by_user_type", (q) => q.eq("userId", userId).eq("type", "purchase"))
@@ -235,7 +182,6 @@ export const purchaseGame = mutation({
       .first();
 
     if (existingPurchase) {
-      // el front captura "ALREADY_OWNED" y muestra un toast
       throw new Error("ALREADY_OWNED");
     }
 
@@ -249,7 +195,7 @@ export const purchaseGame = mutation({
     await db.insert("payments", {
       userId,
       amount,
-      currency: "USD",
+      currency: cur,
       status: "completed",
       provider: "manual",
       createdAt: now,
@@ -261,25 +207,21 @@ export const purchaseGame = mutation({
     if (user?.email) {
       const coverUrl = (game as any)?.cover_url ?? null;
 
-      await scheduler.runAfter(
-        0,
-        (api as any).actions.email.sendReceiptEmail,
-        {
-          to: user.email,
-          subject: `PlayVerse – Compra confirmada: ${game?.title ?? "Juego"}`,
-          html: buildPurchaseEmail({
-            userName: user.name ?? "",
-            gameTitle: game?.title ?? "",
-            coverUrl,
-            amount,
-            currency: "USD",
-            method: "AMEX •••• 4542", // si tenés brand/last4 reales, ponelos acá
-            orderId: null,
-            appUrl: APP_URL,
-          }),
-          replyTo: user.email,
-        }
-      );
+      await scheduler.runAfter(0, (api as any).actions.email.sendReceiptEmail, {
+        to: user.email,
+        subject: `PlayVerse – Compra confirmada: ${game?.title ?? "Juego"}`,
+        html: buildPurchaseEmail({
+          userName: user.name ?? "",
+          gameTitle: game?.title ?? "",
+          coverUrl,
+          amount,
+          currency: cur,
+          method: "AMEX •••• 4542", // si tenés brand/last4 reales, ponelos acá
+          orderId: null,
+          appUrl: APP_URL,
+        }),
+        replyTo: user.email,
+      });
     }
 
     return { ok: true as const };

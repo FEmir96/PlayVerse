@@ -1,4 +1,3 @@
-// app/checkout/extend/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -52,6 +51,25 @@ type PM = {
   expYear: number;
 };
 
+/* === TÍTULO “Boca naranja” reutilizable === */
+function CheckoutTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-center mb-6">
+      <h1
+        className="
+          text-3xl md:text-4xl font-black tracking-tight
+          bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300
+          bg-clip-text text-transparent
+          drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]
+        "
+      >
+        {children}
+      </h1>
+      <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
+    </div>
+  );
+}
+
 export default function ExtendCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -65,7 +83,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
     storeUser?.email?.toLowerCase() ||
     null;
 
-  // Guard de sesión: no patear al login mientras carga
+  // Guard de sesión
   useEffect(() => {
     if (status === "loading") return;
     if (!loginEmail) {
@@ -114,7 +132,6 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   const total = useMemo(() => weeklyPrice * weeks, [weeklyPrice, weeks]);
 
-  // helper normalizar marca
   const normalizeBrand = (b?: string): PM["brand"] => {
     const s = (b || "").toLowerCase();
     if (s.includes("visa")) return "visa";
@@ -123,7 +140,6 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
     return "otro";
   };
 
-  // fallback: método del perfil si no hay tabla de PM
   const pmFromProfile: PM | null = useMemo(() => {
     const p: any = profile;
     if (!p) return null;
@@ -174,7 +190,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         });
       }
 
-      // 1) Registrar pago (tabla payments) – SIN amountCents ni extra fields
+      // 1) Registrar pago en payments
       await makePayment({
         userId: profile._id,
         amount: total,
@@ -182,16 +198,14 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         provider: "manual",
       });
 
-      // 2) Extender alquiler (esto actualiza expiresAt y registra transacción "rental")
+      // 2) Extender alquiler (¡sin 'currency' para respetar el validator!)
       await extendRental({
         userId: profile._id,
         gameId: game._id,
         weeks,
         weeklyPrice,
-        currency: "USD",
       });
 
-      // OK
       toast({
         title: "Alquiler extendido",
         description: "Actualizamos la fecha de vencimiento correctamente.",
@@ -207,7 +221,6 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
     }
   };
 
-  // Mientras no haya email (o está cargando) mostramos pantalla simple
   if (!loginEmail || status === "loading") {
     return (
       <div className="container mx-auto px-4 py-16">
@@ -221,15 +234,26 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   return (
     <div className="container mx-auto px-4 py-10">
-      <h1 className="text-3xl md:text-4xl font-extrabold text-orange-400 text-center mb-2">Extender alquiler</h1>
+      <CheckoutTitle>Extender alquiler</CheckoutTitle>
       <p className="text-slate-300 text-center mb-8">Seleccione semanas adicionales:</p>
 
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Izquierda */}
+        {/* Izquierda — COVER escalado y con buen encuadre */}
         <div>
-          <h2 className="text-2xl font-bold text-white mb-4">{title}</h2>
-          <div className="rounded-xl overflow-hidden bg-slate-700">
-            <img src={cover} alt={title} className="w-full h-[420px] object-cover" />
+          <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
+
+          <div className="mx-auto max-w-[380px] md:max-w-[420px]">
+            <div
+              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
+              style={{ aspectRatio: "3 / 4" }}
+            >
+              <img
+                src={cover}
+                alt={title}
+                className="absolute inset-0 w-full h-full object-contain"
+                draggable={false}
+              />
+            </div>
           </div>
         </div>
 

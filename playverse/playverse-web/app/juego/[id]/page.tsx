@@ -38,7 +38,6 @@ function toEmbed(url?: string | null): string | null {
   if (!url) return null;
   try {
     const u = new URL(url);
-    // YouTube
     if (u.hostname.includes("youtube.com")) {
       const v = u.searchParams.get("v");
       if (v) return `https://www.youtube.com/embed/${v}?rel=0&modestbranding=1`;
@@ -47,7 +46,6 @@ function toEmbed(url?: string | null): string | null {
       const id = u.pathname.replace("/", "");
       if (id) return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1`;
     }
-    // Vimeo
     if (u.hostname.includes("vimeo.com")) {
       const id = u.pathname.split("/").filter(Boolean).pop();
       if (id) return `https://player.vimeo.com/video/${id}`;
@@ -64,15 +62,16 @@ export default function GameDetailPage() {
 
   // UI state
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [isFavorite, setIsFavorite] = useState(false);
   const [thumbStart, setThumbStart] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isHoverMain, setIsHoverMain] = useState(false); // ⛳ pausa slideshow en hover
+  const [isHoverMain, setIsHoverMain] = useState(false);
   const thumbsPerView = 4;
 
   // Param estable
   const idParamRaw = params?.id;
+  theId: {
+  }
   const idParam = Array.isArray(idParamRaw) ? idParamRaw[0] : idParamRaw;
   const hasId = Boolean(idParam);
 
@@ -83,9 +82,7 @@ export default function GameDetailPage() {
   ) as Doc<"games"> | null | undefined;
 
   // Action screenshots IGDB
-  const fetchShots = useAction(
-    api.actions.getIGDBScreenshots.getIGDBScreenshots as any
-  );
+  const fetchShots = useAction(api.actions.getIGDBScreenshots.getIGDBScreenshots as any);
   const [igdbUrls, setIgdbUrls] = useState<string[] | null>(null);
 
   // Cargar screenshots IGDB cuando haya título
@@ -103,9 +100,7 @@ export default function GameDetailPage() {
           includeVideo: false,
         } as any);
         if (!cancelled) {
-          const urls = Array.isArray((res as any)?.urls)
-            ? (res as any).urls
-            : [];
+          const urls = Array.isArray((res as any)?.urls) ? (res as any).urls : [];
           setIgdbUrls(urls);
         }
       } catch {
@@ -124,7 +119,7 @@ export default function GameDetailPage() {
     return toEmbed(url);
   }, [game?.trailer_url]);
 
-  // Media combinada (video primero, luego screenshots; fallback cover)
+  // Media combinada
   const media: MediaItem[] = useMemo(() => {
     const out: MediaItem[] = [];
     if (trailerEmbed) {
@@ -135,9 +130,7 @@ export default function GameDetailPage() {
       } as const);
     }
     if (Array.isArray(igdbUrls) && igdbUrls.length) {
-      out.push(
-        ...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const))
-      );
+      out.push(...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const)));
     }
     if (out.length === 0 && (game as any)?.cover_url) {
       out.push({ type: "image", src: (game as any).cover_url } as const);
@@ -150,10 +143,10 @@ export default function GameDetailPage() {
     if (selectedIndex >= media.length) setSelectedIndex(0);
   }, [media.length, selectedIndex]);
 
-  // Slideshow auto con wrap al trailer y pausa en hover
+  // Slideshow auto con pausa en hover
   useEffect(() => {
     if (!media.length) return;
-    if (isHoverMain) return; // pausa
+    if (isHoverMain) return;
     const t = setInterval(() => {
       setSelectedIndex((prev) => ((prev + 1) % media.length));
     }, 4000);
@@ -167,7 +160,7 @@ export default function GameDetailPage() {
     if (thumbStart > 0) setThumbStart((p) => p - 1);
   };
 
-  // ====== Sesión / Perfil / Validaciones de plan & ownership ======
+  // ====== Sesión / Perfil / Validaciones ======
   const { data: session } = useSession();
   const localUser = useAuthStore((s) => s.user);
   const loggedEmail =
@@ -202,29 +195,59 @@ export default function GameDetailPage() {
         _id: string;
         game?: { _id?: Id<"games">; title?: string; cover_url?: string };
         gameId?: Id<"games">;
+        title?: string;
         createdAt?: number;
       }>
     | undefined;
 
+  // ✅ (Opcional) Biblioteca para reforzar "comprado" si tu backend la expone
+  const hasLibraryQuery =
+    (api as any).queries?.getUserLibrary?.getUserLibrary ?? null;
+  const library = useQuery(
+    hasLibraryQuery as any,
+    profile?._id && hasLibraryQuery ? { userId: profile._id } : "skip"
+  ) as
+    | Array<{ game?: any; gameId?: Id<"games">; type?: string; kind?: string; owned?: boolean }>
+    | undefined;
+
   const now = Date.now();
+
+  // 🧠 Match robusto para "comprado": por id, por título y/o por biblioteca
   const hasPurchased = useMemo(() => {
-    if (!game?._id || !Array.isArray(purchases)) return false;
-    return purchases.some(
-      (p) => String(p?.game?._id ?? p?.gameId ?? "") === String(game._id)
-    );
-  }, [purchases, game?._id]);
+    if (!game?._id) return false;
+    const gid = String(game._id);
+    const gtitle = String(game.title || "").trim().toLowerCase();
+
+    const fromPurchases =
+      Array.isArray(purchases) &&
+      purchases.some((p) => {
+        const pid = String(p?.game?._id ?? p?.gameId ?? "");
+        if (pid && pid === gid) return true;
+        const ptitle = String(p?.game?.title ?? p?.title ?? "").trim().toLowerCase();
+        return !!gtitle && gtitle === ptitle;
+      });
+
+    const fromLibrary =
+      Array.isArray(library) &&
+      library.some((row) => {
+        const idMatch = String(row?.game?._id ?? row?.gameId ?? "") === gid;
+        const kind = String(row?.kind ?? row?.type ?? "").toLowerCase();
+        return idMatch && (kind === "purchase" || row?.owned === true);
+      });
+
+    return !!fromPurchases || !!fromLibrary;
+  }, [purchases, library, game?._id, game?.title]);
 
   const hasActiveRental = useMemo(() => {
     if (!game?._id || !Array.isArray(rentals)) return false;
     return rentals.some((r) => {
-      const same =
-        String(r?.game?._id ?? r?.gameId ?? "") === String(game._id);
-      const active =
-        typeof r.expiresAt === "number" ? r.expiresAt > now : true;
+      const same = String(r?.game?._id ?? r?.gameId ?? "") === String(game._id);
+      const active = typeof r.expiresAt === "number" ? r.expiresAt > now : true;
       return same && active;
     });
   }, [rentals, game?._id, now]);
 
+  // Reglas de UI
   const canPlay = hasPurchased || hasActiveRental;
   const canExtend = !hasPurchased && hasActiveRental;
   const showBuyAndRent = !hasPurchased && !hasActiveRental;
@@ -237,64 +260,47 @@ export default function GameDetailPage() {
 
   // ====== Toast & Favoritos ======
   const { toast } = useToast();
-
   const favItems = useFavoritesStore((s) => s.items);
   const addFav = useFavoritesStore((s) => s.add);
   const removeFav = useFavoritesStore((s) => s.remove);
 
+  // Estado reactivo: si está en favoritos
   const isFav = useMemo(() => {
-    return !!(game?._id && favItems.some((i) => i.id === String(game._id)));
-  }, [favItems, game?._id]);
+    const byId = !!(game?._id && favItems.some((i) => i.id === String(game._id)));
+    if (byId) return true;
+    const title = String(game?.title || "").trim();
+    return !!title && favItems.some((i) => i.title === title);
+  }, [favItems, game?._id, game?.title]);
 
-  // Modals
-  const [showAuthFav, setShowAuthFav] = useState(false); // login requerido para favoritos
-  const [showAuthAction, setShowAuthAction] = useState(false); // login requerido para comprar/alquilar/jugar
-  const [showPremiumModal, setShowPremiumModal] = useState(false); // upgrade plan
+  const [showAuthFav, setShowAuthFav] = useState(false);
+  const [showAuthAction, setShowAuthAction] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   // Handlers navegación
   const handlePurchase = () => {
     if (!game?._id) return;
-    if (!isLogged) {
-      setShowAuthAction(true);
-      return;
-    }
-    if (requiresPremium) {
-      setShowPremiumModal(true);
-      return;
-    }
+    if (!isLogged) return setShowAuthAction(true);
+    if (requiresPremium) return setShowPremiumModal(true);
     router.push(`/checkout/compra/${game._id}`);
   };
 
   const handleRental = () => {
     if (!game?._id) return;
-    if (!isLogged) {
-      setShowAuthAction(true);
-      return;
-    }
-    if (requiresPremium) {
-      setShowPremiumModal(true);
-      return;
-    }
+    if (!isLogged) return setShowAuthAction(true);
+    if (requiresPremium) return setShowPremiumModal(true);
     router.push(`/checkout/alquiler/${game._id}`);
   };
 
   const handleExtend = () => {
     if (!game?._id) return;
-    if (!isLogged) {
-      setShowAuthAction(true);
-      return;
-    }
-    // reutilizamos el checkout de alquiler como extensión
-    router.push(`/checkout/alquiler/${game._id}?extend=1`);
+    if (!isLogged) return setShowAuthAction(true);
+    // 👉 a la página de extender
+    router.push(`/checkout/extender/${game._id}`);
   };
 
   const handlePlay = () => {
-    if (!isLogged) {
-      setShowAuthAction(true);
-      return;
-    }
+    if (!isLogged) return setShowAuthAction(true);
     if (!canPlay) {
-      // fallback por si llega a apretar sin ownership
       toast({
         title: "No disponible",
         description: "Necesitás comprar o alquilar el juego para jugar.",
@@ -302,18 +308,13 @@ export default function GameDetailPage() {
       });
       return;
     }
-    toast({
-      title: "Lanzando juego…",
-      description: "¡Feliz gaming! 🎮",
-    });
+    toast({ title: "Lanzando juego…", description: "¡Feliz gaming! 🎮" });
   };
 
   const onToggleFavorite = () => {
     if (!game?._id) return;
-    if (!isLogged) {
-      setShowAuthFav(true);
-      return;
-    }
+    if (!isLogged) return setShowAuthFav(true);
+
     const item = {
       id: String(game._id),
       title: game.title ?? "Juego",
@@ -324,16 +325,10 @@ export default function GameDetailPage() {
 
     if (isFav) {
       removeFav(item.id);
-      toast({
-        title: "Quitado de favoritos",
-        description: `${item.title} se quitó de tu lista.`,
-      });
+      toast({ title: "Quitado de favoritos", description: `${item.title} se quitó de tu lista.` });
     } else {
       addFav(item);
-      toast({
-        title: "Añadido a favoritos",
-        description: `${item.title} se agregó a tu lista.`,
-      });
+      toast({ title: "Añadido a favoritos", description: `${item.title} se agregó a tu lista.` });
     }
   };
 
@@ -347,7 +342,6 @@ export default function GameDetailPage() {
 
   const isLoading = hasId && game === undefined;
   const notFound = hasId && game === null;
-
   const current = media[selectedIndex];
 
   return (
@@ -385,7 +379,7 @@ export default function GameDetailPage() {
                 )}
               </div>
 
-              {/* Franja fija: título + género (debajo del box) */}
+              {/* Franja fija: título + género */}
               <div className="bg-slate-800/70 border border-orange-400/20 rounded-lg px-4 py-3 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-white">{game.title}</h1>
                 <Badge className="bg-orange-400 text-slate-900 hover:bg-orange-500">
@@ -407,47 +401,45 @@ export default function GameDetailPage() {
                   </Button>
 
                   <div className="flex-1 grid grid-cols-4 gap-2">
-                    {media
-                      .slice(thumbStart, thumbStart + thumbsPerView)
-                      .map((m, idx) => {
-                        const i = thumbStart + idx;
-                        const selected = i === selectedIndex;
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => setSelectedIndex(i)}
-                            className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
-                              selected ? "border-orange-400" : "border-slate-600"
-                            }`}
-                            title={m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`}
-                          >
-                            {m.type === "video" ? (
-                              <>
-                                <Image
-                                  src={m.thumb || (game as any).cover_url || "/placeholder.svg"}
-                                  alt="Trailer"
-                                  width={120}
-                                  height={68}
-                                  className="w-full h-full object-cover"
-                                />
-                                <div className="absolute inset-0 bg-black/30 grid place-items-center">
-                                  <div className="bg-white/90 text-slate-900 rounded-full p-1">
-                                    <Play className="w-4 h-4" />
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
+                    {media.slice(thumbStart, thumbStart + thumbsPerView).map((m, idx) => {
+                      const i = thumbStart + idx;
+                      const selected = i === selectedIndex;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setSelectedIndex(i)}
+                          className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
+                            selected ? "border-orange-400" : "border-slate-600"
+                          }`}
+                          title={m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`}
+                        >
+                          {m.type === "video" ? (
+                            <>
                               <Image
-                                src={m.src}
-                                alt={`${game.title} screenshot ${i + 1}`}
+                                src={m.thumb || (game as any).cover_url || "/placeholder.svg"}
+                                alt="Trailer"
                                 width={120}
                                 height={68}
                                 className="w-full h-full object-cover"
                               />
-                            )}
-                          </button>
-                        );
-                      })}
+                              <div className="absolute inset-0 bg-black/30 grid place-items-center">
+                                <div className="bg-white/90 text-slate-900 rounded-full p-1">
+                                  <Play className="w-4 h-4" />
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <Image
+                              src={m.src}
+                              alt={`${game.title} screenshot ${i + 1}`}
+                              width={120}
+                              height={68}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <Button
@@ -475,14 +467,21 @@ export default function GameDetailPage() {
             <div className="lg:col-span-1 space-y-6">
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <div className="text-center mb-4">
-                  {/* ❌ Quitado “Alquiler semanal” como pediste */}
                   <p className="text-orange-400 text-sm">
                     ¡Suscribite a premium para más ventajas!
                   </p>
                 </div>
 
                 <div className="space-y-3">
-                  {canPlay ? (
+                  {/* SOLO JUGAR si está comprado */}
+                  {hasPurchased ? (
+                    <Button
+                      onClick={handlePlay}
+                      className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                    >
+                      Jugar
+                    </Button>
+                  ) : canPlay ? (
                     <>
                       <Button
                         onClick={handlePlay}
@@ -490,7 +489,6 @@ export default function GameDetailPage() {
                       >
                         Jugar
                       </Button>
-
                       {canExtend && (
                         <Button
                           onClick={handleExtend}
@@ -502,25 +500,23 @@ export default function GameDetailPage() {
                       )}
                     </>
                   ) : (
-                    <>
-                      {showBuyAndRent && (
-                        <>
-                          <Button
-                            onClick={handlePurchase}
-                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
-                          >
-                            Comprar ahora
-                          </Button>
-                          <Button
-                            onClick={handleRental}
-                            variant="outline"
-                            className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                          >
-                            Alquilar
-                          </Button>
-                        </>
-                      )}
-                    </>
+                    showBuyAndRent && (
+                      <>
+                        <Button
+                          onClick={handlePurchase}
+                          className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                        >
+                          Comprar ahora
+                        </Button>
+                        <Button
+                          onClick={handleRental}
+                          variant="outline"
+                          className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                        >
+                          Alquilar
+                        </Button>
+                      </>
+                    )
                   )}
 
                   <div className="flex gap-2">
@@ -529,8 +525,11 @@ export default function GameDetailPage() {
                       variant="outline"
                       className="flex-1 border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
                     >
-                      <Heart className={`w-4 h-4 mr-2 ${isFav ? "fill-current" : ""}`} />
-                      Favoritos
+                      <Heart
+                        className="w-4 h-4 mr-2"
+                        fill={isFav ? "currentColor" : "none"}  
+                      />
+                      {isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
                     </Button>
                     <Button
                       onClick={() => setShowShareModal(true)}
@@ -659,9 +658,7 @@ export default function GameDetailPage() {
                   typeof window !== "undefined"
                     ? window.location.pathname
                     : `/juego/${String(game?._id ?? "")}`;
-                window.location.href = `/auth/login?next=${encodeURIComponent(
-                  next
-                )}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"
             >
@@ -698,9 +695,7 @@ export default function GameDetailPage() {
                   typeof window !== "undefined"
                     ? window.location.pathname
                     : `/juego/${String(game?._id ?? "")}`;
-                window.location.href = `/auth/login?next=${encodeURIComponent(
-                  next
-                )}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"
             >
