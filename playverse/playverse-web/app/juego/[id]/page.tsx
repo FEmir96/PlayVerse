@@ -21,6 +21,7 @@ import {
   Copy,
   Check,
   Play,
+  Star, // ⭐ nuevo
 } from "lucide-react";
 
 import { useQuery, useAction } from "convex/react";
@@ -56,6 +57,27 @@ function toEmbed(url?: string | null): string | null {
   }
 }
 
+/** ⭐ fila de estrellitas (0..5 con pasos 0.5 → mostramos número con una decimal) */
+function StarRow({ value }: { value: number }) {
+  const rounded = Math.round(value * 2) / 2; // pasos de 0.5
+  const full = Math.floor(rounded);
+  return (
+    <div className="flex items-center gap-1">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Star
+          key={i}
+          className="w-4 h-4 text-orange-400"
+          fill={i < full ? "currentColor" : "none"}
+          strokeWidth={1.5}
+        />
+      ))}
+      <span className="ml-1 text-orange-400 font-semibold">
+        {rounded.toFixed(1)}/5
+      </span>
+    </div>
+  );
+}
+
 export default function GameDetailPage() {
   const params = useParams() as { id?: string | string[] } | null;
   const router = useRouter();
@@ -82,7 +104,9 @@ export default function GameDetailPage() {
   ) as Doc<"games"> | null | undefined;
 
   // Action screenshots IGDB
-  const fetchShots = useAction(api.actions.getIGDBScreenshots.getIGDBScreenshots as any);
+  const fetchShots = useAction(
+    api.actions.getIGDBScreenshots.getIGDBScreenshots as any
+  );
   const [igdbUrls, setIgdbUrls] = useState<string[] | null>(null);
 
   // Cargar screenshots IGDB cuando haya título
@@ -130,7 +154,9 @@ export default function GameDetailPage() {
       } as const);
     }
     if (Array.isArray(igdbUrls) && igdbUrls.length) {
-      out.push(...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const)));
+      out.push(
+        ...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const))
+      );
     }
     if (out.length === 0 && (game as any)?.cover_url) {
       out.push({ type: "image", src: (game as any).cover_url } as const);
@@ -148,7 +174,7 @@ export default function GameDetailPage() {
     if (!media.length) return;
     if (isHoverMain) return;
     const t = setInterval(() => {
-      setSelectedIndex((prev) => ((prev + 1) % media.length));
+      setSelectedIndex((prev) => (prev + 1) % media.length);
     }, 4000);
     return () => clearInterval(t);
   }, [media.length, isHoverMain]);
@@ -200,14 +226,20 @@ export default function GameDetailPage() {
       }>
     | undefined;
 
-  // ✅ (Opcional) Biblioteca para reforzar "comprado" si tu backend la expone
+  // ✅ (Opcional) Biblioteca para reforzar "comprado": por id, por título y/o por biblioteca
   const hasLibraryQuery =
     (api as any).queries?.getUserLibrary?.getUserLibrary ?? null;
   const library = useQuery(
     hasLibraryQuery as any,
     profile?._id && hasLibraryQuery ? { userId: profile._id } : "skip"
   ) as
-    | Array<{ game?: any; gameId?: Id<"games">; type?: string; kind?: string; owned?: boolean }>
+    | Array<{
+        game?: any;
+        gameId?: Id<"games">;
+        type?: string;
+        kind?: string;
+        owned?: boolean;
+      }>
     | undefined;
 
   const now = Date.now();
@@ -223,7 +255,9 @@ export default function GameDetailPage() {
       purchases.some((p) => {
         const pid = String(p?.game?._id ?? p?.gameId ?? "");
         if (pid && pid === gid) return true;
-        const ptitle = String(p?.game?.title ?? p?.title ?? "").trim().toLowerCase();
+        const ptitle = String(p?.game?.title ?? p?.title ?? "")
+          .trim()
+          .toLowerCase();
         return !!gtitle && gtitle === ptitle;
       });
 
@@ -294,7 +328,6 @@ export default function GameDetailPage() {
   const handleExtend = () => {
     if (!game?._id) return;
     if (!isLogged) return setShowAuthAction(true);
-    // 👉 a la página de extender
     router.push(`/checkout/extender/${game._id}`);
   };
 
@@ -319,16 +352,23 @@ export default function GameDetailPage() {
       id: String(game._id),
       title: game.title ?? "Juego",
       cover: (game as any).cover_url ?? "/placeholder.svg",
+      // dejamos estos nombres como los tenés hoy
       priceBuy: (game as any).price_buy ?? null,
       priceRent: (game as any).weekly_price ?? null,
     };
 
     if (isFav) {
       removeFav(item.id);
-      toast({ title: "Quitado de favoritos", description: `${item.title} se quitó de tu lista.` });
+      toast({
+        title: "Quitado de favoritos",
+        description: `${item.title} se quitó de tu lista.`,
+      });
     } else {
       addFav(item);
-      toast({ title: "Añadido a favoritos", description: `${item.title} se agregó a tu lista.` });
+      toast({
+        title: "Añadido a favoritos",
+        description: `${item.title} se agregó a tu lista.`,
+      });
     }
   };
 
@@ -344,12 +384,57 @@ export default function GameDetailPage() {
   const notFound = hasId && game === null;
   const current = media[selectedIndex];
 
+  // 🟠 helpers IGDB/PopScore (usamos any para evitar TS hasta que regenere types)
+  const popscore = (game as any)?.popscore as number | undefined;
+  const igdbRating = (game as any)?.igdbRating as number | undefined;
+  const igdbRatingCount = (game as any)?.igdbRatingCount as number | undefined;
+  const igdbPopularity = (game as any)?.igdbPopularity as number | undefined;
+
+  // 🟠 nuevos derivados para UI
+  const igdbUserRating = (game as any)?.igdbUserRating as number | undefined;
+  const firstReleaseDate = (game as any)?.firstReleaseDate as number | undefined;
+  const developers = ((game as any)?.developers as string[] | undefined) ?? [];
+  const publishers = ((game as any)?.publishers as string[] | undefined) ?? [];
+  const languages = ((game as any)?.languages as string[] | undefined) ?? [];
+
+  const ageRatingSystem = (game as any)?.ageRatingSystem as string | undefined;
+  const ageRatingLabel = (game as any)?.ageRatingLabel as string | undefined;
+
+  // ⭐ User rating (100 → 5 estrellas) con fallback user → igdb → popscore
+  const score100 =
+    typeof igdbUserRating === "number"
+      ? igdbUserRating
+      : typeof igdbRating === "number"
+      ? igdbRating
+      : typeof popscore === "number"
+      ? popscore
+      : undefined;
+
+  const userStars =
+    typeof score100 === "number" ? +(score100 / 20).toFixed(1) : undefined;
+
+  // Fecha formateada
+  const releaseStr =
+    typeof firstReleaseDate === "number"
+      ? new Date(firstReleaseDate).toLocaleDateString("es-AR", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : undefined;
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-8">
-        {!hasId && <div className="p-6 text-slate-300">Juego no encontrado.</div>}
-        {hasId && isLoading && <div className="p-6 text-slate-300">Cargando…</div>}
-        {hasId && notFound && <div className="p-6 text-slate-300">Juego no encontrado.</div>}
+        {!hasId && (
+          <div className="p-6 text-slate-300">Juego no encontrado.</div>
+        )}
+        {hasId && isLoading && (
+          <div className="p-6 text-slate-300">Cargando…</div>
+        )}
+        {hasId && notFound && (
+          <div className="p-6 text-slate-300">Juego no encontrado.</div>
+        )}
 
         {hasId && game && (
           <div className="grid lg:grid-cols-3 gap-8">
@@ -379,12 +464,22 @@ export default function GameDetailPage() {
                 )}
               </div>
 
-              {/* Franja fija: título + género */}
+              {/* Franja fija: título + género + PopScore */}
               <div className="bg-slate-800/70 border border-orange-400/20 rounded-lg px-4 py-3 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-white">{game.title}</h1>
-                <Badge className="bg-orange-400 text-slate-900 hover:bg-orange-500">
-                  {(game.genres && game.genres[0]) || "Acción"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-orange-400 text-slate-900 hover:bg-orange-500">
+                    {(game as any).genres?.[0] || "Acción"}
+                  </Badge>
+                  {typeof popscore === "number" && (
+                    <Badge
+                      className="bg-orange-400 text-slate-900 hover:bg-orange-500"
+                      title="PopScore (rating ponderado + popularidad)"
+                    >
+                      ⭐ {popscore.toFixed(1)}
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               {/* Thumbnails */}
@@ -401,45 +496,53 @@ export default function GameDetailPage() {
                   </Button>
 
                   <div className="flex-1 grid grid-cols-4 gap-2">
-                    {media.slice(thumbStart, thumbStart + thumbsPerView).map((m, idx) => {
-                      const i = thumbStart + idx;
-                      const selected = i === selectedIndex;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => setSelectedIndex(i)}
-                          className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
-                            selected ? "border-orange-400" : "border-slate-600"
-                          }`}
-                          title={m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`}
-                        >
-                          {m.type === "video" ? (
-                            <>
+                    {media
+                      .slice(thumbStart, thumbStart + thumbsPerView)
+                      .map((m, idx) => {
+                        const i = thumbStart + idx;
+                        const selected = i === selectedIndex;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setSelectedIndex(i)}
+                            className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
+                              selected ? "border-orange-400" : "border-slate-600"
+                            }`}
+                            title={
+                              m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`
+                            }
+                          >
+                            {m.type === "video" ? (
+                              <>
+                                <Image
+                                  src={
+                                    m.thumb ||
+                                    (game as any).cover_url ||
+                                    "/placeholder.svg"
+                                  }
+                                  alt="Trailer"
+                                  width={120}
+                                  height={68}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/30 grid place-items-center">
+                                  <div className="bg-white/90 text-slate-900 rounded-full p-1">
+                                    <Play className="w-4 h-4" />
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
                               <Image
-                                src={m.thumb || (game as any).cover_url || "/placeholder.svg"}
-                                alt="Trailer"
+                                src={m.src}
+                                alt={`${game.title} screenshot ${i + 1}`}
                                 width={120}
                                 height={68}
                                 className="w-full h-full object-cover"
                               />
-                              <div className="absolute inset-0 bg-black/30 grid place-items-center">
-                                <div className="bg-white/90 text-slate-900 rounded-full p-1">
-                                  <Play className="w-4 h-4" />
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <Image
-                              src={m.src}
-                              alt={`${game.title} screenshot ${i + 1}`}
-                              width={120}
-                              height={68}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
+                            )}
+                          </button>
+                        );
+                      })}
                   </div>
 
                   <Button
@@ -456,15 +559,18 @@ export default function GameDetailPage() {
 
               {/* Descripción */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
-                <h3 className="text-xl font-semibold text-orange-400 mb-4">Descripción</h3>
+                <h3 className="text-xl font-semibold text-orange-400 mb-4">
+                  Descripción
+                </h3>
                 <p className="text-slate-300 leading-relaxed">
                   {game.description ?? "Sin descripción"}
                 </p>
               </div>
             </div>
 
-            {/* Columna derecha (acciones) */}
+            {/* Columna derecha (acciones + info) */}
             <div className="lg:col-span-1 space-y-6">
+              {/* Acciones */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <div className="text-center mb-4">
                   <p className="text-orange-400 text-sm">
@@ -527,7 +633,7 @@ export default function GameDetailPage() {
                     >
                       <Heart
                         className="w-4 h-4 mr-2"
-                        fill={isFav ? "currentColor" : "none"}  
+                        fill={isFav ? "currentColor" : "none"}
                       />
                       {isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
                     </Button>
@@ -545,21 +651,86 @@ export default function GameDetailPage() {
                 </div>
               </div>
 
+              {/* Información del juego (nueva) */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-orange-400 mb-4">
                   Información del juego
                 </h3>
+
                 <div className="space-y-3 text-sm">
+                  {/* Plan */}
                   <div className="flex justify-between">
                     <span className="text-slate-400">Plan:</span>
                     <span className="text-white">{(game as any).plan}</span>
                   </div>
+
+                  {/* Géneros */}
                   <div className="flex justify-between">
                     <span className="text-slate-400">Géneros:</span>
                     <span className="text-white">
                       {((game as any).genres ?? []).join(", ") || "—"}
                     </span>
                   </div>
+
+                  {/* ⭐ User rating (estrellitas, n.n/5) con fallback */}
+                  {typeof userStars === "number" && userStars > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">User rating:</span>
+                      <StarRow value={userStars} />
+                    </div>
+                  )}
+
+                  {/* PopScore (opcional, estilo naranja) */}
+                  {typeof popscore === "number" && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">PopScore:</span>
+                      <span className="text-orange-400 font-semibold">
+                        {popscore.toFixed(1)} / 100
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Clasificación (solo si hay info útil; ocultamos "Not Rated") */}
+                  {ageRatingLabel && ageRatingLabel !== "Not Rated" && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Clasificación:</span>
+                      <span className="text-orange-400 font-semibold">
+                        {ageRatingSystem
+                          ? `${ageRatingSystem} ${ageRatingLabel}`
+                          : ageRatingLabel}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Fecha de lanzamiento */}
+                  {releaseStr && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Lanzamiento:</span>
+                      <span className="text-white">{releaseStr}</span>
+                    </div>
+                  )}
+
+                  {/* Desarrollador / Editor */}
+                  {developers.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Desarrollador:</span>
+                      <span className="text-white">{developers.join(", ")}</span>
+                    </div>
+                  )}
+                  {publishers.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Editor:</span>
+                      <span className="text-white">{publishers.join(", ")}</span>
+                    </div>
+                  )}
+
+                  {/* Idiomas */}
+                  {languages.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Idiomas:</span>
+                      <span className="text-white">{languages.join(", ")}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -658,7 +829,9 @@ export default function GameDetailPage() {
                   typeof window !== "undefined"
                     ? window.location.pathname
                     : `/juego/${String(game?._id ?? "")}`;
-                window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(
+                  next
+                )}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"
             >
@@ -695,7 +868,9 @@ export default function GameDetailPage() {
                   typeof window !== "undefined"
                     ? window.location.pathname
                     : `/juego/${String(game?._id ?? "")}`;
-                window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(
+                  next
+                )}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"
             >
