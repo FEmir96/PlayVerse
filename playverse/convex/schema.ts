@@ -28,9 +28,9 @@ export default defineSchema({
     // IGDB / rating / popscore (opcionales)
     igdbId: v.optional(v.number()),
     igdbSlug: v.optional(v.string()),
-    igdbRating: v.optional(v.number()),        // 0..100 (prefer total/agg/rating)
-    igdbUserRating: v.optional(v.number()),    // 0..100 (row.rating)
-    igdbCriticRating: v.optional(v.number()),  // 0..100 (row.aggregated_rating)
+    igdbRating: v.optional(v.number()),        // 0..100
+    igdbUserRating: v.optional(v.number()),    // 0..100
+    igdbCriticRating: v.optional(v.number()),  // 0..100
     igdbRatingCount: v.optional(v.number()),
     igdbHypes: v.optional(v.number()),
     popscore: v.optional(v.number()),
@@ -46,6 +46,15 @@ export default defineSchema({
     ageRatingSystem: v.optional(v.string()),    // ESRB | PEGI | CERO | ...
     ageRatingCode: v.optional(v.string()),      // "T", "M", "E10+", "18", etc.
     ageRatingLabel: v.optional(v.string()),     // Teen, Mature, etc.
+
+    // >>> NUEVO: soporte juegos embebidos
+    embed_url: v.optional(v.string()),
+    embedUrl: v.optional(v.string()),
+    embed_allow: v.optional(v.string()),
+    embedAllow: v.optional(v.string()),
+    embed_sandbox: v.optional(v.string()),
+    embedSandbox: v.optional(v.string()),
+    updatedAt: v.optional(v.number()),
   })
     .index("by_title", ["title"])
     .index("by_createdAt", ["createdAt"])
