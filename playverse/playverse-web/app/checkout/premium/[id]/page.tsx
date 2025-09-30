@@ -1,107 +1,454 @@
+// app/checkout/premium/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { api } from "@convex";
+import type { Id } from "@convex/_generated/dataModel";
 
-const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"]
-    .getUserByEmail as FunctionReference<"query">;
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
+import { useAuthStore } from "@/lib/useAuthStore";
 
-// Si ya tenés otra mutación distinta, dejá esto sin usar.
-// Lo dejo tipado por si lo necesitás:
+const getUserByIdRef =
+  (api as any)["queries/getUserById"].getUserById as FunctionReference<"query">;
+
+const HAS_PM_QUERY = Boolean(
+  (api as any)["queries/getPaymentMethods"]?.getPaymentMethods
+);
+const getPaymentMethodsRef = (HAS_PM_QUERY
+  ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
+  : (api as any)["queries/getUserById"].getUserById) as FunctionReference<"query">;
+
+const savePaymentMethodRef =
+  (api as any)["mutations/savePaymentMethod"]
+    .savePaymentMethod as FunctionReference<"mutation">;
+
+const makePaymentRef =
+  (api as any)["mutations/makePayment"]
+    .makePayment as FunctionReference<"mutation">;
+
 const upgradePlanRef =
   (api as any)["mutations/upgradePlan"]
-    ?.upgradePlan as FunctionReference<"mutation"> | undefined;
+    .upgradePlan as FunctionReference<"mutation">;
 
-export default function PremiumCheckoutPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+type PM = {
+  _id: string;
+  brand: "visa" | "mastercard" | "amex" | "otro";
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+const PLANS: Record<
+  string,
+  { name: string; price: number; priceLabel: string; period: string; description: string }
+> = {
+  monthly: {
+    name: "Premium Mensual",
+    price: 9.99,
+    priceLabel: "$9.99",
+    period: "/mes",
+    description: "Perfecto para probar la experiencia",
+  },
+  annual: {
+    name: "Premium Anual",
+    price: 89.99,
+    priceLabel: "$89.99",
+    period: "/año",
+    description: "Ahorra $30",
+  },
+  lifetime: {
+    name: "Premium Lifetime",
+    price: 239.99,
+    priceLabel: "$239.99",
+    period: " único pago",
+    description: "Acceso de por vida a todas las funciones Premium",
+  },
+};
+
+export default function PremiumCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const pathname = usePathname();
   const sp = useSearchParams();
-  const plan = (sp.get("plan") as "monthly" | "quarterly" | "annual") || "monthly";
+  const { toast } = useToast();
 
-  const { data: session, status } = useSession();
-  const loginEmail = useMemo(
-    () => session?.user?.email?.toLowerCase() ?? null,
-    [session?.user?.email]
-  );
+  // Sesión + store local
+  const { status, data: session } = useSession();
+  const storeUser = useAuthStore((s) => s.user);
 
-  const profile = useQuery(
-    getUserByEmailRef,
-    loginEmail ? { email: loginEmail } : "skip"
-  ) as { _id: string; role?: "free" | "premium" | "admin" } | null | undefined;
+  const loginEmail =
+    session?.user?.email?.toLowerCase() ??
+    storeUser?.email?.toLowerCase() ??
+    null;
 
-  // (opcional) si usás realmente upgradePlan desde acá:
-  const upgradePlan = upgradePlanRef ? useMutation(upgradePlanRef) : null;
-
-  // Guard 1: Si no hay sesión, ir a login y volver acá
+  // Esperar a que cargue la sesión: no redirigimos mientras status === "loading"
   useEffect(() => {
     if (status === "loading") return;
-    if (!loginEmail) {
-      const nextUrl = `/checkout/premium/${params.id}?plan=${plan}`;
-      window.location.href = `/auth/login?next=${encodeURIComponent(nextUrl)}`;
+    if (!loginEmail && !storeUser) {
+      const next = `${pathname}${sp?.toString() ? `?${sp?.toString()}` : ""}`;
+      router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
     }
-  }, [status, loginEmail, params.id, plan]);
+  }, [status, loginEmail, storeUser, router, pathname, sp]);
 
-  // Guard 2: Si el usuario YA ES premium, prohibir checkout
-  useEffect(() => {
-    const r = (profile?.role ?? "free");
-    if (r === "premium") {
-      router.replace("/"); // o "/perfil" si querés
+  // Perfil por ID (ruta fuerte)
+  const profile = useQuery(
+    getUserByIdRef,
+    params?.id ? ({ id: params.id as Id<"profiles"> } as any) : "skip"
+  ) as
+    | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string })
+    | null
+    | undefined;
+
+  // Métodos desde DB si existe la query, si no mostramos UI manual
+  const methods = useQuery(
+    getPaymentMethodsRef as any,
+    HAS_PM_QUERY && profile?._id ? { userId: profile._id } : "skip"
+  ) as PM[] | undefined;
+
+  // UI payment state
+  const [useSaved, setUseSaved] = useState(true);
+  const [rememberNew, setRememberNew] = useState(false);
+
+  const [holder, setHolder] = useState("");
+  const [number, setNumber] = useState("");
+  const [exp, setExp] = useState("");
+  const [cvc, setCvc] = useState("");
+
+  const savePaymentMethod = useMutation(savePaymentMethodRef);
+  const makePayment = useMutation(makePaymentRef);
+  const upgradePlan = useMutation(upgradePlanRef);
+
+  // Plan a partir de query
+  const planKey = sp?.get("plan") ?? "monthly";
+  const trial = sp?.get("trial") === "true";
+  const plan = PLANS[planKey] ?? PLANS.monthly;
+
+  const formatMoney = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  // Normalizador de marcas
+  const normalizeBrand = (b?: string): PM["brand"] => {
+    const s = (b || "").toLowerCase();
+    if (s.includes("visa")) return "visa";
+    if (s.includes("master")) return "mastercard";
+    if (s.includes("amex") || s.includes("american")) return "amex";
+    return "otro";
+  };
+
+  // Fallback: por si tienes algo de PM en profile
+  const pmFromProfile: PM | null = useMemo(() => {
+    const p: any = profile;
+    if (!p) return null;
+
+    const arr = p.paymentMethods ?? p.payment_methods;
+    if (Array.isArray(arr) && arr.length > 0) {
+      const m = arr[0] || {};
+      return {
+        _id: m._id ?? "profile",
+        brand: normalizeBrand(m.brand),
+        last4: String(m.last4 ?? "").slice(-4),
+        expMonth: Number(m.expMonth ?? m.exp_month ?? 0),
+        expYear: Number(m.expYear ?? m.exp_year ?? 0),
+      };
     }
-  }, [profile?.role, router]);
+    const last4 = p.pmLast4 ?? p.cardLast4 ?? p.last4;
+    const expMonth = p.pmExpMonth ?? p.cardExpMonth ?? p.expMonth;
+    const expYear = p.pmExpYear ?? p.cardExpYear ?? p.expYear;
+    const brand = p.pmBrand ?? p.cardBrand ?? p.brand;
 
-  // Render sencillo; mantené tu UI existente si ya la tenés.
-  // Acá no toco estilos, sólo un layout básico coherente con el resto del sitio.
-  async function onConfirm() {
-    // Si usás mutation real:
-    // if (upgradePlan && profile?._id) {
-    //   await upgradePlan({ userId: profile._id, plan });
-    // }
-    router.replace("/perfil"); // o donde sea tu success
-  }
+    if (last4 && expMonth && expYear && brand) {
+      return {
+        _id: "profile",
+        brand: normalizeBrand(brand),
+        last4: String(last4).slice(-4),
+        expMonth: Number(expMonth),
+        expYear: Number(expYear),
+      };
+    }
+    return null;
+  }, [profile]);
 
-  if (!loginEmail || (profile && profile.role === "premium")) {
+  const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
+
+  const onPay = async () => {
+    if (!profile?._id) return;
+
+    try {
+      // Guardar tarjeta nueva si corresponde
+      if (!useSaved && rememberNew) {
+        await savePaymentMethod({
+          userId: profile._id,
+          fullNumber: number,
+          exp,
+          cvv: cvc,
+          brand: undefined,
+        });
+      }
+
+      // 1) Registrar pago
+      const payRes = await makePayment({
+        userId: profile._id,
+        amount: plan.price,
+        currency: "USD",
+        provider: "manual",
+      });
+
+      // 2) Subir a premium
+      await upgradePlan({
+        userId: profile._id,
+        toRole: "premium",
+        plan: planKey,
+        paymentId: payRes?.paymentId,
+        trial: Boolean(trial),
+      });
+
+      // 3) UX
+      toast({
+        title: `¡Bienvenido a Premium, ${profile?.name ?? "gamer"}!`,
+        description: "Tu suscripción se activó correctamente.",
+      });
+      router.replace("/premium/success");
+    } catch (e: any) {
+      toast({
+        title: "No se pudo completar la suscripción",
+        description: e?.message ?? "Intentá nuevamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Si todavía no sabemos el email (sesión cargando), mostramos loader simple
+  if (status === "loading") {
     return (
-      <div className="container mx-auto px-4 py-16">
-        <p className="text-slate-300">Redirigiendo…</p>
+      <div className="min-h-[60vh] grid place-items-center text-slate-300">
+        Cargando…
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      <div className="container mx-auto px-4 py-10">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-orange-400 text-center mb-2">
-          Confirmar suscripción Premium
-        </h1>
-        <p className="text-slate-300 text-center mb-8">
-          Plan seleccionado: <span className="text-white font-semibold">{plan}</span>
-        </p>
+      {/* Back */}
+      <div className="container mx-auto px-4 pt-6">
+        <Button
+          variant="outline"
+          onClick={() => router.back()}
+          className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+        >
+          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Volver
+        </Button>
+      </div>
 
-        <div className="max-w-lg mx-auto bg-slate-800/60 border border-slate-700 rounded-2xl p-6">
-          <ul className="text-slate-300 text-sm space-y-2 mb-6">
-            <li>• Acceso premium completo</li>
-            <li>• Descuentos exclusivos</li>
-            <li>• Soporte prioritario</li>
-          </ul>
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="text-orange-400 mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold text-orange-400 mb-2">Checkout premium</h1>
+            <p className="text-slate-400">Estás a un paso de desbloquear la mejor experiencia gaming</p>
+          </div>
 
-          <button
-            onClick={onConfirm}
-            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold rounded-lg py-3 transition-colors"
-          >
-            Suscribirme ahora
-          </button>
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Resumen del plan */}
+            <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
+              <h2 className="text-xl font-semibold text-orange-400 mb-6">Resumen de tu plan</h2>
 
-          <p className="text-center text-slate-400 text-xs mt-3">
-            Al continuar aceptás los Términos y Condiciones.
-          </p>
+              <div className="bg-slate-700/50 rounded-lg p-6 mb-6">
+                <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
+                <div className="text-3xl font-bold text-teal-400 mb-2">
+                  {plan.priceLabel}
+                  <span className="text-lg text-slate-400">{plan.period}</span>
+                </div>
+                <p className="text-slate-400 mb-4">{plan.description}</p>
+
+                <div className="space-y-2">
+                  {["Acceso a toda la biblioteca", "Descuentos del 27%", "Cero publicidad"].map((feature, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-teal-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span className="text-slate-300">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-sm text-slate-400">
+                Tu suscripción se renovará automáticamente (excepto Lifetime). Podés cancelarla en cualquier momento desde tu perfil.
+              </div>
+            </div>
+
+            {/* Pago */}
+            <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6 space-y-4">
+              {primaryPM ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-white font-medium">Método de pago</p>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={useSaved} onCheckedChange={(v) => setUseSaved(v === true)} />
+                      Usar tarjeta guardada
+                    </label>
+                  </div>
+
+                  {useSaved ? (
+                    <div className="flex items-center justify-between rounded-lg bg-slate-700/60 p-3">
+                      <div>
+                        <p className="text-slate-200 text-sm">
+                          {primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}
+                        </p>
+                        <p className="text-slate-400 text-xs">
+                          Expira {String(primaryPM.expMonth).padStart(2, "0")}/{String(primaryPM.expYear).slice(-2)}
+                        </p>
+                      </div>
+                      <span className="text-xs text-emerald-300">Seleccionada</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="text-slate-300 text-sm">Nombre del titular</label>
+                        <Input
+                          value={holder}
+                          onChange={(e) => setHolder(e.target.value)}
+                          placeholder="Nombre en la tarjeta"
+                          className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-300 text-sm">Número de tarjeta</label>
+                        <Input
+                          value={number}
+                          onChange={(e) => {
+                            const d = e.target.value.replace(/\D/g, "").slice(0, 19);
+                            setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                          }}
+                          placeholder="4111 1111 1111 1111"
+                          className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                          inputMode="numeric"
+                          autoComplete="cc-number"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-slate-300 text-sm">Fecha de expiración</label>
+                          <Input
+                            value={exp}
+                            onChange={(e) => {
+                              const d = e.target.value.replace(/\D/g, "").slice(0, 4);
+                              setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                            }}
+                            placeholder="MM/YY"
+                            className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                            inputMode="numeric"
+                            autoComplete="cc-exp"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-slate-300 text-sm">CVC</label>
+                          <Input
+                            value={cvc}
+                            onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                            placeholder="123"
+                            className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                            inputMode="numeric"
+                            autoComplete="cc-csc"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                        <span className="text-slate-300 text-sm">Guardar método de pago</span>
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-slate-300 text-sm">Nombre del titular</label>
+                    <Input
+                      value={holder}
+                      onChange={(e) => setHolder(e.target.value)}
+                      placeholder="Nombre en la tarjeta"
+                      className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-300 text-sm">Número de tarjeta</label>
+                    <Input
+                      value={number}
+                      onChange={(e) => {
+                        const d = e.target.value.replace(/\D/g, "").slice(0, 19);
+                        setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                      }}
+                      placeholder="4111 1111 1111 1111"
+                      className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                      inputMode="numeric"
+                      autoComplete="cc-number"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-300 text-sm">Fecha de expiración</label>
+                      <Input
+                        value={exp}
+                        onChange={(e) => {
+                          const d = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                        }}
+                        placeholder="MM/YY"
+                        className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                        inputMode="numeric"
+                        autoComplete="cc-exp"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-300 text-sm">CVC</label>
+                      <Input
+                        value={cvc}
+                        onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                        placeholder="123"
+                        className="bg-slate-700/60 border-slate-600 text-white mt-1"
+                        inputMode="numeric"
+                        autoComplete="cc-csc"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                    <span className="text-slate-300 text-sm">Guardar método de pago</span>
+                  </div>
+                </>
+              )}
+
+              <Button
+                onClick={onPay}
+                className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3 text-lg"
+              >
+                Pagar {formatMoney(plan.price)} y suscribirse
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

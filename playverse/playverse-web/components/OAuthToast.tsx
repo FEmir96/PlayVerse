@@ -1,35 +1,61 @@
+// playverse-web/components/OAuthToast.tsx
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthStore } from "@/lib/useAuthStore";
+import { setFavoritesScope } from "@/components/favoritesStore";
 
 export default function OAuthToast() {
   const { toast } = useToast();
-  const search = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const search = useSearchParams();
+
+  const { data: session, status } = useSession();
+  const localUser = useAuthStore((s) => s.user);
+
+  const shownRef = useRef(false);
+  const oauth = search.get("oauth"); // "google" | "xbox" | null
+
+  const displayName = useMemo(() => {
+    const name =
+      session?.user?.name ||
+      localUser?.name ||
+      session?.user?.email ||
+      localUser?.email ||
+      null;
+    return name ? String(name).trim().split(/\s+/)[0] : null;
+  }, [session?.user?.name, session?.user?.email, localUser?.name, localUser?.email]);
+
+  const providerLabel =
+    oauth === "google" ? "Google" :
+    oauth === "xbox"   ? "Xbox"  :
+    oauth ? oauth : "tu cuenta";
 
   useEffect(() => {
-    const prov = search?.get("oauth");
-    if (!prov) return;
+    if (!oauth) return;
+    if (shownRef.current) return;
+    if (status === "loading") return;
 
-    const nice =
-      prov === "google" ? "Google" :
-      prov === "xbox"   ? "Xbox"   :
-      "tu cuenta";
+    shownRef.current = true;
+
+    // 👉 Scope por usuario para favoritos
+    setFavoritesScope(session?.user?.email ?? null);
 
     toast({
-      title: `¡Bienvenido!`,
-      description: `Inicio de sesión con ${nice} exitoso.`,
+      title: displayName ? `¡Bienvenido, ${displayName}!` : "¡Bienvenido!",
+      description: `Inicio de sesión con ${providerLabel} exitoso.`,
     });
 
-    // limpiar la query para que no se repita el toast
-    const params = new URLSearchParams(search!.toString());
+    // Limpio ?oauth= de la URL
+    const params = new URLSearchParams(search.toString());
     params.delete("oauth");
-    router.replace(`${pathname}${params.toString() ? `?${params}` : ""}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, pathname]);
+    const cleanUrl = `${pathname}${params.size ? `?${params.toString()}` : ""}`;
+    router.replace(cleanUrl);
+  }, [oauth, status, displayName, providerLabel, pathname, router, search, session?.user?.email]);
 
   return null;
 }

@@ -1,176 +1,191 @@
 "use node";
 
-import { v } from "convex/values";
 import { action } from "../_generated/server";
-import type { Id, Doc } from "../_generated/dataModel";
-import { getIgdbAuth } from "../lib/igdb/auth";
-import { pickAgeRating } from "../lib/igdb/ageRatings";
+import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
+import { api } from "../_generated/api";
 
-// Tipos mínimos para parsear IGDB
-type IgdbCompany = {
-  developer?: boolean;
-  publisher?: boolean;
-  company?: { name?: string | null } | null;
-} | null;
+import {
+  pickAgeRating,
+  buildLabel,
+  systemShort,
+  normalizeTitle,
+} from "../lib/igdb/ageRatings";
 
-type IgdbLangSupport = {
-  language?: { name?: string | null } | null;
-  language_support_type?: { name?: string | null } | null;
-} | null;
+type AgeSystem =
+  | "ESRB" | "PEGI" | "USK" | "CERO" | "ACB" | "GRAC" | "CLASS_IND" | "OFLCNZ";
+
+type IgdbAge = { category: number | null; rating: number | null };
+
+type GameRow = {
+  _id: Id<"games">;
+  title: string;
+  igdbId?: number | null;
+};
+
+function getenv(ctx: any, key: string): string | undefined {
+  try {
+    const v = ctx?.env?.get?.(key);
+    if (v) return v;
+  } catch {}
+  return process.env[key];
+}
+
+async function getTwitchAppToken(ctx: any): Promise<string> {
+  const clientId  = getenv(ctx, "IGDB_CLIENT_ID")  || getenv(ctx, "TWITCH_CLIENT_ID");
+  const clientSec = getenv(ctx, "IGDB_CLIENT_SECRET") || getenv(ctx, "TWITCH_CLIENT_SECRET");
+  if (!clientId || !clientSec) {
+    throw new Error("Faltan IGDB_CLIENT_ID / IGDB_CLIENT_SECRET en las env vars");
+  }
+  const res = await fetch("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSec)}&grant_type=client_credentials`,
+  });
+  if (!res.ok) throw new Error(`Twitch token error ${res.status}: ${await res.text().catch(()=> "")}`);
+  const json = await res.json();
+  return json.access_token as string;
+}
+
+async function igdb<T = any>(ctx: any, endpoint: string, query: string): Promise<T[]> {
+  const token = await getTwitchAppToken(ctx);
+  const clientId =
+    getenv(ctx, "IGDB_CLIENT_ID") || getenv(ctx, "TWITCH_CLIENT_ID");
+  const res = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Client-ID": String(clientId),
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/json",
+      "Content-Type": "text/plain",
+    },
+    body: query,
+  });
+  if (!res.ok) throw new Error(`IGDB error ${res.status}: ${await res.text().catch(()=> "")}`);
+  return (await res.json()) as T[];
+}
 
 type IgdbGame = {
   id: number;
-  name?: string | null;
-  slug?: string | null;
-  first_release_date?: number | null;      // epoch seconds
-  rating?: number | null;                  // user
-  rating_count?: number | null;
-  aggregated_rating?: number | null;       // critic
-  total_rating?: number | null;            // combined
-  age_ratings?: Array<{ category?: number | null; rating?: number | null }> | null;
-  involved_companies?: IgdbCompany[] | null;
-  language_supports?: IgdbLangSupport[] | null;
+  name: string;
+  age_ratings?: IgdbAge[];
+  parent_game?: number | null;
+  version_parent?: number | null;
+  alternative_names?: { name: string }[];
 };
 
-type HandlerResult = {
-  ok: boolean;
-  igdbId?: number;
-  savedKeys?: string[];
-  reason?: string;
-};
+async function getGameWithAgesById(ctx: any, id: number): Promise<IgdbGame | null> {
+  const fields =
+    "fields id,name,age_ratings.category,age_ratings.rating,parent_game,version_parent,alternative_names.name;";
+  const rows = await igdb<IgdbGame>(ctx, "games", `${fields}\nwhere id = ${id};\nlimit 1;`);
+  return rows[0] ?? null;
+}
+
+async function getAgesFromGameOrParents(ctx: any, g: IgdbGame | null): Promise<IgdbAge[] | null> {
+  if (!g) return null;
+  if (g.age_ratings && g.age_ratings.length) return g.age_ratings;
+
+  if (g.version_parent) {
+    const vp = await getGameWithAgesById(ctx, g.version_parent);
+    if (vp?.age_ratings?.length) return vp.age_ratings;
+  }
+  if (g.parent_game) {
+    const pg = await getGameWithAgesById(ctx, g.parent_game);
+    if (pg?.age_ratings?.length) return pg.age_ratings;
+  }
+  return null;
+}
+
+const norm = (s: string) =>
+  (s || "").normalize("NFKD").replace(/[^\w]+/g, " ").trim().toLowerCase();
+
+function titleScore(row: IgdbGame, target: string): number {
+  const nName = norm(row.name);
+  if (nName === target) return 0;
+  if (nName.includes(target)) return 1;
+  if (row.alternative_names?.some(a => norm(a.name) === target)) return 2;
+  return 3;
+}
+
+async function searchBestByTitle(ctx: any, title: string): Promise<{ game: IgdbGame | null; ages: IgdbAge[] | null }> {
+  const q = (title || "").trim();
+  if (!q) return { game: null, ages: null };
+
+  const fields =
+    "fields id,name,age_ratings.category,age_ratings.rating,parent_game,version_parent,alternative_names.name;";
+  // ❗️Sin filtro por category y con más resultados
+  const rows = await igdb<IgdbGame>(
+    ctx,
+    "games",
+    `search "${q.replace(/"/g, '\\"')}";\n${fields}\nlimit 50;`
+  );
+
+  if (!rows.length) return { game: null, ages: null };
+
+  const tgt = norm(title);
+  rows.sort((a, b) => titleScore(a, tgt) - titleScore(b, tgt));
+
+  for (const r of rows) {
+    const ages = await getAgesFromGameOrParents(ctx, r);
+    if (ages?.length) return { game: r, ages };
+  }
+  return { game: rows[0] ?? null, ages: null };
+}
 
 export const refreshIGDBRatingForGame = action({
   args: {
     gameId: v.id("games"),
     igdbId: v.optional(v.number()),
     forceByTitle: v.optional(v.boolean()),
+    prefer: v.optional(
+      v.array(
+        v.union(
+          v.literal("ESRB"), v.literal("PEGI"), v.literal("USK"),
+          v.literal("CERO"), v.literal("ACB"), v.literal("GRAC"),
+          v.literal("CLASS_IND"), v.literal("OFLCNZ")
+        )
+      )
+    ),
   },
-  handler: async (ctx, args): Promise<HandlerResult> => {
-    const api: any = (await import("../_generated/api")).api;
-
-    // 1) Juego local
-    const game = (await ctx.runQuery(api.queries.getGameById.getGameById, {
+  handler: async (ctx, args) => {
+    const local = (await ctx.runQuery(api.queries.getGameById.getGameById, {
       id: args.gameId as Id<"games">,
-    })) as Doc<"games"> | null;
-    if (!game) throw new Error("Juego no encontrado en DB");
+    })) as GameRow | null;
+    if (!local) return { ok: false as const, reason: "Game local no encontrado" };
 
-    // 2) Credenciales IGDB
-    const { clientId: CLIENT_ID, token: TOKEN } = await getIgdbAuth();
+    const prefer = (args.prefer ?? []) as AgeSystem[];
+    const byTitle = args.forceByTitle === true || typeof args.igdbId !== "number";
 
-    // 3) Campos válidos (nada de 'popularity' ni 'hypes')
-    const fields = [
-      "id",
-      "name",
-      "slug",
-      "first_release_date",
-      "rating",
-      "rating_count",
-      "aggregated_rating",
-      "total_rating",
-      "age_ratings.category",
-      "age_ratings.rating",
-      "involved_companies.company.name",
-      "involved_companies.developer",
-      "involved_companies.publisher",
-      "language_supports.language.name",
-      "language_supports.language_support_type.name",
-    ].join(",");
+    let ages: IgdbAge[] | null = null;
 
-    const useById =
-      !args.forceByTitle && typeof args.igdbId === "number" && args.igdbId > 0;
+    if (!byTitle) {
+      const g = await getGameWithAgesById(ctx, Number(args.igdbId));
+      ages = await getAgesFromGameOrParents(ctx, g);
+    }
+    if (!ages?.length) {
+      const { ages: aa } = await searchBestByTitle(ctx, local.title || "");
+      ages = aa ?? null;
+    }
 
-    const queryStr = useById
-      ? `fields ${fields}; where id = ${args.igdbId}; limit 1;`
-      : `search "${escapeIgdbSearch(String(game.title || ""))}";
-         fields ${fields};
-         where version_parent = null;
-         limit 1;`;
+    if (!ages?.length) {
+      return { ok: false as const, reason: "IGDB sin age_ratings (ni en el padre)" };
+    }
 
-    const rows = await igdbPost<IgdbGame[]>("games", queryStr, CLIENT_ID, TOKEN);
-    const row = Array.isArray(rows) ? rows[0] : undefined;
-    if (!row?.id) return { ok: false, reason: "No se encontró el juego en IGDB" };
+    const choice = pickAgeRating(ages, prefer);
+    if (!choice) return { ok: false as const, reason: "No se pudo elegir un age rating" };
 
-    // 4) Devs / Pubs
-    const comps = (row.involved_companies ?? []).filter(Boolean) as NonNullable<IgdbCompany>[];
-    const developers = dedupe(
-      comps
-        .filter(c => c.developer && c.company?.name)
-        .map(c => String(c.company!.name!)).map(s => s.trim())
-        .filter(Boolean)
-    );
-    const publishers = dedupe(
-      comps
-        .filter(c => c.publisher && c.company?.name)
-        .map(c => String(c.company!.name!)).map(s => s.trim())
-        .filter(Boolean)
+    const label = buildLabel({ system: choice.system, code: choice.code });
+
+    await ctx.runMutation(
+      api.mutations.applyAgeRating.applyAgeRating,
+      {
+        gameId: args.gameId as Id<"games">,
+        ageRatingSystem: systemShort(choice.system),
+        ageRatingCode: String(choice.code),
+        ageRatingLabel: label,
+      }
     );
 
-    // 5) Idiomas
-    const langSupports = (row.language_supports ?? []).filter(Boolean) as NonNullable<IgdbLangSupport>[];
-    const languages = dedupe(
-      langSupports
-        .map(l => l.language?.name ?? "")
-        .map(s => String(s).trim())
-        .filter(Boolean)
-    );
-
-    // 6) Clasificación por edad
-    const chosen = pickAgeRating(row.age_ratings ?? undefined);
-
-    // 7) Patch SOLO con campos que tu mutation valida
-    const patch: Record<string, any> = {
-      igdbUserRating: numOrUndef(round1, row.rating),
-      igdbRatingCount: numOrUndef(n => n, row.rating_count),
-      igdbCriticRating: numOrUndef(round1, row.aggregated_rating),
-      igdbRating: numOrUndef(round1, row.total_rating), // mapeamos total_rating → igdbRating
-      igdbId: row.id,
-      igdbSlug: row.slug ?? undefined,
-
-      firstReleaseDate: typeof row.first_release_date === "number" ? row.first_release_date * 1000 : undefined,
-      developers: developers.length ? developers : undefined,
-      publishers: publishers.length ? publishers : undefined,
-      languages: languages.length ? languages : undefined,
-
-      ageRatingSystem: chosen?.system,
-      ageRatingLabel: chosen?.label,
-      ageRatingCode: chosen?.code, // ← ahora existe en el tipo AgeRatingChoice
-      lastIgdbSyncAt: Date.now(),
-    };
-
-    await ctx.runMutation(api.mutations.applyIgdbRating.applyIgdbRating, {
-      id: args.gameId,
-      requesterId: undefined,
-      data: patch,
-      auditDetails: { igdb: { id: row.id, name: row.name ?? null } },
-    });
-
-    return { ok: true, igdbId: row.id, savedKeys: Object.keys(patch).filter(k => patch[k] !== undefined) };
+    return { ok: true as const, system: systemShort(choice.system), code: choice.code, label };
   },
 });
-
-// ===== helpers =====
-async function igdbPost<T>(endpoint: string, body: string, clientId: string, token: string): Promise<T> {
-  const res = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
-    method: "POST",
-    headers: { "Client-ID": clientId, Authorization: `Bearer ${token}` },
-    body,
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`IGDB error ${res.status}: ${txt}`);
-  }
-  return (await res.json()) as T;
-}
-
-function escapeIgdbSearch(s: string) {
-  return s.replace(/"/g, '\\"');
-}
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
-}
-function numOrUndef<T extends number>(map: (n: number) => T, val: number | null | undefined): T | undefined {
-  return typeof val === "number" ? map(val) : undefined;
-}
-function dedupe<T>(arr: T[]): T[] {
-  return Array.from(new Set(arr));
-}

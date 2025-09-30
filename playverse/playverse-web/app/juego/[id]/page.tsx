@@ -21,7 +21,7 @@ import {
   Copy,
   Check,
   Play,
-  Star, // ⭐ nuevo
+  Star,
 } from "lucide-react";
 
 import { useQuery, useAction } from "convex/react";
@@ -92,8 +92,6 @@ export default function GameDetailPage() {
 
   // Param estable
   const idParamRaw = params?.id;
-  theId: {
-  }
   const idParam = Array.isArray(idParamRaw) ? idParamRaw[0] : idParamRaw;
   const hasId = Boolean(idParam);
 
@@ -226,7 +224,7 @@ export default function GameDetailPage() {
       }>
     | undefined;
 
-  // ✅ (Opcional) Biblioteca para reforzar "comprado": por id, por título y/o por biblioteca
+  // ✅ (Opcional) Biblioteca
   const hasLibraryQuery =
     (api as any).queries?.getUserLibrary?.getUserLibrary ?? null;
   const library = useQuery(
@@ -244,7 +242,6 @@ export default function GameDetailPage() {
 
   const now = Date.now();
 
-  // 🧠 Match robusto para "comprado": por id, por título y/o por biblioteca
   const hasPurchased = useMemo(() => {
     if (!game?._id) return false;
     const gid = String(game._id);
@@ -298,7 +295,6 @@ export default function GameDetailPage() {
   const addFav = useFavoritesStore((s) => s.add);
   const removeFav = useFavoritesStore((s) => s.remove);
 
-  // Estado reactivo: si está en favoritos
   const isFav = useMemo(() => {
     const byId = !!(game?._id && favItems.some((i) => i.id === String(game._id)));
     if (byId) return true;
@@ -352,7 +348,6 @@ export default function GameDetailPage() {
       id: String(game._id),
       title: game.title ?? "Juego",
       cover: (game as any).cover_url ?? "/placeholder.svg",
-      // dejamos estos nombres como los tenés hoy
       priceBuy: (game as any).price_buy ?? null,
       priceRent: (game as any).weekly_price ?? null,
     };
@@ -384,36 +379,23 @@ export default function GameDetailPage() {
   const notFound = hasId && game === null;
   const current = media[selectedIndex];
 
-  // 🟠 helpers IGDB/PopScore (usamos any para evitar TS hasta que regenere types)
-  const popscore = (game as any)?.popscore as number | undefined;
+  // 🟠 ratings
   const igdbRating = (game as any)?.igdbRating as number | undefined;
-  const igdbRatingCount = (game as any)?.igdbRatingCount as number | undefined;
-  const igdbPopularity = (game as any)?.igdbPopularity as number | undefined;
-
-  // 🟠 nuevos derivados para UI
   const igdbUserRating = (game as any)?.igdbUserRating as number | undefined;
-  const firstReleaseDate = (game as any)?.firstReleaseDate as number | undefined;
-  const developers = ((game as any)?.developers as string[] | undefined) ?? [];
-  const publishers = ((game as any)?.publishers as string[] | undefined) ?? [];
-  const languages = ((game as any)?.languages as string[] | undefined) ?? [];
 
-  const ageRatingSystem = (game as any)?.ageRatingSystem as string | undefined;
-  const ageRatingLabel = (game as any)?.ageRatingLabel as string | undefined;
-
-  // ⭐ User rating (100 → 5 estrellas) con fallback user → igdb → popscore
+  // ⭐ User rating (100 → 5 estrellas) con fallback user → igdb
   const score100 =
     typeof igdbUserRating === "number"
       ? igdbUserRating
       : typeof igdbRating === "number"
       ? igdbRating
-      : typeof popscore === "number"
-      ? popscore
       : undefined;
 
   const userStars =
     typeof score100 === "number" ? +(score100 / 20).toFixed(1) : undefined;
 
   // Fecha formateada
+  const firstReleaseDate = (game as any)?.firstReleaseDate as number | undefined;
   const releaseStr =
     typeof firstReleaseDate === "number"
       ? new Date(firstReleaseDate).toLocaleDateString("es-AR", {
@@ -422,6 +404,13 @@ export default function GameDetailPage() {
           day: "numeric",
         })
       : undefined;
+
+  // Otros metadatos
+  const developers = ((game as any)?.developers as string[] | undefined) ?? [];
+  const publishers = ((game as any)?.publishers as string[] | undefined) ?? [];
+  const languages = ((game as any)?.languages as string[] | undefined) ?? [];
+  const ageRatingSystem = (game as any)?.ageRatingSystem as string | undefined;
+  const ageRatingLabel = (game as any)?.ageRatingLabel as string | undefined;
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -464,21 +453,13 @@ export default function GameDetailPage() {
                 )}
               </div>
 
-              {/* Franja fija: título + género + PopScore */}
+              {/* Franja fija: título + género (PopScore quitado) */}
               <div className="bg-slate-800/70 border border-orange-400/20 rounded-lg px-4 py-3 flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-white">{game.title}</h1>
+                <h1 className="text-2xl font-bold text-orange-400">{game.title}</h1>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-orange-400 text-slate-900 hover:bg-orange-500">
                     {(game as any).genres?.[0] || "Acción"}
                   </Badge>
-                  {typeof popscore === "number" && (
-                    <Badge
-                      className="bg-orange-400 text-slate-900 hover:bg-orange-500"
-                      title="PopScore (rating ponderado + popularidad)"
-                    >
-                      ⭐ {popscore.toFixed(1)}
-                    </Badge>
-                  )}
                 </div>
               </div>
 
@@ -651,28 +632,14 @@ export default function GameDetailPage() {
                 </div>
               </div>
 
-              {/* Información del juego (nueva) */}
+              {/* Información del juego (PopScore removido) */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-orange-400 mb-4">
                   Información del juego
                 </h3>
 
                 <div className="space-y-3 text-sm">
-                  {/* Plan */}
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Plan:</span>
-                    <span className="text-white">{(game as any).plan}</span>
-                  </div>
-
-                  {/* Géneros */}
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Géneros:</span>
-                    <span className="text-white">
-                      {((game as any).genres ?? []).join(", ") || "—"}
-                    </span>
-                  </div>
-
-                  {/* ⭐ User rating (estrellitas, n.n/5) con fallback */}
+                  {/* ⭐ User rating */}
                   {typeof userStars === "number" && userStars > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">User rating:</span>
@@ -680,17 +647,7 @@ export default function GameDetailPage() {
                     </div>
                   )}
 
-                  {/* PopScore (opcional, estilo naranja) */}
-                  {typeof popscore === "number" && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">PopScore:</span>
-                      <span className="text-orange-400 font-semibold">
-                        {popscore.toFixed(1)} / 100
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Clasificación (solo si hay info útil; ocultamos "Not Rated") */}
+                  {/* Clasificación (ocultamos "Not Rated") */}
                   {ageRatingLabel && ageRatingLabel !== "Not Rated" && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Clasificación:</span>
@@ -724,11 +681,20 @@ export default function GameDetailPage() {
                     </div>
                   )}
 
-                  {/* Idiomas */}
+                  {/* Idiomas como “stickers” */}
                   {languages.length > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Idiomas:</span>
-                      <span className="text-white">{languages.join(", ")}</span>
+                    <div className="">
+                      <span className="block text-slate-400 mb-2">Idiomas:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {languages.map((lang, idx) => (
+                          <Badge
+                            key={idx}
+                            className="bg-teal-500/20 border border-teal-400/30 text-teal-200 hover:bg-teal-500/30"
+                          >
+                            {lang}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
