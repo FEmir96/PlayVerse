@@ -3,14 +3,12 @@ import { query } from "../_generated/server";
 import { v } from "convex/values";
 
 export const getUserByEmail = query({
-  args: { email: v.string() },
+  args: { email: v.optional(v.string()) },
   handler: async (ctx, { email }) => {
-    const normalized = email.toLowerCase();
-    const user = await ctx.db
+    if (!email) return null;
+    return await ctx.db
       .query("profiles")
-      .withIndex("by_email", (q) => q.eq("email", normalized))
+      .withIndex("by_email", (q) => q.eq("email", email.toLowerCase()))
       .unique();
-
-    return user ?? null;
   },
 });

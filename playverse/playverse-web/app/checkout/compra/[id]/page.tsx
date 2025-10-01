@@ -1,185 +1,418 @@
-"use client"
+// app/checkout/compra/[id]/page.tsx
+"use client";
 
-import type React from "react"
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useMutation, useQuery } from "convex/react";
+import type { FunctionReference } from "convex/server";
+import { api } from "@convex";
+import type { Id } from "@convex/_generated/dataModel";
 
-import { useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
+import { useAuthStore } from "@/lib/useAuthStore";
 
-// Mock game data
-const gameData = {
-  id: "1",
-  title: "Tomb Raider",
-  image: "/tomb-raider-game-cover.jpg",
-  description:
-    "Embárcate en una aventura épica llena de misterios antiguos, tesoros perdidos y peligros mortales. Lara Croft regresa en su aventura más emocionante hasta la fecha, explorando tumbas olvidadas y enfrentándose a enemigos que pondrán a prueba todas sus habilidades.",
-  price: "$19.99",
-  premiumDiscount: "Podrías ahorrarte un 10% suscribiéndote a premium, ¡No te lo pierdas!",
+// —— Refs —— 
+const getUserByEmailRef =
+  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
+
+const HAS_PM_QUERY = Boolean((api as any)["queries/getPaymentMethods"]?.getPaymentMethods);
+const getPaymentMethodsRef = (HAS_PM_QUERY
+  ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
+  : (api as any)["queries/getUserByEmail"].getUserByEmail) as FunctionReference<"query">;
+
+const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
+const getGameByIdRef = (HAS_GET_BY_ID
+  ? (api as any)["queries/getGameById"].getGameById
+  : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
+
+// ✅ biblioteca para chequear propiedad
+const getUserLibraryRef =
+  (api as any)["queries/getUserLibrary"].getUserLibrary as FunctionReference<"query">;
+
+const purchaseGameRef = (api as any).transactions.purchaseGame as FunctionReference<"mutation">;
+const savePaymentMethodRef =
+  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
+
+type PM = {
+  _id: string;
+  brand: "visa" | "mastercard" | "amex" | "otro";
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+/* === TÍTULO “Boca naranja” reutilizable === */
+function CheckoutTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-center mb-6">
+      <h1
+        className="
+          text-3xl md:text-4xl font-black tracking-tight
+          bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300
+          bg-clip-text text-transparent
+          drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]
+        "
+      >
+        {children}
+      </h1>
+      <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
+    </div>
+  );
 }
 
-export default function PurchaseCheckoutPage() {
-  const params = useParams()
-  const router = useRouter()
-  const [formData, setFormData] = useState({
-    cardholderName: "",
-    cardNumber: "",
-    expiryDate: "",
-    cvc: "",
-    savePaymentMethod: false,
-  })
+export default function PurchaseCheckoutPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Handle purchase logic here
-    console.log("Processing purchase:", formData)
-    // Redirect to success page or game library
-    router.push("/mis-juegos")
+  const { data: session } = useSession();
+  const storeUser = useAuthStore((s) => s.user);
+  const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
+
+  useEffect(() => {
+    if (!loginEmail) {
+      router.replace(`/auth/login?next=${encodeURIComponent(pathname ?? "/")}`);
+    }
+  }, [loginEmail, router, pathname]);
+
+  // Perfil
+  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined);
+
+  // Juego
+  const game = useQuery(
+    getGameByIdRef as any,
+    HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
+  ) as { _id: Id<"games">; title?: string; cover_url?: string; price_buy?: number } | null | undefined;
+
+  // Métodos guardados
+  const methods = useQuery(
+    getPaymentMethodsRef as any,
+    HAS_PM_QUERY && profile?._id ? { userId: profile._id } : undefined
+  ) as PM[] | undefined;
+
+  // ✅ Biblioteca del usuario para validar propiedad
+  const library = useQuery(
+    getUserLibraryRef as any,
+    profile?._id ? { userId: profile._id } : undefined
+  ) as any[] | undefined;
+
+  const savePaymentMethod = useMutation(savePaymentMethodRef);
+  const purchaseGame = useMutation(purchaseGameRef);
+
+  // UI
+  const [useSaved, setUseSaved] = useState(true);
+  const [rememberNew, setRememberNew] = useState(false);
+
+  const [holder, setHolder] = useState("");
+  const [number, setNumber] = useState("");
+  const [exp, setExp] = useState("");
+  const [cvc, setCvc] = useState("");
+
+  const price = useMemo(() => {
+    if (typeof (game as any)?.price_buy === "number") return (game as any).price_buy;
+    return 49.99; // fallback
+  }, [game]);
+
+  const formatMoney = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  const normalizeBrand = (b?: string): PM["brand"] => {
+    const s = (b || "").toLowerCase();
+    if (s.includes("visa")) return "visa";
+    if (s.includes("master")) return "mastercard";
+    if (s.includes("amex") || s.includes("american")) return "amex";
+    return "otro";
+  };
+
+  // fallback: si no hay métodos en la tabla, uso uno del perfil
+  const pmFromProfile: PM | null = useMemo(() => {
+    const p: any = profile;
+    if (!p) return null;
+
+    const arr = p.paymentMethods ?? p.payment_methods;
+    if (Array.isArray(arr) && arr.length > 0) {
+      const m = arr[0] || {};
+      return {
+        _id: m._id ?? "profile",
+        brand: normalizeBrand(m.brand),
+        last4: String(m.last4 ?? "").slice(-4),
+        expMonth: Number(m.expMonth ?? m.exp_month ?? 0),
+        expYear: Number(m.expYear ?? m.exp_year ?? 0),
+      };
+    }
+    const last4 = p.pmLast4 ?? p.cardLast4 ?? p.last4;
+    const expMonth = p.pmExpMonth ?? p.cardExpMonth ?? p.expMonth;
+    const expYear = p.pmExpYear ?? p.cardExpYear ?? p.expYear;
+    const brand = p.pmBrand ?? p.cardBrand ?? p.brand;
+
+    if (last4 && expMonth && expYear && brand) {
+      return {
+        _id: "profile",
+        brand: normalizeBrand(brand),
+        last4: String(last4).slice(-4),
+        expMonth: Number(expMonth),
+        expYear: Number(expYear),
+      };
+    }
+    return null;
+  }, [profile]);
+
+  const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
+
+  /** ✅ ¿Ya es dueño del juego? */
+  const alreadyOwned = useMemo(() => {
+    if (!library || !game?._id) return false;
+    const gid = String(game._id);
+    return library.some((row: any) => {
+      const g = row?.game ?? row;
+      const id = String(g?._id ?? row?.gameId ?? "");
+      const kind = String(row?.kind ?? row?.type ?? "purchase").toLowerCase();
+      return id === gid && (kind === "purchase" || kind === "buy" || row?.owned === true);
+    });
+  }, [library, game?._id]);
+
+  useEffect(() => {
+    if (alreadyOwned && game?.title) {
+      toast({
+        title: "Ya tienes este juego",
+        description: `“${game.title}” ya está en tu catálogo.`,
+      });
+    }
+  }, [alreadyOwned, game?.title, toast]);
+
+  const onPay = async () => {
+    if (!profile?._id || !game?._id) return;
+
+    if (alreadyOwned) {
+      toast({
+        title: "Compra no necesaria",
+        description: "Ya tienes este producto en tu catálogo.",
+      });
+      return;
+    }
+
+    try {
+      if (!useSaved && rememberNew) {
+        await savePaymentMethod({
+          userId: profile._id,
+          fullNumber: number,
+          exp,
+          cvv: cvc,
+          brand: undefined,
+        });
+      }
+
+      await purchaseGame({ userId: profile._id, gameId: game._id, amount: price });
+
+      toast({ title: "Compra confirmada", description: "Te enviamos un email con los detalles." });
+      router.replace("/mis-juegos");
+    } catch (e: any) {
+      const msg = String(e?.message || "");
+      if (msg.includes("ALREADY_OWNED")) {
+        toast({ title: "Ya tienes este juego", description: "No es necesario volver a comprarlo." });
+        return;
+      }
+      toast({
+        title: "No se pudo completar el pago",
+        description: e?.message ?? "Intentá nuevamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (!loginEmail) {
+    return (
+      <div className="container mx-auto px-4 py-16">
+        <p className="text-slate-300">Redirigiendo al login…</p>
+      </div>
+    );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      {/* Back Button */}
-      <div className="container mx-auto px-4 pt-6">
-        <Button
-          variant="outline"
-          onClick={() => router.back()}
-          className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-        >
-          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Volver
-        </Button>
-      </div>
+  const title = game?.title ?? "Juego";
+  const cover = game?.cover_url ?? "/placeholder.svg";
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="text-orange-400 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
-              </svg>
+  return (
+    <div className="container mx-auto px-4 py-10">
+      {/* === Título bonito === */}
+      <CheckoutTitle>Confirmar compra</CheckoutTitle>
+      <p className="text-slate-300 text-center mb-8">Estás comprando:</p>
+
+      <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Izquierda — COVER escalado y con buen encuadre */}
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
+
+          {/* Wrapper para controlar tamaño */}
+          <div className="mx-auto max-w-[380px] md:max-w-[420px]">
+            {/* Marco con relación de aspecto 3/4 y borde */}
+            <div
+              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
+              style={{ aspectRatio: "3 / 4" }}
+            >
+              <img
+                src={cover}
+                alt={title}
+                className="absolute inset-0 w-full h-full object-contain"
+                draggable={false}
+              />
             </div>
-            <h1 className="text-3xl font-bold text-orange-400 mb-2">Confirmar compra</h1>
-            <p className="text-slate-400">Estas comprando:</p>
           </div>
 
-          <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-8">
-            <h2 className="text-2xl font-bold text-white mb-6">{gameData.title}</h2>
-            <div className="grid lg:grid-cols-2 gap-8">
-              {/* Game Info */}
-              <div className="space-y-6">
-                <div className="bg-slate-700/50 rounded-lg p-4">
-                  <Image
-                    src={gameData.image || "/placeholder.svg"}
-                    alt={gameData.title}
-                    width={300}
-                    height={200}
-                    className="w-full h-full object-cover rounded-lg mb-4"
+          {/* Aviso si ya lo tiene (sin cambios) */}
+          {alreadyOwned && (
+            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
+              Ya tienes este juego en tu biblioteca. No es necesario volver a comprarlo.
+            </div>
+          )}
+        </div>
+
+        {/* Derecha (igual que antes) */}
+        <div className="space-y-4">
+          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+            <div className="text-3xl font-black text-emerald-300">{formatMoney(price)}</div>
+            <p className="text-sm text-amber-400 mt-2">
+              Podrías ahorrarte un 10% suscribiéndote a premium, ¡no te lo pierdas!
+            </p>
+          </div>
+
+          {(() => {
+            const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
+            if (primaryPM) {
+              return (
+                <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-white font-medium">Método de pago</p>
+                    <div className="flex items-center gap-2 text-sm">
+                      <label className="flex items-center gap-2">
+                        <Checkbox checked={useSaved} onCheckedChange={(v) => setUseSaved(v === true)} />
+                        Usar tarjeta guardada
+                      </label>
+                    </div>
+                  </div>
+
+                  {useSaved ? (
+                    <div className="flex items-center justify-between rounded-lg bg-slate-800 p-3">
+                      <div>
+                        <p className="text-slate-200 text-sm">{primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}</p>
+                        <p className="text-slate-400 text-xs">
+                          Expira {String(primaryPM.expMonth).padStart(2, "0")}/{String(primaryPM.expYear).slice(-2)}
+                        </p>
+                      </div>
+                      <span className="text-xs text-emerald-300">Seleccionada</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="text-slate-300 text-sm">Nombre del titular</label>
+                        <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-slate-300 text-sm">Número de tarjeta</label>
+                        <Input
+                          value={number}
+                          onChange={(e) => {
+                            const d = e.target.value.replace(/\D/g, "").slice(0, 19);
+                            setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                          }}
+                          placeholder="4111 1111 1111 1111"
+                          className="bg-slate-700 border-slate-600 text-white mt-1"
+                          inputMode="numeric"
+                          autoComplete="cc-number"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-slate-300 text-sm">Fecha de expiración</label>
+                          <Input
+                            value={exp}
+                            onChange={(e) => {
+                              const d = e.target.value.replace(/\D/g, "").slice(0, 4);
+                              setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                            }}
+                            placeholder="MM/YY"
+                            className="bg-slate-700 border-slate-600 text-white mt-1"
+                            inputMode="numeric"
+                            autoComplete="cc-exp"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-slate-300 text-sm">CVC</label>
+                          <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                        <span className="text-slate-300 text-sm">Guardar método de pago</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            // Sin método guardado → formulario
+            return (
+              <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
+                <div>
+                  <label className="text-slate-300 text-sm">Nombre del titular</label>
+                  <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+                </div>
+                <div>
+                  <label className="text-slate-300 text-sm">Número de tarjeta</label>
+                  <Input
+                    value={number}
+                    onChange={(e) => {
+                      const d = e.target.value.replace(/\D/g, "").slice(0, 19);
+                      setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                    }}
+                    placeholder="4111 1111 1111 1111"
+                    className="bg-slate-700 border-slate-600 text-white mt-1"
+                    inputMode="numeric"
+                    autoComplete="cc-number"
                   />
                 </div>
-
-                <div className="space-y-4">
-                  <p className="text-slate-300 leading-relaxed">{gameData.description}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-300 text-sm">Fecha de expiración</label>
+                    <Input
+                      value={exp}
+                      onChange={(e) => {
+                        const d = e.target.value.replace(/\D/g, "").slice(0, 4);
+                        setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                      }}
+                      placeholder="MM/YY"
+                      className="bg-slate-700 border-slate-600 text-white mt-1"
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-300 text-sm">CVC</label>
+                    <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                  <span className="text-slate-300 text-sm">Guardar método de pago</span>
                 </div>
               </div>
+            );
+          })()}
 
-              {/* Payment Form */}
-              <div className="space-y-6">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <div className="bg-slate-700/30 rounded-lg p-4 mb-8">
-                      <div className="text-3xl font-bold text-teal-400 mb-2">
-                        {gameData.price}
-                      </div>
-                      <p className="text-orange-400 text-sm">{gameData.premiumDiscount}</p>
-                    </div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Nombre del titular</label>
-                    <Input
-                      type="text"
-                      placeholder="Nombre en la tarjeta"
-                      value={formData.cardholderName}
-                      onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })}
-                      className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Número de tarjeta</label>
-                    <Input
-                      type="text"
-                      placeholder="**** **** **** 1234"
-                      value={formData.cardNumber}
-                      onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })}
-                      className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
-                      maxLength={19}
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">Fecha de expiración</label>
-                      <Input
-                        type="text"
-                        placeholder="MM/YY"
-                        value={formData.expiryDate}
-                        onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-                        className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
-                        maxLength={5}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">CVC</label>
-                      <Input
-                        type="text"
-                        placeholder="123"
-                        value={formData.cvc}
-                        onChange={(e) => setFormData({ ...formData, cvc: e.target.value })}
-                        className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
-                        maxLength={4}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="savePayment"
-                      checked={formData.savePaymentMethod}
-                      onCheckedChange={(checked) => setFormData({ ...formData, savePaymentMethod: checked as boolean })}
-                      className="border-slate-600 data-[state=checked]:bg-orange-400 data-[state=checked]:border-orange-400"
-                    />
-                    <label htmlFor="savePayment" className="text-sm text-slate-300">
-                      Guardar método de pago
-                    </label>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3 text-lg"
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
-                    </svg>
-                    Pagar {gameData.price}
-                  </Button>
-                </form>
-              </div>
-            </div>
-          </div>
+          <Button
+            onClick={onPay}
+            disabled={alreadyOwned}
+            className={`w-full text-slate-900 text-lg py-6 font-bold ${
+              alreadyOwned ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"
+            }`}
+          >
+            {alreadyOwned ? "Ya tienes este juego" : `Pagar ${formatMoney(price)}`}
+          </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }

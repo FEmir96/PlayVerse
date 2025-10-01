@@ -8,6 +8,8 @@ import "./globals.css";
 import { Header } from "@/components/header";
 import { ConditionalFooter } from "@/components/ConditionalFooter";
 import { Suspense } from "react";
+import OAuthToast from "@/components/OAuthToast";
+
 
 // ✅ Convex: wrapper client
 import ConvexProviderClient from "./providers/convex-provider";
@@ -33,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SessionProviderClient>
             <Suspense fallback={<div>Loading...</div>}>
               <Header />
+              <OAuthToast />
               <main className="min-h-screen">{children}</main>
               <ConditionalFooter />
             </Suspense>

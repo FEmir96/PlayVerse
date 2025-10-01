@@ -1,10 +1,27 @@
-"use client"
+// app/premium/page.tsx
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
+// Sesión + store local
+import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/lib/useAuthStore";
+
+// Convex (perfil → rol)
+import { useQuery } from "convex/react";
+import type { FunctionReference } from "convex/server";
+import { api } from "@convex";
+
+const getUserByEmailRef =
+  (api as any)["queries/getUserByEmail"]
+    .getUserByEmail as FunctionReference<"query">;
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Datos UI (mismo estilo)
+// ───────────────────────────────────────────────────────────────────────────────
 const premiumPlans = [
   {
     id: "monthly",
@@ -25,16 +42,17 @@ const premiumPlans = [
     originalPrice: "$119.88",
     features: ["La más conveniente", "3 meses gratis", "Todo lo de mensual", "Acceso anticipado a juegos"],
   },
+  // Renombrado desde "lifetime"
   {
-    id: "lifetime",
-    name: "Lifetime",
-    price: "$239.99",
-    period: " único pago",
-    description: "Acceso de por vida a todas las funciones Premium",
+    id: "quarterly",
+    name: "Trimestral",
+    price: "$24.99",
+    period: "/3 meses",
+    description: "Equilibrio perfecto entre precio y flexibilidad",
     popular: false,
-    features: ["Acceso ilimitado de por vida", "Todos los beneficios", "Sin renovaciones", "Máximo valor"],
+    features: ["Mejor precio que mensual", "Todo lo de mensual", "Renovación cada 3 meses", "Sin permanencia"],
   },
-]
+];
 
 const premiumBenefits = [
   {
@@ -72,20 +90,100 @@ const premiumBenefits = [
     title: "Descuentos exclusivos",
     description: "Hasta 10% de descuento en compras y alquileres de juegos",
   },
-]
+];
 
 export default function PremiumPage() {
-  const router = useRouter()
-  const [selectedPlan, setSelectedPlan] = useState("annual")
+  const router = useRouter();
+  const search = useSearchParams();
+  const pathname = usePathname() || "/premium";
+
+  // Estado UI (como lo tenías)
+  const [selectedPlan, setSelectedPlan] = useState("annual");
+
+  // Sesión + store local
+  const { data: session, status } = useSession();
+  const storeUser = useAuthStore((s) => s.user);
+  const loginEmail =
+    session?.user?.email?.toLowerCase() ||
+    storeUser?.email?.toLowerCase() ||
+    null;
+
+  // Perfil para conocer rol
+  const profile = useQuery(
+    getUserByEmailRef,
+    loginEmail ? { email: loginEmail } : "skip"
+  ) as { role?: "free" | "premium" | "admin" } | null | undefined;
+
+  const role: "free" | "premium" | "admin" = (profile?.role as any) || "free";
+  const profileLoaded = loginEmail ? profile !== undefined : true;
+
+  // Lectura de intent del querystring
+  const intent = search.get("intent") || null;
+  const planParam = search.get("plan") || "monthly";
+  const trial = search.get("trial") === "true";
+
+  // Evitar dobles redirecciones en dev/StrictMode
+  const redirectedOnce = useRef(false);
+
+  // Redirección centralizada para el flujo de suscripción
+  useEffect(() => {
+    if (intent !== "subscribe") return;
+    if (redirectedOnce.current) return;
+
+    // Mientras carga la sesión, esperamos
+    if (status === "loading") return;
+
+    // Si no hay sesión → mandar a login con next=esta misma URL (para continuar después)
+    if (!loginEmail) {
+      redirectedOnce.current = true;
+      const nextUrl = `${pathname}?${search.toString()}`;
+      router.replace(`/auth/login?next=${encodeURIComponent(nextUrl)}`);
+      return;
+    }
+
+    // Si hay sesión, esperamos a tener rol
+    if (!profileLoaded) return;
+
+    // Con rol en mano: premium → Home | free/admin → Checkout Premium
+    redirectedOnce.current = true;
+    if (role === "premium") {
+      router.replace("/");
+    } else {
+      router.replace(`/checkout/premium?plan=${planParam}${trial ? "&trial=true" : ""}`);
+    }
+  }, [intent, status, loginEmail, profileLoaded, role, planParam, trial, router, pathname, search]);
+
+  // Guard anti-flash: no renderizar Premium mientras decide a dónde ir
+  const isRedirecting =
+    intent === "subscribe" &&
+    (status === "loading" || !loginEmail || (loginEmail && !profileLoaded));
+
+  if (isRedirecting) {
+    return (
+      <div className="min-h-screen bg-slate-900 grid place-items-center">
+        <div className="text-slate-300">Redirigiendo…</div>
+      </div>
+    );
+  }
+
+  // Handlers de botones (no rompen nada: disparan el intent)
+  const pushSubscribeIntent = (planId: string, withTrial = false) => {
+    const q = new URLSearchParams({ intent: "subscribe", plan: planId });
+    if (withTrial) q.set("trial", "true");
+    router.push(`/premium?${q.toString()}`);
+  };
 
   const handleSubscribe = (planId: string) => {
-    router.push(`/checkout/premium?plan=${planId}`)
-  }
+    pushSubscribeIntent(planId, false);
+  };
 
   const handleFreeTrial = () => {
-    router.push("/checkout/premium?plan=monthly&trial=true")
-  }
+    pushSubscribeIntent("monthly", true);
+  };
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // Render UI (igual a tu diseño original)
+  // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Hero Section */}
@@ -127,7 +225,7 @@ export default function PremiumPage() {
         </div>
       </div>
 
-      {/* Benefits Section */}
+      {/* Benefits */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">¿Por qué elegir Premium?</h2>
@@ -147,11 +245,10 @@ export default function PremiumPage() {
         </div>
       </div>
 
-      {/* Pricing Plans */}
+      {/* Pricing */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">Elige tu plan</h2>
-          <p className="text-slate-400 text-lg">Encuentra el plan perfecto para tu estilo de juego</p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -176,8 +273,8 @@ export default function PremiumPage() {
                   <span className="text-4xl font-bold text-teal-400">{plan.price}</span>
                   <span className="text-slate-400">{plan.period}</span>
                 </div>
-                {plan.originalPrice && (
-                  <div className="text-sm text-slate-500 line-through mb-1">{plan.originalPrice}</div>
+                {"originalPrice" in plan && (plan as any).originalPrice && (
+                  <div className="text-sm text-slate-500 line-through mb-1">{(plan as any).originalPrice}</div>
                 )}
                 <p className="text-slate-400 text-sm">{plan.description}</p>
               </div>
@@ -206,51 +303,14 @@ export default function PremiumPage() {
                 }`}
                 variant={plan.popular ? "default" : "outline"}
               >
-                {plan.id === "lifetime" ? "Comprar ahora" : "Suscribirse"}
+                {plan.id === "quarterly" ? "Suscribirse" : plan.id === "annual" ? "Suscribirse" : "Suscribirse"}
               </Button>
             </div>
           ))}
-        </div>  
-      </div>
-
-      {/* FAQ Section */}
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">Preguntas frecuentes</h2>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">
-                ¿Puedo cancelar mi suscripción en cualquier momento?
-              </h3>
-              <p className="text-slate-400">
-                Sí, puedes cancelar tu suscripción Premium en cualquier momento desde tu perfil. Tu acceso continuará
-                hasta el final del período de facturación actual.
-              </p>
-            </div>
-
-            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">¿Qué incluye la prueba gratuita?</h3>
-              <p className="text-slate-400">
-                La prueba gratuita de 7 días incluye acceso completo a todas las funciones Premium: biblioteca
-                ilimitada, sin anuncios y descuentos exclusivos.
-              </p>
-            </div>
-
-            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-2">¿Los descuentos se aplican automáticamente?</h3>
-              <p className="text-slate-400">
-                Sí, todos los descuentos Premium se aplican automáticamente al momento de la compra o alquiler. No
-                necesitas códigos especiales.
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* CTA Section */}
+      {/* CTA */}
       <div className="bg-gradient-to-r from-orange-400/10 to-teal-400/10 border-t border-orange-400/20">
         <div className="container mx-auto px-4 py-16">
           <div className="text-center max-w-2xl mx-auto">
@@ -271,5 +331,5 @@ export default function PremiumPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

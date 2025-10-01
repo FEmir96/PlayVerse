@@ -1,11 +1,24 @@
-"use client"
+// playverse-web/app/premium/success/page.tsx
+"use client";
 
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PremiumSuccessPage() {
-  const router = useRouter()
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const name = sessionStorage.getItem("pv_premium_welcome");
+    if (name) {
+      toast({
+        title: "¡Bienvenido a Premium!",
+        description: `Hola ${name}, ya tenés acceso a todos los beneficios.`,
+      });
+      sessionStorage.removeItem("pv_premium_welcome");
+    }
+  }, [toast]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
@@ -79,5 +92,5 @@ export default function PremiumSuccessPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

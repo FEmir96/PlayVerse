@@ -1,56 +1,87 @@
 // app/api/auth/[...nextauth]/route.ts
-import NextAuth from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
+import NextAuth, { type AuthOptions } from "next-auth";
+import Google from "next-auth/providers/google";
+import AzureAd from "next-auth/providers/azure-ad";
 import { ConvexHttpClient } from "convex/browser";
-import type { FunctionReference } from "convex/server";
-import { api } from "@convex"; // alias a ../convex/_generated/api (vía tsconfig)
+import { api } from "@convex/_generated/api";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL!;
+const convex = new ConvexHttpClient(convexUrl);
 
-// 🔒 usamos el módulo correcto: auth.oauthUpsert (existe en convex/auth.ts)
-const oauthUpsertRef =
-  ((api as any).auth?.oauthUpsert ??
-    (api as any)["auth/oauthUpsert"]) as FunctionReference<"mutation">;
+export const authOptions: AuthOptions = {
+  // Asegúrate de tener esto en .env.local
+  // NEXTAUTH_URL=http://localhost:3000
+  // NEXTAUTH_SECRET=algo_largo_y_unico
+  secret: process.env.NEXTAUTH_SECRET,
 
-const handler = NextAuth({
+  session: { strategy: "jwt" },
+
   providers: [
-    GoogleProvider({
+    Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      allowDangerousEmailAccountLinking: true,
+    }),
+
+    AzureAd({
+      clientId: process.env.MICROSOFT_CLIENT_ID!,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
+      tenantId: process.env.MICROSOFT_TENANT_ID || "common",
+      authorization: {
+        params: { scope: "openid profile email offline_access" },
+      },
+      checks: ["pkce", "state"],
+      allowDangerousEmailAccountLinking: true,
     }),
   ],
+
+  callbacks: {
+    // Upsert del perfil en Convex para Google/Microsoft
+    async signIn({ user, account }) {
+      try {
+        if (!user?.email) return false;
+
+        await convex.mutation(api.auth.oauthUpsert, {
+          email: user.email,
+          name: user.name ?? "",
+          avatarUrl: (user as any).image ?? undefined,
+          provider: account?.provider ?? "unknown",
+          providerId: account?.providerAccountId ?? undefined,
+        });
+
+        return true;
+      } catch (err) {
+        console.error("oauthUpsert failed:", err);
+        return true; // no bloqueamos el login por esto
+      }
+    },
+
+    async jwt({ token, user }) {
+      if (user?.email) {
+        token.email = user.email;
+        token.name = user.name ?? token.name;
+        (token as any).picture = (user as any).image ?? (token as any).picture;
+      }
+      (token as any).role = (token as any).role ?? "free";
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.email = token.email as string;
+        session.user.name = token.name as string;
+        (session.user as any).image = (token as any).picture;
+      }
+      return session;
+    },
+  },
+
+  // (opcional) página de login personalizada
   pages: {
     signIn: "/auth/login",
-    error: "/auth/login",
   },
-  callbacks: {
-    async signIn({ user, account }) {
-      if (account?.provider === "google" && user?.email) {
-        try {
-          await convex.mutation(oauthUpsertRef, {
-            email: user.email,
-            name: user.name ?? "",
-            avatarUrl: user.image ?? undefined,
-            provider: "google",
-            providerId: account.providerAccountId,
-          });
-        } catch (err) {
-          console.error("[oauthUpsert] error:", err);
-          return "/auth/login?error=convex";
-        }
-      }
-      return true;
-    },
-    // ✅ No forzamos ?login=ok; respetamos lo que venga en callbackUrl
-    async redirect({ url, baseUrl }) {
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      try {
-        const u = new URL(url);
-        if (u.origin === baseUrl) return url;
-      } catch {}
-      return baseUrl; // fallback: home sin query
-    },
-  },
-});
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

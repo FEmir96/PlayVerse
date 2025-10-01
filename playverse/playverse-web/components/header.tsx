@@ -1,16 +1,16 @@
-// playverse-web/components/header.tsx
+// app/(tu-layout)/Header.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Heart, User, LogOut, Shield } from "lucide-react";
 import { FavoritesDropdown } from "./favorites-dropdown";
 import { NotificationsDropdown } from "./notifications-dropdown";
 
-// auth store (para login con email/password)
+// auth store (email/password)
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
 
@@ -26,54 +26,123 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// ✅ favoritos
+import { useFavoritesStore } from "@/components/favoritesStore";
+
+// ✅ Convex: perfil para saber el rol
+import { useQuery } from "convex/react";
+import type { FunctionReference } from "convex/server";
+import { api } from "@convex";
+
+// ✅ toast
+import { useToast } from "@/hooks/use-toast";
+
+const getUserByEmailRef =
+  (api as any)["queries/getUserByEmail"]
+    .getUserByEmail as FunctionReference<"query">;
+
 export function Header() {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
-
+  const searchParams = useSearchParams();
   const [showFavorites, setShowFavorites] = useState(false);
+
+  // toast
+  const { toast } = useToast();
+  const firedWelcome = useRef(false);
 
   // store local (email/password)
   const localUser = useAuthStore((s: AuthState) => s.user);
   const clearAuth = useAuthStore((s: AuthState) => s.clear);
 
-  // sesión OAuth (Google)
+  // sesión OAuth (Google / Microsoft)
   const { data: session } = useSession();
 
   const logged = Boolean(session?.user || localUser);
+  const displayName = session?.user?.name ?? localUser?.name ?? undefined;
+  const displayEmail = session?.user?.email ?? localUser?.email ?? undefined;
 
-  const displayName =
-    session?.user?.name ?? localUser?.name ?? undefined;
-  const displayEmail =
-    session?.user?.email ?? localUser?.email ?? undefined;
-  const avatarUrl =
-    (session?.user as any)?.image ?? undefined;
+  const loginEmail =
+    session?.user?.email?.toLowerCase() ||
+    localUser?.email?.toLowerCase() ||
+    null;
+
+  // Traer perfil para conocer rol
+  const profile = useQuery(
+    getUserByEmailRef,
+    loginEmail ? { email: loginEmail } : "skip"
+  ) as { role?: "free" | "premium" | "admin" } | null | undefined;
+
+  const role: "free" | "premium" | "admin" =
+    (profile?.role as any) || "free";
+
+  // Mostrar “Premium” sólo para FREE, ADMIN o visitantes
+  const shouldShowPremium = !logged || role === "free" || role === "admin";
 
   const isActiveLink = (href: string) => {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
   };
 
+  // ✅ Activo: subrayado discreto (sin glow persistente)
+  // ✅ Hover: glow anaranjado sólo mientras el mouse está encima
   const getLinkClasses = (href: string) => {
-    const baseClasses =
-      "font-medium transition-all duration-200 px-3 py-2 relative";
+    const base =
+      "font-medium transition-all duration-200 px-3 py-2 relative rounded-md text-orange-400";
     if (isActiveLink(href)) {
-      return `${baseClasses} text-orange-400 after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-orange-400 after:rounded-full after:font-bold`;
+      return [
+        base,
+        "after:content-[''] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-0.5 after:bg-orange-400 after:rounded-full",
+      ].join(" ");
     }
-    return `${baseClasses} text-orange-400 hover:text-yellow-400`;
+    return [
+      base,
+      "hover:text-amber-300",
+      "hover:bg-orange-400/10 hover:shadow-[0_0_12px_rgba(251,146,60,0.25)]",
+    ].join(" ");
   };
 
   const handleLogout = async () => {
-    // si hay sesión de NextAuth => usar signOut y redirigir con ?logout=1
     if (session?.user) {
       const { signOut } = await import("next-auth/react");
       await signOut({ callbackUrl: "/?logout=1" });
       return;
     }
-    // si era login local => limpiar store y mandar al home con ?logout=1
     clearAuth();
     localStorage.removeItem("pv_email");
     router.push("/?logout=1");
   };
+
+  // contador favoritos
+  const favCount = useFavoritesStore((s) => s.items.length);
+
+  // 🔔 Mostrar toast de bienvenida después de OAuth (Google/Xbox) y limpiar query
+  useEffect(() => {
+    if (firedWelcome.current) return;
+
+    const auth = searchParams.get("auth");
+    const provider = searchParams.get("provider"); // "google" | "xbox" (nuestro valor)
+    if (auth === "ok" && logged) {
+      firedWelcome.current = true;
+
+      const provLabel =
+        provider === "xbox" ? "Xbox" : provider === "google" ? "Google" : "tu cuenta";
+
+      toast({
+        title: `¡Bienvenido, ${displayName ?? "gamer"}!`,
+        description: `Inicio de sesión con ${provLabel} exitoso.`,
+      });
+
+      // limpiar ?auth=ok&provider=...
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("auth");
+      params.delete("provider");
+
+      const nextUrl = pathname + (params.toString() ? `?${params.toString()}` : "");
+      // Replace para no dejar el parámetro en el historial
+      router.replace(nextUrl);
+    }
+  }, [searchParams, logged, pathname, router, toast, displayName]);
 
   return (
     <header className="bg-slate-900 border-b border-slate-700 relative">
@@ -91,7 +160,7 @@ export function Header() {
           </Link>
 
           {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-6">
+          <nav className="hidden md:flex items-center space-x-1">
             <Link href="/" className={getLinkClasses("/")}>
               Inicio
             </Link>
@@ -101,9 +170,13 @@ export function Header() {
             <Link href="/mis-juegos" className={getLinkClasses("/mis-juegos")}>
               Mis juegos
             </Link>
-            <Link href="/premium" className={getLinkClasses("/premium")}>
-              Premium
-            </Link>
+
+            {shouldShowPremium && (
+              <Link href="/premium" className={getLinkClasses("/premium")}>
+                Premium
+              </Link>
+            )}
+
             <Link href="/contacto" className={getLinkClasses("/contacto")}>
               Contacto
             </Link>
@@ -120,10 +193,16 @@ export function Header() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="text-orange-400 hover:text-orange-300"
+                    className="relative text-orange-400 hover:text-orange-300"
                     onClick={() => setShowFavorites(!showFavorites)}
+                    title="Favoritos"
                   >
                     <Heart className="w-5 h-5" />
+                    {favCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-400 text-slate-900 text-[11px] font-extrabold grid place-items-center leading-[18px]">
+                        {favCount > 99 ? "99+" : favCount}
+                      </span>
+                    )}
                   </Button>
                   <FavoritesDropdown
                     isOpen={showFavorites}
@@ -160,7 +239,6 @@ export function Header() {
                       className="text-orange-400 hover:text-orange-300"
                       title={displayName}
                     >
-                      {/* Si tenés avatar, podrías mostrarlo; por ahora mantenemos el ícono */}
                       <User className="w-5 h-5" />
                     </Button>
                   </div>
@@ -187,13 +265,15 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
 
-                  {/* Nuevo item: Panel Administrador */}
-                  <DropdownMenuItem asChild className="cursor-pointer">
-                    <Link href="/admin" className="w-full flex items-center gap-2">
-                      <Shield className="w-4 h-4" />
-                      Panel Administrador
-                    </Link>
-                  </DropdownMenuItem>
+                  {/* Solo admins ven el panel */}
+                  {role === "admin" && (
+                    <DropdownMenuItem asChild className="cursor-pointer">
+                      <Link href="/admin" className="w-full flex items-center gap-2">
+                        <Shield className="w-4 h-4" />
+                        Panel Administrador
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
 
                   <DropdownMenuSeparator className="bg-slate-700" />
                   <DropdownMenuItem

@@ -1,3 +1,4 @@
+// convex/actions/backfillDetailsFromIGDB.ts
 "use node";
 
 import { action } from "../_generated/server";
@@ -7,13 +8,51 @@ import type { Id, Doc } from "../_generated/dataModel";
 import type { FunctionReference } from "convex/server";
 
 // 💡 triple nivel (carpeta → archivo → export)
-const qGetGames = (api as any).queries.getGames.getGames as FunctionReference<"query">;
+const qGetGames =
+  (api as any).queries.getGames.getGames as FunctionReference<"query">;
 const mSetGameDetails =
-  (api as any).mutations.setGameDetails.setGameDetails as FunctionReference<"mutation">;
+  (api as any).mutations.setGameDetails
+    .setGameDetails as FunctionReference<"mutation">;
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 const clamp = (s: string, max = 4000) => (s.length > max ? s.slice(0, max) : s);
 
+/* ==================== Normalización & matching (igual que covers) ==================== */
+const STOPWORDS = new Set([
+  "the", "of", "and", "edition", "editions", "deluxe", "ultimate", "definitive", "remastered", "remake",
+  "goty", "complete", "collection", "director", "directors", "cut", "hd", "enhanced", "year", "gold", "platinum",
+  "el", "la", "los", "las", "de", "del", "y", "edicion", "definitiva", "remasterizado", "remasterizada",
+  "completa", "coleccion", "aniversario", "juego", "videojuego", "videjuego", "tm", "©", "®"
+]);
+const ROMAN_TO_INT: Record<string, number> = {
+  i:1,ii:2,iii:3,iv:4,v:5,vi:6,vii:7,viii:8,ix:9,x:10,xi:11,xii:12,xiii:13,
+  xiv:14,xv:15,xvi:16,xvii:17,xviii:18,xix:19,xx:20
+};
+const norm = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/['’]/g,"")
+   .replace(/&/g," and ").toLowerCase();
+const tok = (s: string) =>
+  norm(s).replace(/[^a-z0-9\s]/g," ").split(/\s+/)
+    .map(t => ROMAN_TO_INT[t] ? String(ROMAN_TO_INT[t]) : t)
+    .filter(Boolean).filter(t => !STOPWORDS.has(t));
+const set = (a: string[]) => new Set(a);
+const jaccard = (A: Set<string>, B: Set<string>) => {
+  let inter = 0; for (const x of A) if (B.has(x)) inter++;
+  const uni = A.size + B.size - inter; return uni === 0 ? 0 : inter / uni;
+};
+function distinctiveTokens(title: string): string[] {
+  const tks = tok(title);
+  return tks.filter(t => t.length >= 4 || /^\d+$/.test(t));
+}
+function baseVariants(original: string): string[] {
+  const raw = original.trim();
+  const out = new Set<string>([raw]);
+  const cut = raw.split(/[:\-–—\|]/)[0].trim(); if (cut && cut !== raw) out.add(cut);
+  out.add(raw.replace(/[™©®]/g,"").trim());
+  return Array.from(out);
+}
+
+/* ==================== Traducción ==================== */
 function normalizeTitle(t: string) {
   return t
     .normalize("NFKD")
@@ -49,11 +88,19 @@ async function translateToEs(text: string): Promise<string> {
   }
 }
 
+/* ==================== IGDB auth ==================== */
 async function getIgdbToken(): Promise<{ token: string; clientId: string }> {
-  const clientId = process.env.TWITCH_CLIENT_ID!;
-  const clientSecret = process.env.TWITCH_CLIENT_SECRET!;
-  if (!clientId || !clientSecret)
-    throw new Error("Faltan TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET en Convex env");
+  const clientId =
+    process.env.IGDB_CLIENT_ID || process.env.TWITCH_CLIENT_ID || "";
+  const clientSecret =
+    process.env.IGDB_CLIENT_SECRET || process.env.TWITCH_CLIENT_SECRET || "";
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Faltan IGDB_CLIENT_ID/IGDB_CLIENT_SECRET (o TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET) en Convex env"
+    );
+  }
+
   const resp = await fetch(
     `https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`,
     { method: "POST" }
@@ -63,37 +110,86 @@ async function getIgdbToken(): Promise<{ token: string; clientId: string }> {
   return { token: json.access_token as string, clientId };
 }
 
-type IGDBGame = { id: number; name: string; summary?: string; genres?: { name: string }[] };
+/* ==================== IGDB búsqueda con scoring ==================== */
+type IGDBGame = {
+  id: number;
+  name: string;
+  summary?: string;
+  genres?: { name: string }[];
+  alternative_names?: { name?: string }[];
+};
 
-async function igdbFindByTitle(title: string): Promise<IGDBGame | null> {
-  const { token, clientId } = await getIgdbToken();
+async function igdbQueryGames(
+  clientId: string,
+  token: string,
+  q: string
+): Promise<IGDBGame[]> {
+  const r = await fetch("https://api.igdb.com/v4/games", {
+    method: "POST",
+    headers: {
+      "Client-ID": clientId,
+      Authorization: `Bearer ${token}`,
+      "Accept": "application/json",
+      "Content-Type": "text/plain",
+    },
+    body: q,
+  });
+  if (!r.ok) return [];
+  return (await r.json()) as IGDBGame[];
+}
 
+/** Búsqueda inteligente: variantes + tokens distintivos + Jaccard + minScore */
+async function igdbFindByTitleSmart(
+  clientId: string,
+  token: string,
+  title: string,
+  minScore = 0.55
+): Promise<{ game: IGDBGame; score: number } | null> {
   const base = normalizeTitle(title);
   const simple = base.split(":")[0].split("-")[0].trim();
   const aliases = TITLE_ALIASES[base.toLowerCase()] ?? [];
+  const variants = [...new Set([base, simple, ...aliases, ...baseVariants(base)])];
 
-  const queries = [
-    `search "${base.replace(/"/g, '\\"')}"; fields name,summary,genres.name; where version_parent = null; limit 1;`,
-    `search "${simple.replace(/"/g, '\\"')}"; fields name,summary,genres.name; limit 1;`,
-    ...aliases.map(
-      (a) =>
-        `search "${a.replace(/"/g, '\\"')}"; fields name,summary,genres.name; limit 1;`
-    ),
-  ];
+  const need = new Set(distinctiveTokens(base));
+  const titleTokens = set(tok(base));
 
-  for (const q of queries) {
-    const r = await fetch("https://api.igdb.com/v4/games", {
-      method: "POST",
-      headers: { "Client-ID": clientId, Authorization: `Bearer ${token}` },
-      body: q,
-    });
-    const data = (await r.json()) as IGDBGame[];
-    if (Array.isArray(data) && data[0]) return data[0];
-    await sleep(250);
+  let best: { game: IGDBGame; score: number } | null = null;
+
+  for (const v of variants) {
+    const q = `search "${v.replace(/"/g, '\\"')}";
+      fields name,summary,genres.name,alternative_names.name,version_parent;
+      where version_parent = null;
+      limit 10;`;
+
+    const arr = await igdbQueryGames(clientId, token, q);
+
+    for (const g of arr) {
+      const names = [
+        g.name ?? "",
+        ...(g.alternative_names?.map(a => a.name ?? "") ?? []),
+      ].filter(Boolean);
+
+      const candTokens = set(tok(names.join(" ")));
+
+      // exigir tokens distintivos, si los hay
+      let missing = false;
+      for (const t of need) if (!candTokens.has(t)) { missing = true; break; }
+      if (missing) continue;
+
+      const score = jaccard(titleTokens, candTokens);
+      if (score >= minScore && (!best || score > best.score)) {
+        best = { game: g, score };
+        if (score >= 0.75) return best; // match fuerte → corto
+      }
+    }
+
+    await sleep(150);
   }
-  return null;
+
+  return best;
 }
 
+/* ==================== Mapeo de géneros a PlayVerse ==================== */
 function mapGenresToPlayVerse(igdbNames: string[] = []): string[] {
   const MAP = new Map<string, string>([
     ["Action", "Acción"],
@@ -122,12 +218,14 @@ function mapGenresToPlayVerse(igdbNames: string[] = []): string[] {
   return [...out];
 }
 
+/* ==================== Action principal ==================== */
 type DetailsResult = {
   candidates: number;
   processed: number;
   updated: number;
   dryRun: boolean;
   overwrite: boolean;
+  minScore: number;
   sample: any[];
 };
 
@@ -136,15 +234,17 @@ export const backfillDetailsFromIGDB = action({
     dryRun: v.boolean(),
     overwrite: v.optional(v.boolean()),
     limit: v.optional(v.number()),
+    /** nuevo: umbral de similitud (0-1). Recomendado: 0.55–0.70 */
+    minScore: v.optional(v.number()),
   },
   handler: async (
     ctx,
-    { dryRun, overwrite = false, limit }
+    { dryRun, overwrite = false, limit, minScore = 0.6 }
   ): Promise<DetailsResult> => {
-    // 1) Traer juegos con TU getGames.ts
+    // 1) Cargar todos los juegos (tu query)
     const all: Doc<"games">[] = (await ctx.runQuery(qGetGames, {} as any)) as Doc<"games">[];
 
-    // 2) Filtrar pendientes
+    // 2) Filtrar pendientes (o forzar con overwrite)
     const pending = all.filter((g: any) => {
       const missingDesc = overwrite || !g.description || g.description.trim() === "";
       const missingGenres = overwrite || !Array.isArray(g.genres) || g.genres.length === 0;
@@ -152,15 +252,23 @@ export const backfillDetailsFromIGDB = action({
     });
     const batch = typeof limit === "number" ? pending.slice(0, Math.max(0, limit)) : pending;
 
+    // 3) Auth IGDB (una sola vez)
+    const { token, clientId } = await getIgdbToken();
+
     let updated = 0;
     const sample: any[] = [];
 
+    // 4) Procesar
     for (const game of batch) {
-      const found = await igdbFindByTitle(game.title);
-      if (!found) {
-        sample.push({ title: game.title, note: "No match IGDB" });
+      const smart = await igdbFindByTitleSmart(clientId, token, game.title, minScore);
+
+      if (!smart) {
+        sample.push({ title: game.title, note: "Sin match IGDB (score < minScore)" });
         continue;
       }
+
+      const found = smart.game;
+      const score = smart.score;
 
       const igdbGenres = found.genres?.map((g) => g.name) ?? [];
       const genresPV = mapGenresToPlayVerse(igdbGenres);
@@ -172,11 +280,11 @@ export const backfillDetailsFromIGDB = action({
         sample.push({
           title: game.title,
           igdbMatch: found.name,
+          score: Number(score.toFixed(3)),
           genresIGDB: igdbGenres,
           genresPlayVerse: genresPV,
           descriptionPreview:
-            (descEs ?? "").slice(0, 160) +
-            (descEs && descEs.length > 160 ? "…" : ""),
+            (descEs ?? "").slice(0, 160) + ((descEs?.length ?? 0) > 160 ? "…" : ""),
         });
       } else {
         await ctx.runMutation(mSetGameDetails, {
@@ -188,7 +296,7 @@ export const backfillDetailsFromIGDB = action({
         updated++;
       }
 
-      await sleep(300);
+      await sleep(300); // Rate limiting suave
     }
 
     return {
@@ -197,6 +305,7 @@ export const backfillDetailsFromIGDB = action({
       updated,
       dryRun,
       overwrite,
+      minScore,
       sample: sample.slice(0, 10),
     };
   },
