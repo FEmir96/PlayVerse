@@ -50,6 +50,8 @@ export default function PlayEmbeddedPage() {
     email ? { email } : "skip"
   ) as { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
 
+  const isAdmin = profile?.role === "admin";
+
   const game = useQuery(
     getGameByIdRef,
     gameId ? ({ id: gameId as Id<"games"> } as any) : "skip"
@@ -69,35 +71,37 @@ export default function PlayEmbeddedPage() {
   // Datos de juego
   const title = String(game?.title ?? "Juego");
   const embedUrl = (game as any)?.embed_url ?? (game as any)?.embedUrl ?? null;
-  const sandbox = (game as any)?.embed_sandbox as string | undefined; // ej: "allow-scripts allow-same-origin ..."
-  const allow = (game as any)?.embed_allow as string | undefined;     // ej: "autoplay; fullscreen; gamepad; clipboard-read; clipboard-write"
+  const sandbox = (game as any)?.embed_sandbox as string | undefined;
+  const allow = (game as any)?.embed_allow as string | undefined;
 
   const expiresInMs = useMemo(() => {
+    if (isAdmin) return null;
     if (!canPlay?.expiresAt) return null;
     return Math.max(0, canPlay.expiresAt - now);
-  }, [canPlay?.expiresAt, now]);
+  }, [canPlay?.expiresAt, now, isAdmin]);
 
-  // Guard login si el modelo lo requiere
+  // Guard login (no aplica a admin)
   useEffect(() => {
     if (canPlay === undefined) return;
+    if (isAdmin) return;
     if (canPlay?.canPlay) return;
     if (canPlay?.reason === "login") {
       const next = `/play/${gameId}`;
       router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
     }
-  }, [canPlay, router, gameId]);
+  }, [canPlay, router, gameId, isAdmin]);
 
-  // CTA según motivo
+  // CTA según motivo (admin no muestra CTA)
   const action = useMemo(() => {
-    const reason = canPlay?.reason;
+    const reason = isAdmin ? null : canPlay?.reason;
     if (!reason) return null;
     if (reason === "premium_required") return { label: "Hazte Premium", href: "/premium?intent=subscribe&plan=monthly" };
     if (reason === "purchase_required") return { label: "Comprar juego", href: `/checkout/compra/${gameId}` };
     if (reason === "rental_required") return { label: "Alquilar juego", href: `/checkout/alquiler/${gameId}` };
     return null;
-  }, [canPlay?.reason, gameId]);
+  }, [canPlay?.reason, gameId, isAdmin]);
 
-  // Sin juego o sin embed
+  // Loading / sin datos
   if (!gameId || game === undefined || canPlay === undefined) {
     return <div className="min-h-[60vh] grid place-items-center text-slate-300">Cargando…</div>;
   }
@@ -112,8 +116,10 @@ export default function PlayEmbeddedPage() {
     );
   }
 
+  const allowed = isAdmin || !!canPlay?.canPlay;
+
   // No permitido → pantalla con CTA
-  if (!canPlay?.canPlay) {
+  if (!allowed) {
     return (
       <div className="min-h-screen bg-slate-900 text-white">
         <div className="container mx-auto px-4 py-12 max-w-3xl">
@@ -194,7 +200,7 @@ export default function PlayEmbeddedPage() {
             title={title}
             className="w-full h-full"
             allow={allow ?? "autoplay; fullscreen; gamepad; clipboard-read; clipboard-write; cross-origin-isolated"}
-            sandbox={sandbox /* si no definís sandbox, el iframe se renderiza sin ese atributo */}
+            sandbox={sandbox}
             referrerPolicy="no-referrer"
             allowFullScreen
           />

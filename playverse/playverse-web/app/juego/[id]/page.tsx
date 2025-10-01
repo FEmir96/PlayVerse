@@ -59,7 +59,7 @@ function toEmbed(url?: string | null): string | null {
 
 /** ⭐ fila de estrellitas (0..5 con pasos 0.5 → mostramos número con una decimal) */
 function StarRow({ value }: { value: number }) {
-  const rounded = Math.round(value * 2) / 2; // pasos de 0.5
+  const rounded = Math.round(value * 2) / 2;
   const full = Math.floor(rounded);
   return (
     <div className="flex items-center gap-1">
@@ -107,7 +107,6 @@ export default function GameDetailPage() {
   );
   const [igdbUrls, setIgdbUrls] = useState<string[] | null>(null);
 
-  // Cargar screenshots IGDB cuando haya título
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -242,6 +241,9 @@ export default function GameDetailPage() {
 
   const now = Date.now();
 
+  // ── NUEVO: flag admin
+  const isAdmin = profile?.role === "admin";
+
   const hasPurchased = useMemo(() => {
     if (!game?._id) return false;
     const gid = String(game._id);
@@ -279,15 +281,23 @@ export default function GameDetailPage() {
   }, [rentals, game?._id, now]);
 
   // Reglas de UI
-  const canPlay = hasPurchased || hasActiveRental;
+  const isPremiumPlan = (game as any)?.plan === "premium";
+  const isFreePlan = (game as any)?.plan === "free";
+  const canPlay = isAdmin || hasPurchased || hasActiveRental; // ← admin SIEMPRE puede jugar
   const canExtend = !hasPurchased && hasActiveRental;
   const showBuyAndRent = !hasPurchased && !hasActiveRental;
 
   const requiresPremium =
-    (game as any)?.plan === "premium" &&
+    isPremiumPlan &&
     profile &&
     profile.role !== "premium" &&
     profile.role !== "admin";
+
+  // ➜ ¿Es embebible?
+  const isEmbeddable = useMemo(() => {
+    const u = (game as any)?.embed_url ?? (game as any)?.embedUrl;
+    return typeof u === "string" && u.trim().length > 0;
+  }, [game]);
 
   // ====== Toast & Favoritos ======
   const { toast } = useToast();
@@ -327,8 +337,47 @@ export default function GameDetailPage() {
     router.push(`/checkout/extender/${game._id}`);
   };
 
+  /** ✅ Lógica de “Jugar”
+   * - Embebible:
+   *    • Login requerido. Si admin → pasa directo. Si free → pasa directo.
+   *    • Premium → requiere compra/alquiler activo, salvo admin (canPlay=true).
+   * - NO embebible: respeta gating previo; admin también pasa (canPlay=true).
+   */
   const handlePlay = () => {
-    if (!isLogged) return setShowAuthAction(true);
+    if (!game?._id) return;
+
+    const playUrl = `/play/${game._id}`;
+
+    if (isEmbeddable) {
+      if (!isLogged) {
+        router.push(`/auth/login?next=${encodeURIComponent(playUrl)}`);
+        return;
+      }
+      if (isAdmin) {
+        router.push(playUrl);
+        return;
+      }
+      if (isFreePlan) {
+        router.push(playUrl);
+        return;
+      }
+      if (isPremiumPlan && !canPlay) {
+        toast({
+          title: "No disponible",
+          description: "Necesitás comprar o alquilar este juego para jugar.",
+          variant: "destructive",
+        });
+        return;
+      }
+      router.push(playUrl);
+      return;
+    }
+
+    // No embebible
+    if (!isLogged) {
+      setShowAuthAction(true);
+      return;
+    }
     if (!canPlay) {
       toast({
         title: "No disponible",
@@ -383,7 +432,6 @@ export default function GameDetailPage() {
   const igdbRating = (game as any)?.igdbRating as number | undefined;
   const igdbUserRating = (game as any)?.igdbUserRating as number | undefined;
 
-  // ⭐ User rating (100 → 5 estrellas) con fallback user → igdb
   const score100 =
     typeof igdbUserRating === "number"
       ? igdbUserRating
@@ -453,7 +501,7 @@ export default function GameDetailPage() {
                 )}
               </div>
 
-              {/* Franja fija: título + género (PopScore quitado) */}
+              {/* Franja fija: título + género */}
               <div className="bg-slate-800/70 border border-orange-400/20 rounded-lg px-4 py-3 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-orange-400">{game.title}</h1>
                 <div className="flex items-center gap-2">
@@ -560,8 +608,15 @@ export default function GameDetailPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {/* SOLO JUGAR si está comprado */}
-                  {hasPurchased ? (
+                  {/* ➜ Free + embebible → botón jugar directo */}
+                  {isEmbeddable && (game as any).plan === "free" ? (
+                    <Button
+                      onClick={handlePlay}
+                      className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                    >
+                      Jugar gratis
+                    </Button>
+                  ) : hasPurchased ? (
                     <Button
                       onClick={handlePlay}
                       className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
@@ -632,7 +687,7 @@ export default function GameDetailPage() {
                 </div>
               </div>
 
-              {/* Información del juego (PopScore removido) */}
+              {/* Información del juego */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-orange-400 mb-4">
                   Información del juego
@@ -647,7 +702,7 @@ export default function GameDetailPage() {
                     </div>
                   )}
 
-                  {/* Clasificación (ocultamos "Not Rated") */}
+                  {/* Clasificación */}
                   {ageRatingLabel && ageRatingLabel !== "Not Rated" && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Clasificación:</span>
@@ -681,7 +736,7 @@ export default function GameDetailPage() {
                     </div>
                   )}
 
-                  {/* Idiomas como “stickers” */}
+                  {/* Idiomas */}
                   {languages.length > 0 && (
                     <div className="">
                       <span className="block text-slate-400 mb-2">Idiomas:</span>
