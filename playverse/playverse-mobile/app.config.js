@@ -7,6 +7,7 @@ export default {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
+    scheme: "playverse",
     userInterfaceStyle: "light",
     newArchEnabled: true,
     splash: {

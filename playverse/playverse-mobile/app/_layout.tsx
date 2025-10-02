@@ -76,6 +76,13 @@ function RootLayoutNav() {
             animation: 'none',
           }} 
         />
+        <Stack.Screen 
+          name="premium" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
       </Stack>
     </ThemeProvider>
   );

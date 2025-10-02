@@ -7,6 +7,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import PlayverseLogo from '@/components/PlayverseLogo';
 import Header from '@/components/Header';
 import ContactModal from '@/components/ContactModal';
+import EditProfileModal from '@/components/EditProfileModal';
 import { LinearGradient } from 'expo-linear-gradient';
 
 
@@ -16,6 +17,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
   const [contactModalVisible, setContactModalVisible] = useState(false);
+  const [editProfileModalVisible, setEditProfileModalVisible] = useState(false);
   const [isPremium, setIsPremium] = useState(true); // Simular estado premium
 
   const faqData = [
@@ -46,6 +48,14 @@ export default function ProfileScreen() {
 
   const handleCloseContactModal = () => {
     setContactModalVisible(false);
+  };
+
+  const handleEditProfilePress = () => {
+    setEditProfileModalVisible(true);
+  };
+
+  const handleCloseEditProfileModal = () => {
+    setEditProfileModalVisible(false);
   };
 
   return (
@@ -106,7 +116,10 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={[styles.editProfileButton, { borderColor: colors.accent }]}>
+          <TouchableOpacity 
+            style={[styles.editProfileButton, { borderColor: colors.accent }]}
+            onPress={handleEditProfilePress}
+          >
             <Ionicons name="create" size={16} color={colors.accent} />
             <Text style={[styles.editProfileText, { color: colors.accent }]}>Editar perfil</Text>
           </TouchableOpacity>
@@ -158,6 +171,14 @@ export default function ProfileScreen() {
       <ContactModal
         visible={contactModalVisible}
         onClose={handleCloseContactModal}
+      />
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        visible={editProfileModalVisible}
+        onClose={handleCloseEditProfileModal}
+        currentUsername="Eros Bianchini"
+        currentEmail="usuario@gmail.com"
       />
     </View>
   );

@@ -15,7 +15,7 @@ export default {
     tabIconDefault: '#94A3B8',
     tabIconSelected: tintColorLight,
     // Gradientes
-    premiumGradient: ['#044f3b', '#2a044f'] as const, // Azul a púrpura
+    premiumGradient: ['#fb923c4D', '#14b8a64D', '#9333ea4D'] as const, // orange-400/30, teal-500/30, purple-600/30
     heroGradient: ['#1E293B', '#0F172A'] as const, // Teal oscuro a teal medio
   },
   dark: {
@@ -31,7 +31,7 @@ export default {
     tabIconDefault: '#94A3B8',
     tabIconSelected: tintColorLight,
     // Gradientes
-    premiumGradient: ['#d977063D', '#14b8a64D', '#9333ea4D'] as const, // Azul a púrpura
+    premiumGradient: ['#fb923c4D', '#14b8a64D', '#9333ea4D'] as const, // orange-400/30, teal-500/30, purple-600/30
     heroGradient: ['#1E293B', '#0F172A'] as const, // Teal oscuro a teal medio
   },
 };

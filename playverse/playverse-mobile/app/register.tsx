@@ -134,11 +134,12 @@ export default function RegisterScreen({ onSwitchToLogin, showHeader = true }: R
             <View style={styles.loginLink}>
               <Text style={[styles.loginText, { color: colors.white }]}>
                 ¿Ya tienes una cuenta?{' '}
-                <TouchableOpacity onPress={onSwitchToLogin || (() => router.replace('/login'))}>
-                  <Text style={[styles.loginLinkText, { color: colors.secondary }]}>
-                    Inicia sesión aquí
-                  </Text>
-                </TouchableOpacity>
+                <Text 
+                  style={[styles.loginLinkText, { color: colors.secondary }]}
+                  onPress={onSwitchToLogin || (() => router.replace('/login'))}
+                >
+                  Inicia sesión aquí
+                </Text>
               </Text>
             </View>
           </View>

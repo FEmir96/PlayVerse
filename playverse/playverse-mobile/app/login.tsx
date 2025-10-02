@@ -108,11 +108,12 @@ export default function LoginScreen({ onSwitchToRegister, showHeader = true }: L
             <View style={styles.registerLink}>
               <Text style={[styles.registerText, { color: colors.white }]}>
                 ¿No tienes una cuenta?{' '}
-                <TouchableOpacity onPress={onSwitchToRegister || (() => router.replace('/register'))}>
-                  <Text style={[styles.registerLinkText, { color: colors.secondary }]}>
-                    Regístrate aquí
-                  </Text>
-                </TouchableOpacity>
+                <Text 
+                  style={[styles.registerLinkText, { color: colors.secondary }]}
+                  onPress={onSwitchToRegister || (() => router.replace('/register'))}
+                >
+                  Regístrate aquí
+                </Text>
               </Text>
             </View>
           </View>
@@ -244,7 +245,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   registerLinkText: {
-    paddingTop: 10,
     fontWeight: 'bold',
   },
 });
