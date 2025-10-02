@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import Image from "next/image";
-import { useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 
 import { useAuthStore } from "@/lib/useAuthStore";
@@ -21,16 +19,11 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    remember: false,
-  });
+  const [formData, setFormData] = useState({ email: "", password: "", remember: false });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
   const setUser = useAuthStore((s: AuthState) => s.setUser);
-  const authLogin = useMutation(api.auth.authLogin);
 
   // ✅ Decodificamos y saneamos ?next
   const nextUrl = useMemo(() => {
@@ -57,7 +50,15 @@ export default function LoginPage() {
     if (saved) setFormData((s) => ({ ...s, email: saved, remember: true }));
   }, []);
 
+  const buildAfterUrl = (next: string) => {
+    const base = "/auth/after";
+    const u = new URL(base, typeof window !== "undefined" ? window.location.origin : "http://local");
+    if (next) u.searchParams.set("next", next);
+    return u.pathname + u.search;
+  };
+
   const buildCallback = (base: string, provider: "google" | "xbox") => {
+    // Lo dejamos por compat, aunque ahora usamos /auth/after como callback genérico
     const u = new URL(base, typeof window !== "undefined" ? window.location.origin : "http://local");
     u.searchParams.set("oauth", provider);
     return u.pathname + (u.search ? u.search : "");
@@ -68,35 +69,33 @@ export default function LoginPage() {
     setError("");
     setPending(true);
 
-    const res = await authLogin({
-      email: formData.email.trim().toLowerCase(),
-      password: formData.password,
-    });
+    try {
+      // ✅ Usamos NextAuth Credentials para crear la sesión real
+      const { signIn } = await import("next-auth/react");
+      const callbackUrl = buildAfterUrl(nextUrl);
 
-    setPending(false);
+      const res = await signIn("credentials", {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        redirect: true,            // deja que NextAuth redirija
+        callbackUrl,               // → /auth/after?next=...
+      });
 
-    if (!res?.ok) {
-      setError(res?.error ?? "No se pudo iniciar sesión");
-      return;
+      // Notará un redirect inmediato; lo de abajo rara vez corre.
+      // Persistimos utilidades locales si el navegador aún no salió.
+      if (formData.remember) {
+        localStorage.setItem("pv_email", formData.email.trim().toLowerCase());
+      } else {
+        localStorage.removeItem("pv_email");
+      }
+      setFavoritesScope(formData.email.trim().toLowerCase());
+      setUser({ email: formData.email.trim().toLowerCase(), name: "", role: "free" } as any);
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo iniciar sesión");
+    } finally {
+      setPending(false);
     }
-
-    setUser(res.profile);
-    toast({
-      title: `¡Bienvenido, ${res.profile.name}!`,
-      description: "Inicio de sesión exitoso.",
-    });
-
-    // Recordar email (opcional)
-    if (formData.remember) {
-      localStorage.setItem("pv_email", formData.email.trim().toLowerCase());
-    } else {
-      localStorage.removeItem("pv_email");
-    }
-
-    // 👉 Scope por usuario para favoritos + rehidratación inmediata
-    setFavoritesScope(res?.profile?.email || formData.email.trim().toLowerCase());
-
-    setTimeout(() => router.push(nextUrl), 120);
   };
 
   return (
@@ -133,9 +132,7 @@ export default function LoginPage() {
             <h2 className="text-xl font-semibold text-orange-400">Iniciar sesión</h2>
           </div>
 
-          <p className="text-slate-400 text-center mb-6">
-            Bienvenido de vuelta, gamer
-          </p>
+          <p className="text-slate-400 text-center mb-6">Bienvenido de vuelta, gamer</p>
 
           {/* FORM email / password */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -207,7 +204,7 @@ export default function LoginPage() {
               type="button"
               onClick={() =>
                 import("next-auth/react").then(({ signIn }) =>
-                  signIn("google", { callbackUrl: buildCallback(nextUrl, "google") })
+                  signIn("google", { callbackUrl: buildAfterUrl(nextUrl) })
                 )
               }
               className="w-full flex items-center justify-center gap-3 rounded-md border border-orange-400/40 bg-slate-800/60 px-4 py-2.5 text-[15px] font-medium text-slate-200 transition hover:bg-slate-800 hover:border-orange-400/70 active:scale-[0.99] cursor-pointer"
@@ -228,7 +225,7 @@ export default function LoginPage() {
               type="button"
               onClick={() =>
                 import("next-auth/react").then(({ signIn }) =>
-                  signIn("azure-ad", { callbackUrl: buildCallback(nextUrl, "xbox") })
+                  signIn("azure-ad", { callbackUrl: buildAfterUrl(nextUrl) })
                 )
               }
               className="w-full flex items-center justify-center gap-3 rounded-md
