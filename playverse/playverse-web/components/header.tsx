@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 // ✅ favoritos
-import { useFavoritesStore } from "@/components/favoritesStore";
+import { useFavoritesStore, setFavoritesScope } from "@/components/favoritesStore";
 
 // ✅ Convex: perfil para saber el rol
 import { useQuery } from "convex/react";
@@ -46,6 +46,7 @@ export function Header() {
   const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
   const [showFavorites, setShowFavorites] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // toast
   const { toast } = useToast();
@@ -56,9 +57,14 @@ export function Header() {
   const clearAuth = useAuthStore((s: AuthState) => s.clear);
 
   // sesión OAuth (Google / Microsoft)
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
 
-  const logged = Boolean(session?.user || localUser);
+  // logged: true si hay sesión de NextAuth o local
+  const logged = useMemo(
+    () => status === "authenticated" || Boolean(localUser),
+    [status, localUser]
+  );
+
   const displayName = session?.user?.name ?? localUser?.name ?? undefined;
   const displayEmail = session?.user?.email ?? localUser?.email ?? undefined;
 
@@ -102,15 +108,58 @@ export function Header() {
     ].join(" ");
   };
 
+  /**
+   * ✅ Vincula el scope de favoritos al email del usuario.
+   * - Cuando cambia `loginEmail`, cambia el namespace de favoritos.
+   * - Si no hay usuario → usa scope de invitado.
+   */
+  useEffect(() => {
+    const scope = loginEmail ?? "__guest__";
+    setFavoritesScope(scope);
+  }, [loginEmail]);
+
+  /**
+   * ✅ Logout unificado en 1 click:
+   * - Limpia SIEMPRE la sesión local (Zustand)
+   * - Si hay sesión NextAuth, hace signOut SIN redirect (redirect: false)
+   * - Resetea scope de favoritos a invitado
+   * - Navega con replace al home con ?logout=1
+   * - Deshabilita el botón mientras corre para evitar doble click
+   */
   const handleLogout = async () => {
-    if (session?.user) {
-      const { signOut } = await import("next-auth/react");
-      await signOut({ callbackUrl: "/?logout=1" });
-      return;
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      // 1) limpiar siempre auth local
+      clearAuth();
+      try {
+        localStorage.removeItem("pv_email");
+      } catch {}
+
+      // 2) resetear scope de favoritos a invitado (para no “heredar” favoritos)
+      setFavoritesScope("__guest__");
+
+      // 3) si hay sesión NextAuth → signOut sin redirect
+      if (status === "authenticated") {
+        const { signOut } = await import("next-auth/react");
+        await signOut({ redirect: false });
+      }
+
+      // 4) navegar (replace) para refrescar UI y quitar cualquier query
+      router.replace("/?logout=1");
+
+      // 5) feedback
+      toast({
+        title: "Sesión cerrada",
+        description: "¡Hasta la próxima! 👋",
+      });
+    } catch {
+      if (typeof window !== "undefined") {
+        window.location.href = "/?logout=1";
+      }
+    } finally {
+      setLoggingOut(false);
     }
-    clearAuth();
-    localStorage.removeItem("pv_email");
-    router.push("/?logout=1");
   };
 
   // contador favoritos
@@ -139,7 +188,6 @@ export function Header() {
       params.delete("provider");
 
       const nextUrl = pathname + (params.toString() ? `?${params.toString()}` : "");
-      // Replace para no dejar el parámetro en el historial
       router.replace(nextUrl);
     }
   }, [searchParams, logged, pathname, router, toast, displayName]);
@@ -156,6 +204,7 @@ export function Header() {
               width={80}
               height={40}
               className="h-10 w-auto"
+              priority
             />
           </Link>
 
@@ -278,10 +327,10 @@ export function Header() {
                   <DropdownMenuSeparator className="bg-slate-700" />
                   <DropdownMenuItem
                     onClick={handleLogout}
-                    className="text-red-400 focus:text-red-400 cursor-pointer"
+                    className={`text-red-400 focus:text-red-400 cursor-pointer ${loggingOut ? "opacity-60 pointer-events-none" : ""}`}
                   >
                     <LogOut className="w-4 h-4" />
-                    Cerrar sesión
+                    {loggingOut ? "Cerrando..." : "Cerrar sesión"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
