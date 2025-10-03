@@ -112,7 +112,7 @@ export default defineSchema({
   favorites: defineTable({
     userId: v.id("profiles"),
     gameId: v.id("games"),
-    createdAt: v.number(),
+    createdAt: v.float64(),
   })
     .index("by_user", ["userId"])
     .index("by_user_game", ["userId", "gameId"]),

@@ -50,18 +50,17 @@ export default function LoginPage() {
     if (saved) setFormData((s) => ({ ...s, email: saved, remember: true }));
   }, []);
 
-  const buildAfterUrl = (next: string) => {
+  const buildAfterUrl = (next: string, provider?: "credentials" | "google" | "xbox") => {
     const base = "/auth/after";
-    const u = new URL(base, typeof window !== "undefined" ? window.location.origin : "http://local");
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "http://local";
+    const u = new URL(base, origin);
     if (next) u.searchParams.set("next", next);
+    if (provider) {
+      u.searchParams.set("auth", "ok");
+      u.searchParams.set("provider", provider);
+    }
     return u.pathname + u.search;
-  };
-
-  const buildCallback = (base: string, provider: "google" | "xbox") => {
-    // Lo dejamos por compat, aunque ahora usamos /auth/after como callback genérico
-    const u = new URL(base, typeof window !== "undefined" ? window.location.origin : "http://local");
-    u.searchParams.set("oauth", provider);
-    return u.pathname + (u.search ? u.search : "");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,17 +71,16 @@ export default function LoginPage() {
     try {
       // ✅ Usamos NextAuth Credentials para crear la sesión real
       const { signIn } = await import("next-auth/react");
-      const callbackUrl = buildAfterUrl(nextUrl);
+      const callbackUrl = buildAfterUrl(nextUrl, "credentials");
 
-      const res = await signIn("credentials", {
+      await signIn("credentials", {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         redirect: true,            // deja que NextAuth redirija
-        callbackUrl,               // → /auth/after?next=...
+        callbackUrl,               // → /auth/after?auth=ok&provider=credentials&next=...
       });
 
-      // Notará un redirect inmediato; lo de abajo rara vez corre.
-      // Persistimos utilidades locales si el navegador aún no salió.
+      // El navegador normalmente ya redirigió; si alcanzara a correr:
       if (formData.remember) {
         localStorage.setItem("pv_email", formData.email.trim().toLowerCase());
       } else {
@@ -93,7 +91,6 @@ export default function LoginPage() {
     } catch (err) {
       console.error(err);
       setError("No se pudo iniciar sesión");
-    } finally {
       setPending(false);
     }
   };
@@ -204,7 +201,7 @@ export default function LoginPage() {
               type="button"
               onClick={() =>
                 import("next-auth/react").then(({ signIn }) =>
-                  signIn("google", { callbackUrl: buildAfterUrl(nextUrl) })
+                  signIn("google", { callbackUrl: buildAfterUrl(nextUrl, "google") })
                 )
               }
               className="w-full flex items-center justify-center gap-3 rounded-md border border-orange-400/40 bg-slate-800/60 px-4 py-2.5 text-[15px] font-medium text-slate-200 transition hover:bg-slate-800 hover:border-orange-400/70 active:scale-[0.99] cursor-pointer"
@@ -225,7 +222,7 @@ export default function LoginPage() {
               type="button"
               onClick={() =>
                 import("next-auth/react").then(({ signIn }) =>
-                  signIn("azure-ad", { callbackUrl: buildAfterUrl(nextUrl) })
+                  signIn("azure-ad", { callbackUrl: buildAfterUrl(nextUrl, "xbox") })
                 )
               }
               className="w-full flex items-center justify-center gap-3 rounded-md

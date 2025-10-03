@@ -48,7 +48,6 @@ export function Header() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // toast
   const { toast } = useToast();
   const firedWelcome = useRef(false);
 
@@ -56,7 +55,7 @@ export function Header() {
   const localUser = useAuthStore((s: AuthState) => s.user);
   const clearAuth = useAuthStore((s: AuthState) => s.clear);
 
-  // sesión OAuth (Google / Microsoft)
+  // sesión OAuth (Google / Microsoft / etc.)
   const { data: session, status } = useSession();
 
   // logged: true si hay sesión de NextAuth o local
@@ -90,8 +89,7 @@ export function Header() {
     return pathname.startsWith(href);
   };
 
-  // ✅ Activo: subrayado discreto (sin glow persistente)
-  // ✅ Hover: glow anaranjado sólo mientras el mouse está encima
+  // Activo vs hover
   const getLinkClasses = (href: string) => {
     const base =
       "font-medium transition-all duration-200 px-3 py-2 relative rounded-md text-orange-400";
@@ -108,51 +106,37 @@ export function Header() {
     ].join(" ");
   };
 
-  /**
-   * ✅ Vincula el scope de favoritos al email del usuario.
-   * - Cuando cambia `loginEmail`, cambia el namespace de favoritos.
-   * - Si no hay usuario → usa scope de invitado.
-   */
+  // Vincular scope de favoritos al email del usuario
   useEffect(() => {
     const scope = loginEmail ?? "__guest__";
     setFavoritesScope(scope);
   }, [loginEmail]);
 
   /**
-   * ✅ Logout unificado en 1 click:
-   * - Limpia SIEMPRE la sesión local (Zustand)
-   * - Si hay sesión NextAuth, hace signOut SIN redirect (redirect: false)
-   * - Resetea scope de favoritos a invitado
-   * - Navega con replace al home con ?logout=1
-   * - Deshabilita el botón mientras corre para evitar doble click
+   * Logout unificado:
+   * - Limpia auth local
+   * - signOut de NextAuth sin redirect
+   * - Scope favoritos a invitado
+   * - Navega a "/?logout=1"
+   * - ❗Sin toast local (evita duplicado: queda solo el rojo global)
    */
   const handleLogout = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
-      // 1) limpiar siempre auth local
       clearAuth();
       try {
         localStorage.removeItem("pv_email");
       } catch {}
 
-      // 2) resetear scope de favoritos a invitado (para no “heredar” favoritos)
       setFavoritesScope("__guest__");
 
-      // 3) si hay sesión NextAuth → signOut sin redirect
       if (status === "authenticated") {
         const { signOut } = await import("next-auth/react");
         await signOut({ redirect: false });
       }
 
-      // 4) navegar (replace) para refrescar UI y quitar cualquier query
       router.replace("/?logout=1");
-
-      // 5) feedback
-      toast({
-        title: "Sesión cerrada",
-        description: "¡Hasta la próxima! 👋",
-      });
     } catch {
       if (typeof window !== "undefined") {
         window.location.href = "/?logout=1";
@@ -165,30 +149,54 @@ export function Header() {
   // contador favoritos
   const favCount = useFavoritesStore((s) => s.items.length);
 
-  // 🔔 Mostrar toast de bienvenida después de OAuth (Google/Xbox) y limpiar query
+  /**
+   * Welcome toast después de login:
+   * - Caso 1: query ?auth=ok&provider=google|xbox|credentials → muestra y limpia query
+   * - Caso 2: si no viene query (p. ej. formulario), muestra 1 sola vez al detectar logged
+   */
   useEffect(() => {
     if (firedWelcome.current) return;
 
     const auth = searchParams.get("auth");
-    const provider = searchParams.get("provider"); // "google" | "xbox" (nuestro valor)
-    if (auth === "ok" && logged) {
+    const provider = (searchParams.get("provider") || "").toLowerCase(); // "google" | "xbox" | "credentials"
+
+    const showWelcome = (provLabel?: string) => {
+      if (firedWelcome.current) return;
       firedWelcome.current = true;
 
-      const provLabel =
-        provider === "xbox" ? "Xbox" : provider === "google" ? "Google" : "tu cuenta";
+      // Evitar repetir entre navegaciones de la misma sesión
+      try {
+        if (sessionStorage.getItem("pv_welcomed") === "1") return;
+        sessionStorage.setItem("pv_welcomed", "1");
+      } catch {}
 
       toast({
         title: `¡Bienvenido, ${displayName ?? "gamer"}!`,
-        description: `Inicio de sesión con ${provLabel} exitoso.`,
+        description: `Inicio de sesión con ${provLabel ?? "tu cuenta"} exitoso.`,
       });
+    };
+
+    if (auth === "ok" && logged) {
+      const provLabel =
+        provider === "xbox" ? "Xbox" :
+        provider === "google" ? "Google" :
+        provider === "credentials" ? "tu cuenta" :
+        "tu cuenta";
+
+      showWelcome(provLabel);
 
       // limpiar ?auth=ok&provider=...
       const params = new URLSearchParams(searchParams.toString());
       params.delete("auth");
       params.delete("provider");
-
       const nextUrl = pathname + (params.toString() ? `?${params.toString()}` : "");
       router.replace(nextUrl);
+      return;
+    }
+
+    // Fallback: si no hay query pero ya está logueado (ej. login por formulario sin qs)
+    if (logged) {
+      showWelcome(); // "tu cuenta"
     }
   }, [searchParams, logged, pathname, router, toast, displayName]);
 
@@ -242,7 +250,12 @@ export function Header() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="relative text-orange-400 hover:text-orange-300"
+                    className="relative text-orange-400 rounded-xl transition-all duration-200
+                               hover:text-amber-300 hover:bg-orange-400/10
+                               hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                               hover:ring-1 hover:ring-orange-400/40
+                               focus-visible:outline-none
+                               focus-visible:ring-2 focus-visible:ring-orange-400/60"
                     onClick={() => setShowFavorites(!showFavorites)}
                     title="Favoritos"
                   >
@@ -285,7 +298,12 @@ export function Header() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="text-orange-400 hover:text-orange-300"
+                      className="relative text-orange-400 rounded-xl transition-all duration-200
+                                 hover:text-amber-300 hover:bg-orange-400/10
+                                 hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                                 hover:ring-1 hover:ring-orange-400/40
+                                 focus-visible:outline-none
+                                 focus-visible:ring-2 focus-visible:ring-orange-400/60"
                       title={displayName}
                     >
                       <User className="w-5 h-5" />
@@ -307,8 +325,16 @@ export function Header() {
                   </div>
                   <DropdownMenuSeparator className="bg-slate-700" />
 
-                  <DropdownMenuItem asChild className="cursor-pointer">
-                    <Link href="/perfil" className="w-full flex items-center gap-2">
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/perfil"
+                      className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
+                                hover:bg-orange-400/10 hover:text-amber-300
+                                hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                                hover:ring-1 hover:ring-orange-400/40
+                                focus-visible:outline-none
+                                focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                    >
                       <User className="w-4 h-4" />
                       Ver perfil
                     </Link>
@@ -317,7 +343,15 @@ export function Header() {
                   {/* Solo admins ven el panel */}
                   {role === "admin" && (
                     <DropdownMenuItem asChild className="cursor-pointer">
-                      <Link href="/admin" className="w-full flex items-center gap-2">
+                      <Link
+                        href="/admin"
+                        className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
+                                  hover:bg-orange-400/10 hover:text-amber-300
+                                  hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                                  hover:ring-1 hover:ring-orange-400/40
+                                  focus-visible:outline-none
+                                  focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                      >
                         <Shield className="w-4 h-4" />
                         Panel Administrador
                       </Link>
@@ -327,7 +361,14 @@ export function Header() {
                   <DropdownMenuSeparator className="bg-slate-700" />
                   <DropdownMenuItem
                     onClick={handleLogout}
-                    className={`text-red-400 focus:text-red-400 cursor-pointer ${loggingOut ? "opacity-60 pointer-events-none" : ""}`}
+                    className={`cursor-pointer rounded-md transition-all duration-200
+                                text-red-400 focus:text-red-400
+                                hover:bg-red-400/10
+                                hover:shadow-[0_0_18px_rgba(248,113,113,0.35)]
+                                hover:ring-1 hover:ring-red-400/40
+                                focus-visible:outline-none
+                                focus-visible:ring-2 focus-visible:ring-red-400/60
+                                ${loggingOut ? "opacity-60 pointer-events-none" : ""}`}
                   >
                     <LogOut className="w-4 h-4" />
                     {loggingOut ? "Cerrando..." : "Cerrar sesión"}

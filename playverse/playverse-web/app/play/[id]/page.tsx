@@ -51,6 +51,7 @@ export default function PlayEmbeddedPage() {
   ) as { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
 
   const isAdmin = profile?.role === "admin";
+  const isPremiumSub = profile?.role === "premium";
 
   const game = useQuery(
     getGameByIdRef,
@@ -74,32 +75,55 @@ export default function PlayEmbeddedPage() {
   const sandbox = (game as any)?.embed_sandbox as string | undefined;
   const allow = (game as any)?.embed_allow as string | undefined;
 
+  const isEmbeddable = typeof embedUrl === "string" && embedUrl.trim().length > 0;
+  const plan = (game as any)?.plan as "free" | "premium" | undefined;
+  const isFreePlan = plan === "free";
+  const isPremiumPlan = plan === "premium";
+
+  // ⏱ contador alquiler (si aplica)
   const expiresInMs = useMemo(() => {
     if (isAdmin) return null;
     if (!canPlay?.expiresAt) return null;
     return Math.max(0, canPlay.expiresAt - now);
   }, [canPlay?.expiresAt, now, isAdmin]);
 
-  // Guard login (no aplica a admin)
+  // ✅ OVERRIDE local: embebidos
+  // - Admin siempre puede
+  // - Si es embebible y user logueado:
+  //     * plan "free" → puede
+  //     * plan "premium" → puede si es premium o admin
+  const premiumOverrideAllowed =
+    isEmbeddable &&
+    !!email &&
+    (isFreePlan || (isPremiumPlan && (isPremiumSub || isAdmin)));
+
+  // Guard de login cuando corresponde (sin romper canPlay)
   useEffect(() => {
+    if (isAdmin || premiumOverrideAllowed) return;
     if (canPlay === undefined) return;
-    if (isAdmin) return;
     if (canPlay?.canPlay) return;
-    if (canPlay?.reason === "login") {
+    if (canPlay?.reason === "login" || !email) {
       const next = `/play/${gameId}`;
       router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
     }
-  }, [canPlay, router, gameId, isAdmin]);
+  }, [canPlay, router, gameId, isAdmin, premiumOverrideAllowed, email]);
 
-  // CTA según motivo (admin no muestra CTA)
+  // CTA según motivo (admin u override premium/free → sin CTA)
   const action = useMemo(() => {
-    const reason = isAdmin ? null : canPlay?.reason;
+    if (isAdmin || premiumOverrideAllowed) return null;
+    const reason = canPlay?.reason;
     if (!reason) return null;
-    if (reason === "premium_required") return { label: "Hazte Premium", href: "/premium?intent=subscribe&plan=monthly" };
-    if (reason === "purchase_required") return { label: "Comprar juego", href: `/checkout/compra/${gameId}` };
-    if (reason === "rental_required") return { label: "Alquilar juego", href: `/checkout/alquiler/${gameId}` };
+    if (reason === "premium_required") {
+      return { label: "Hazte Premium", href: "/premium?intent=subscribe&plan=monthly" };
+    }
+    if (reason === "purchase_required") {
+      return { label: "Comprar juego", href: `/checkout/compra/${gameId}` };
+    }
+    if (reason === "rental_required") {
+      return { label: "Alquilar juego", href: `/checkout/alquiler/${gameId}` };
+    }
     return null;
-  }, [canPlay?.reason, gameId, isAdmin]);
+  }, [canPlay?.reason, gameId, isAdmin, premiumOverrideAllowed]);
 
   // Loading / sin datos
   if (!gameId || game === undefined || canPlay === undefined) {
@@ -116,25 +140,42 @@ export default function PlayEmbeddedPage() {
     );
   }
 
-  const allowed = isAdmin || !!canPlay?.canPlay;
+  // Acceso final
+  const allowed = isAdmin || premiumOverrideAllowed || !!canPlay?.canPlay;
 
   // No permitido → pantalla con CTA
   if (!allowed) {
     return (
       <div className="min-h-screen bg-slate-900 text-white">
         <div className="container mx-auto px-4 py-12 max-w-3xl">
-          <h1 className="text-3xl font-bold text-orange-400 mb-4">{title}</h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-3xl font-bold text-orange-400">{title}</h1>
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/juego/${gameId}`)}
+              className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+            >
+              Volver
+            </Button>
+          </div>
+
           <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-6">
             <p className="text-slate-300 mb-4">
               No tenés acceso para jugar este título desde el sitio.
             </p>
             {action && (
-              <Button onClick={() => router.push(action.href)} className="bg-orange-400 hover:bg-orange-500 text-slate-900">
+              <Button
+                onClick={() => router.push(action.href)}
+                className="bg-orange-400 hover:bg-orange-500 text-slate-900"
+              >
                 {action.label}
               </Button>
             )}
             {!action && (
-              <Button onClick={() => router.push(`/juego/${gameId}`)} className="bg-orange-400 hover:bg-orange-500 text-slate-900">
+              <Button
+                onClick={() => router.push(`/juego/${gameId}`)}
+                className="bg-orange-400 hover:bg-orange-500 text-slate-900"
+              >
                 Volver al detalle
               </Button>
             )}
@@ -149,17 +190,16 @@ export default function PlayEmbeddedPage() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-6">
+        {/* ⬆️ Header con botón Volver arriba del player */}
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl md:text-2xl font-bold text-orange-400">{title}</h1>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/juego/${gameId}`)}
-              className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
-            >
-              Volver
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/juego/${gameId}`)}
+            className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+          >
+            Volver
+          </Button>
         </div>
 
         {showCountdown && (

@@ -8,6 +8,14 @@ import { useFavoritesStore } from "@/components/favoritesStore";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
+// ➕ imports para sesión y convex (no tocan el UI)
+import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/lib/useAuthStore";
+import type { AuthState } from "@/lib/useAuthStore";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
@@ -17,6 +25,21 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
   const { toast } = useToast();
   const items = useFavoritesStore((s) => s.items);
   const remove = useFavoritesStore((s) => s.remove);
+
+  // ======== Convex + sesión (solo para poder llamar al toggle del server) ========
+  const { data: session } = useSession();
+  const localUser = useAuthStore((s: AuthState) => s.user);
+  const loginEmail =
+    session?.user?.email?.toLowerCase() || localUser?.email?.toLowerCase() || null;
+
+  const profile = useQuery(
+    api.queries.getUserByEmail.getUserByEmail as any,
+    loginEmail ? { email: loginEmail } : "skip"
+  ) as { _id?: Id<"profiles"> } | null | undefined;
+
+  const toggleFavorite = useMutation(
+    api.mutations.toggleFavorite.toggleFavorite as any
+  );
 
   useEffect(() => {
     const handler = () => {};
@@ -97,13 +120,49 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
 
                         {/* Papelera con glow en hover */}
                         <button
-                          onClick={() => {
+                          onClick={async () => {
+                            // 1) UI optimista: quito local y aviso
                             remove(g.id);
-                            window.dispatchEvent(new Event("pv:favorites:changed"));
+                            try {
+                              window.dispatchEvent(new Event("pv:favorites:changed"));
+                            } catch {}
                             toast({
                               title: "Eliminado de favoritos",
                               description: `${g.title} se quitó de tu lista.`,
                             });
+
+                            // 2) Server: usar toggleFavorite para que quede REMOVIDO
+                            try {
+                              if (profile?._id) {
+                                // primer toggle
+                                const res = await toggleFavorite({
+                                  userId: profile._id as Id<"profiles">,
+                                  gameId: g.id as unknown as Id<"games">,
+                                } as any);
+
+                                // algunas implementaciones devuelven {added: boolean} o boolean
+                                const added =
+                                  typeof res === "boolean"
+                                    ? res
+                                    : !!(
+                                        res &&
+                                        (res.added === true ||
+                                          res.status === "added" ||
+                                          res.result === "added")
+                                      );
+
+                                // si por desincronización el server lo "agregó", togglear otra vez para forzar eliminación
+                                if (added) {
+                                  await toggleFavorite({
+                                    userId: profile._id as Id<"profiles">,
+                                    gameId: g.id as unknown as Id<"games">,
+                                  } as any);
+                                }
+                              }
+                            } catch (err) {
+                              // no rompo UX; sólo log y un aviso suave si querés
+                              console.error("toggleFavorite (trash) error:", err);
+                            }
                           }}
                           className="text-slate-400 rounded-md transition-all duration-200
                                      hover:text-red-400 hover:bg-red-400/10

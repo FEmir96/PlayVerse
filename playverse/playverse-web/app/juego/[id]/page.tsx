@@ -24,7 +24,7 @@ import {
   Star,
 } from "lucide-react";
 
-import { useQuery, useAction } from "convex/react";
+import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
 
@@ -34,6 +34,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useFavoritesStore } from "@/components/favoritesStore";
 
 type MediaItem = { type: "image" | "video"; src: string; thumb?: string };
+
+// ⬇️ Sólo activa favoritos del servidor si está seteado el flag
+const ENABLE_SERVER_FAVORITES =
+  process.env.NEXT_PUBLIC_USE_SERVER_FAVORITES === "1";
 
 function toEmbed(url?: string | null): string | null {
   if (!url) return null;
@@ -92,7 +96,7 @@ export default function GameDetailPage() {
 
   // Param estable
   const idParamRaw = params?.id;
-  const idParam = Array.isArray(idParamRaw) ? idParamRaw[0] : idParamRaw;
+  const idParam = Array.isArray(idParamRaw) ? (idParamRaw as string[])[0] : (idParamRaw as string | undefined);
   const hasId = Boolean(idParam);
 
   // Query de juego
@@ -239,11 +243,34 @@ export default function GameDetailPage() {
       }>
     | undefined;
 
+  // ✅ (Opcional) Favoritos del servidor (sólo si el flag está activo)
+  // ✅ Nunca pasamos null a useQuery; si no existe la query, usamos un fallback y "skip"
+  const shouldRunServerFav =
+    process.env.NEXT_PUBLIC_USE_SERVER_FAVORITES === "1" &&
+    Boolean((api as any).queries?.getUserFavorites?.getUserFavorites) &&
+    Boolean(profile?._id);
+
+  // función a usar: la real si existe, o una cualquiera como fallback (no se ejecuta con "skip")
+  const favoritesFnRef =
+    shouldRunServerFav
+      ? (api as any).queries.getUserFavorites.getUserFavorites
+      : (api as any).queries.getGameById.getGameById; // fallback inocuo
+
+  const serverFavorites = useQuery(
+    favoritesFnRef as any,
+    shouldRunServerFav ? ({ userId: (profile as any)._id } as any) : "skip"
+  ) as
+    | Array<{ game?: { _id?: Id<"games"> }; gameId?: Id<"games"> }>
+    | undefined;
+
   const now = Date.now();
 
-  // ── NUEVO: flag admin
+  // ── flags
   const isAdmin = profile?.role === "admin";
+  const isPremiumPlan = (game as any)?.plan === "premium";
+  const isFreePlan = (game as any)?.plan === "free";
 
+  // Compras/Alquileres
   const hasPurchased = useMemo(() => {
     if (!game?._id) return false;
     const gid = String(game._id);
@@ -280,12 +307,19 @@ export default function GameDetailPage() {
     });
   }, [rentals, game?._id, now]);
 
-  // Reglas de UI
-  const isPremiumPlan = (game as any)?.plan === "premium";
-  const isFreePlan = (game as any)?.plan === "free";
-  const canPlay = isAdmin || hasPurchased || hasActiveRental; // ← admin SIEMPRE puede jugar
+  // ➜ ¿Es embebible?
+  const isEmbeddable = useMemo(() => {
+    const u = (game as any)?.embed_url ?? (game as any)?.embedUrl;
+    return typeof u === "string" && u.trim().length > 0;
+  }, [game]);
+
+  // ====== NUEVO: permisos por suscripción premium ======
+  const isPremiumSub = profile?.role === "premium";
+  const canPlayBySubscription = isPremiumPlan && (isPremiumSub || isAdmin);
+  const canPlayEffective = canPlayBySubscription || hasPurchased || hasActiveRental || isAdmin;
+
   const canExtend = !hasPurchased && hasActiveRental;
-  const showBuyAndRent = !hasPurchased && !hasActiveRental;
+  const showBuyAndRent = !canPlayEffective;
 
   const requiresPremium =
     isPremiumPlan &&
@@ -293,56 +327,100 @@ export default function GameDetailPage() {
     profile.role !== "premium" &&
     profile.role !== "admin";
 
-  // ➜ ¿Es embebible?
-  const isEmbeddable = useMemo(() => {
-    const u = (game as any)?.embed_url ?? (game as any)?.embedUrl;
-    return typeof u === "string" && u.trim().length > 0;
-  }, [game]);
-
   // ====== Toast & Favoritos ======
   const { toast } = useToast();
   const favItems = useFavoritesStore((s) => s.items);
   const addFav = useFavoritesStore((s) => s.add);
   const removeFav = useFavoritesStore((s) => s.remove);
 
-  const isFav = useMemo(() => {
+  // Estado de favorito según servidor (si tenemos la query)
+  const isFavServer = useMemo(() => {
+    if (!serverFavorites || !game?._id) return undefined;
+    const gid = String(game._id);
+    return serverFavorites.some(
+      (f) => String(f?.game?._id ?? f?.gameId ?? "") === gid
+    );
+  }, [serverFavorites, game?._id]);
+
+  // Fallback: store local
+  const isFavLocal = useMemo(() => {
     const byId = !!(game?._id && favItems.some((i) => i.id === String(game._id)));
     if (byId) return true;
     const title = String(game?.title || "").trim();
     return !!title && favItems.some((i) => i.title === title);
   }, [favItems, game?._id, game?.title]);
 
+  // Valor final a usar en UI
+  const isFav = (typeof isFavServer === "boolean" ? isFavServer : isFavLocal) as boolean;
+
   const [showAuthFav, setShowAuthFav] = useState(false);
   const [showAuthAction, setShowAuthAction] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
-  // Handlers navegación
+  // 🔁 Mutación Convex para favoritos
+  const toggleFavoriteMutation = useMutation(
+    api.mutations.toggleFavorite.toggleFavorite as any
+  );
+
+  // ========== HANDLERS ==========
+
+  // Comprar → checkout, con tarifa plana si user FREE compra juego PREMIUM
   const handlePurchase = () => {
     if (!game?._id) return;
-    if (!isLogged) return setShowAuthAction(true);
-    if (requiresPremium) return setShowPremiumModal(true);
-    router.push(`/checkout/compra/${game._id}`);
+    const gid = String(game._id);
+
+    if (hasPurchased) {
+      toast({ title: "Ya lo tienes", description: "Este juego ya está en tu biblioteca." });
+      router.push(`/juego/${gid}`);
+      return;
+    }
+
+    // FREE comprando juego premium → checkout con tarifa plana
+    if (isPremiumPlan && profile?.role === "free") {
+      router.push(`/checkout/compra/${gid}?pricing=flat_premium`);
+      return;
+    }
+
+    if (requiresPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+
+    router.push(`/checkout/compra/${gid}`);
   };
 
+  // Alquilar
   const handleRental = () => {
     if (!game?._id) return;
-    if (!isLogged) return setShowAuthAction(true);
-    if (requiresPremium) return setShowPremiumModal(true);
-    router.push(`/checkout/alquiler/${game._id}`);
+    const gid = String(game._id);
+
+    if (hasPurchased) {
+      toast({ title: "Ya comprado", description: "Ya posees este título." });
+      router.push(`/juego/${gid}`);
+      return;
+    }
+
+    if (hasActiveRental) {
+      toast({ title: "Alquiler activo", description: "Puedes extender tu alquiler." });
+      router.push(`/checkout/extender/${gid}`);
+      return;
+    }
+
+    if (requiresPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+
+    router.push(`/checkout/alquiler/${gid}`);
   };
 
+  // Extender
   const handleExtend = () => {
     if (!game?._id) return;
-    if (!isLogged) return setShowAuthAction(true);
     router.push(`/checkout/extender/${game._id}`);
   };
 
-  /** ✅ Lógica de “Jugar”
-   * - Embebible:
-   *    • Login requerido. Si admin → pasa directo. Si free → pasa directo.
-   *    • Premium → requiere compra/alquiler activo, salvo admin (canPlay=true).
-   * - NO embebible: respeta gating previo; admin también pasa (canPlay=true).
-   */
+  /** ✅ “Jugar” */
   const handlePlay = () => {
     if (!game?._id) return;
 
@@ -361,12 +439,20 @@ export default function GameDetailPage() {
         router.push(playUrl);
         return;
       }
-      if (isPremiumPlan && !canPlay) {
-        toast({
-          title: "No disponible",
-          description: "Necesitás comprar o alquilar este juego para jugar.",
-          variant: "destructive",
-        });
+      if (isPremiumPlan) {
+        if (isPremiumSub) {
+          router.push(playUrl);
+          return;
+        }
+        if (!canPlayEffective) {
+          toast({
+            title: "No disponible",
+            description: "Necesitás comprar o alquilar este juego para jugar.",
+            variant: "destructive",
+          });
+          return;
+        }
+        router.push(playUrl);
         return;
       }
       router.push(playUrl);
@@ -378,7 +464,7 @@ export default function GameDetailPage() {
       setShowAuthAction(true);
       return;
     }
-    if (!canPlay) {
+    if (!canPlayEffective) {
       toast({
         title: "No disponible",
         description: "Necesitás comprar o alquilar el juego para jugar.",
@@ -389,9 +475,13 @@ export default function GameDetailPage() {
     toast({ title: "Lanzando juego…", description: "¡Feliz gaming! 🎮" });
   };
 
-  const onToggleFavorite = () => {
+  // ⭐ Favoritos (local + Convex) con alineación al resultado del server
+  const onToggleFavorite = async () => {
     if (!game?._id) return;
-    if (!isLogged) return setShowAuthFav(true);
+    if (!isLogged || !profile?._id) {
+      setShowAuthFav(true);
+      return;
+    }
 
     const item = {
       id: String(game._id),
@@ -401,19 +491,56 @@ export default function GameDetailPage() {
       priceRent: (game as any).weekly_price ?? null,
     };
 
-    if (isFav) {
-      removeFav(item.id);
+    let addedFromServer: boolean | undefined;
+
+    try {
+      const result = await toggleFavoriteMutation({
+        userId: profile._id as Id<"profiles">,
+        gameId: game._id as Id<"games">,
+      } as any);
+
+      // Soportar varias formas de respuesta
+      if (typeof result === "boolean") {
+        addedFromServer = result;
+      } else if (result && typeof result === "object") {
+        addedFromServer =
+          (result.added === true) ||
+          (result.status === "added") ||
+          (result.result === "added");
+      }
+    } catch (err) {
+      console.error("toggleFavorite Convex error:", err);
       toast({
-        title: "Quitado de favoritos",
-        description: `${item.title} se quitó de tu lista.`,
+        title: "No se pudo actualizar en el servidor",
+        description: "Se intentará nuevamente más tarde.",
+        variant: "destructive",
       });
-    } else {
+    }
+
+    // Fallback: si el server no dijo, invertimos el estado actual
+    if (typeof addedFromServer !== "boolean") {
+      addedFromServer = !isFav;
+    }
+
+    // Actualizar store local según lo que realmente pasó en server
+    if (addedFromServer) {
       addFav(item);
       toast({
         title: "Añadido a favoritos",
         description: `${item.title} se agregó a tu lista.`,
       });
+    } else {
+      removeFav(item.id);
+      toast({
+        title: "Quitado de favoritos",
+        description: `${item.title} se quitó de tu lista.`,
+      });
     }
+
+    // Notificar a otros componentes (dropdown, etc.)
+    try {
+      window.dispatchEvent(new Event("pv:favorites:changed"));
+    } catch {}
   };
 
   const copyToClipboard = async () => {
@@ -616,14 +743,7 @@ export default function GameDetailPage() {
                     >
                       Jugar gratis
                     </Button>
-                  ) : hasPurchased ? (
-                    <Button
-                      onClick={handlePlay}
-                      className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                    >
-                      Jugar
-                    </Button>
-                  ) : canPlay ? (
+                  ) : canPlayEffective ? (
                     <>
                       <Button
                         onClick={handlePlay}
@@ -836,6 +956,7 @@ export default function GameDetailPage() {
               Para añadir a favoritos debes iniciar sesión o registrarte.
             </p>
           </div>
+          {/* Footer original: alineado a la derecha */}
           <DialogFooter className="flex gap-2 justify-end">
             <Button
               variant="outline"
@@ -903,34 +1024,57 @@ export default function GameDetailPage() {
 
       {/* Modal: requiere plan Premium */}
       <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
-        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-orange-400 text-xl font-semibold">
-              Se requiere PREMIUM
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-slate-300 text-center">
-              Para jugar o alquilar este título es necesario contar con la
-              suscripción <span className="text-amber-300 font-semibold">PREMIUM</span> de PlayVerse.
-            </p>
-          </div>
-          <DialogFooter className="flex gap-2 justify-end">
-            <Button
-              variant="outline"
-              onClick={() => setShowPremiumModal(false)}
-              className="border-slate-600 text-slate-300 bg-transparent"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                window.location.href = "/checkout/premium?plan=monthly";
-              }}
-              className="bg-orange-400 hover:bg-orange-500 text-slate-900"
-            >
-              Upgrade Plan
-            </Button>
+          <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
+    {/* ⬇️ CENTRADO */}
+    <DialogHeader className="text-center items-center">
+      <DialogTitle className="text-orange-400 text-xl font-semibold text-center mx-auto">
+        Se requiere PREMIUM
+      </DialogTitle>
+    </DialogHeader>
+
+    <div className="space-y-4">
+      <p className="text-slate-300 text-center">
+        Para jugar o alquilar este título es necesario contar con la
+        suscripción <span className="text-amber-300 font-semibold">PREMIUM</span> de PlayVerse.
+      </p>
+    </div>
+
+          {/* ⬇️ Botones uno en cada punta */}
+          <DialogFooter className="w-full">
+            <div className="w-full flex items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowPremiumModal(false)}
+                className="rounded-xl px-5 py-2.5
+                           bg-slate-800/40 text-slate-200
+                           border border-slate-500/60
+                           shadow-[inset_0_0_0_1px_rgba(148,163,184,0.25)]
+                           hover:text-white hover:bg-slate-700/50
+                           hover:border-orange-400/60
+                           hover:shadow-[0_0_0_3px_rgba(251,146,60,0.15)]
+                           focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-orange-400/60
+                           transition-colors"
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                onClick={() => {
+                  window.location.href = "/checkout/premium?plan=monthly";
+                }}
+                className="rounded-xl px-5 py-2.5
+                           bg-orange-400 text-slate-900 font-semibold
+                           shadow-[0_8px_24px_rgba(251,146,60,0.35)]
+                           hover:bg-orange-500
+                           focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-orange-400/70
+                           active:translate-y-[1px]
+                           transition"
+              >
+                Upgrade Plan
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
