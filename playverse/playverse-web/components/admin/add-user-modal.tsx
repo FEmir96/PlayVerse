@@ -1,18 +1,23 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type React from "react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AddUserModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSave: (userData: any) => void
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (userData: {
+    username: string;
+    email: string;
+    password: string;
+    role: "free" | "premium" | "admin";
+    // status NO se envía; es sólo visual en este modal
+  }) => void;
 }
 
 export function AddUserModal({ isOpen, onClose, onSave }: AddUserModalProps) {
@@ -21,27 +26,44 @@ export function AddUserModal({ isOpen, onClose, onSave }: AddUserModalProps) {
     email: "",
     password: "",
     confirmPassword: "",
-    role: "Usuario",
-    status: "Activo",
-  })
+    role: "free" as "free" | "premium" | "admin", // valores reales del schema
+    status: "Activo", // sólo visual
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
+
     if (formData.password !== formData.confirmPassword) {
-      alert("Las contraseñas no coinciden")
-      return
+      alert("Las contraseñas no coinciden");
+      return;
     }
-    onSave(formData)
+
+    // Normalizamos el rol a valores válidos del schema, en minúsculas
+    const normalizedRole: "free" | "premium" | "admin" =
+      formData.role === "admin" || formData.role === "premium" || formData.role === "free"
+        ? formData.role
+        : "free";
+
+    // Enviamos únicamente los campos del schema (status queda fuera)
+    onSave({
+      username: formData.username,
+      email: formData.email,
+      password: formData.password,
+      role: normalizedRole,
+    });
+
+    // Reset
     setFormData({
       username: "",
       email: "",
       password: "",
       confirmPassword: "",
-      role: "Usuario",
+      role: "free",
       status: "Activo",
-    })
-    onClose()
-  }
+    });
+
+    onClose();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -74,6 +96,7 @@ export function AddUserModal({ isOpen, onClose, onSave }: AddUserModalProps) {
             />
           </div>
 
+          {/* Passwords */}
           <div>
             <Label className="text-orange-400 mb-2 block">Contraseña</Label>
             <Input
@@ -99,36 +122,39 @@ export function AddUserModal({ isOpen, onClose, onSave }: AddUserModalProps) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {/* Rol: valores del schema en minúsculas */}
             <div>
               <Label className="text-orange-400 mb-2 block">Rol</Label>
-              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+              <Select
+                value={formData.role}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, role: value as "free" | "premium" | "admin" })
+                }
+              >
                 <SelectTrigger className="bg-slate-900 border-slate-700 text-orange-400">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-slate-700">
-                  <SelectItem value="Usuario" className="text-orange-400">
-                    Usuario
-                  </SelectItem>
-                  <SelectItem value="Admin" className="text-orange-400">
-                    Admin
-                  </SelectItem>
+                  <SelectItem value="free" className="text-orange-400">free</SelectItem>
+                  <SelectItem value="premium" className="text-orange-400">premium</SelectItem>
+                  <SelectItem value="admin" className="text-orange-400">admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Estado: visual (no se envía al backend) */}
             <div>
-              <Label className="text-orange-400 mb-2 block">Estado</Label>
-              <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <Label className="text-orange-400 mb-2 block">Estado (visual)</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) => setFormData({ ...formData, status: value })}
+              >
                 <SelectTrigger className="bg-slate-900 border-slate-700 text-orange-400">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-slate-700">
-                  <SelectItem value="Activo" className="text-orange-400">
-                    Activo
-                  </SelectItem>
-                  <SelectItem value="Baneado" className="text-orange-400">
-                    Baneado
-                  </SelectItem>
+                  <SelectItem value="Activo" className="text-orange-400">Activo</SelectItem>
+                  <SelectItem value="Baneado" className="text-orange-400">Baneado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -140,5 +166,5 @@ export function AddUserModal({ isOpen, onClose, onSave }: AddUserModalProps) {
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

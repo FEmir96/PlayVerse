@@ -11,6 +11,9 @@ import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/lib/useAuthStore";
 
+// ✅ nuevo: botón Ranking
+import RankingButton from "@/components/RankingButton";
+
 const getGameByIdRef =
   (api as any)["queries/getGameById"].getGameById as FunctionReference<"query">;
 
@@ -88,10 +91,6 @@ export default function PlayEmbeddedPage() {
   }, [canPlay?.expiresAt, now, isAdmin]);
 
   // ✅ OVERRIDE local: embebidos
-  // - Admin siempre puede
-  // - Si es embebible y user logueado:
-  //     * plan "free" → puede
-  //     * plan "premium" → puede si es premium o admin
   const premiumOverrideAllowed =
     isEmbeddable &&
     !!email &&
@@ -190,16 +189,19 @@ export default function PlayEmbeddedPage() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-6">
-        {/* ⬆️ Header con botón Volver arriba del player */}
+        {/* ⬆️ Header con botón Ranking + Volver (nuevo: Ranking) */}
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl md:text-2xl font-bold text-orange-400">{title}</h1>
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/juego/${gameId}`)}
-            className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
-          >
-            Volver
-          </Button>
+          <div className="flex items-center gap-2">
+            <RankingButton embedUrl={embedUrl ?? undefined} />
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/juego/${gameId}`)}
+              className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+            >
+              Volver
+            </Button>
+          </div>
         </div>
 
         {showCountdown && (

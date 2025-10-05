@@ -1,90 +1,135 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Edit, Trash2, Users, Gamepad2 } from "lucide-react"
-import { useAuthStore } from "@/lib/useAuthStore"
-import type { AuthState } from "@/lib/useAuthStore"
-import { AddUserModal } from "@/components/admin/add-user-modal"
-import { EditUserModal } from "@/components/admin/edit-user-modal"
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Search, Plus, Edit, Trash2, Users, Gamepad2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+import { AddUserModal } from "@/components/admin/add-user-modal";
+import { EditUserModal } from "@/components/admin/edit-user-modal";
+
+type AdminGame = {
+  _id: Id<"games">;
+  title: string;
+  plan: "free" | "premium";
+  description?: string;
+  cover_url?: string;
+  trailer_url?: string;
+  genres?: string[];
+  purchasePrice?: number;
+  weeklyPrice?: number;
+};
+
+type AdminProfile = {
+  _id: Id<"profiles">;
+  name: string;
+  email: string;
+  role: "free" | "premium" | "admin";
+  status?: string;
+};
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<"games" | "users">("games")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [showAddUserModal, setShowAddUserModal] = useState(false)
-  const [showEditUserModal, setShowEditUserModal] = useState(false)
-  const [selectedUser, setSelectedUser] = useState(null)
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<"games" | "users">("games");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
 
-  const user = useAuthStore((s: AuthState) => s.user)
+  const games = useQuery(api.queries.admin.listGames.listGames) as
+    | AdminGame[]
+    | undefined;
+  const profiles = useQuery(api.queries.admin.listProfiles.listProfiles) as
+    | AdminProfile[]
+    | undefined;
 
-  // Mock data for games
-  const [mockGames, setMockGames] = useState([
-    { id: 1, title: "Tomb Raider", category: "Acción", purchasePrice: 19.99, rentalPrice: 2.99 },
-    { id: 2, title: "The Witcher 3", category: "RPG", purchasePrice: 29.99, rentalPrice: 4.99 },
-    { id: 3, title: "Cyberpunk 2077", category: "RPG", purchasePrice: 39.99, rentalPrice: 6.99 },
-    { id: 4, title: "GTA V", category: "Acción", purchasePrice: 24.99, rentalPrice: 3.99 },
-    { id: 5, title: "Red Dead Redemption 2", category: "Acción", purchasePrice: 34.99, rentalPrice: 5.99 },
-  ])
+  const deleteGame = useMutation(api.mutations.admin.deleteGame.deleteGame);
+  const updateProfile = useMutation(
+    api.mutations.admin.updateProfile.updateProfile
+  );
 
-  // Mock data for users
-  const [mockUsers, setMockUsers] = useState([
-    { id: 1, name: "Eros Bianchini", email: "eros@gmail.com", role: "free", status: "Activo" },
-    { id: 2, name: "Fernando Faour", email: "fernando@gmail.com", role: "admin", status: "Baneado" },
-    { id: 3, name: "María García", email: "maria@gmail.com", role: "premium", status: "Activo" },
-    { id: 4, name: "Carlos López", email: "carlos@gmail.com", role: "premium", status: "Activo" },
-    { id: 5, name: "Ana Martínez", email: "ana@gmail.com", role: "admin", status: "Activo" },
-  ])
+  const filteredGames: AdminGame[] = useMemo(() => {
+    const t = searchTerm.trim().toLowerCase();
+    return (games ?? []).filter((g: AdminGame) =>
+      g.title.toLowerCase().includes(t)
+    );
+  }, [games, searchTerm]);
 
-  const filteredGames = mockGames.filter((game) => game.title.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredUsers: AdminProfile[] = useMemo(() => {
+    const t = searchTerm.trim().toLowerCase();
+    return (profiles ?? []).filter(
+      (u: AdminProfile) =>
+        u.name.toLowerCase().includes(t) ||
+        u.email.toLowerCase().includes(t)
+    );
+  }, [profiles, searchTerm]);
 
-  const filteredUsers = mockUsers.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
-
-  const handleAddUser = (userData: any) => {
-    const newUser = {
-      id: mockUsers.length + 1,
-      name: userData.username,
-      email: userData.email,
-      role: userData.role.toLowerCase(),
-      status: userData.status,
+  const handleDeleteGame = async (gameId: string) => {
+    try {
+      await deleteGame({ id: gameId as Id<"games"> } as any);
+      toast({
+        title: "Juego eliminado",
+        description: "Se eliminó correctamente.",
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar.",
+        variant: "destructive",
+      });
     }
-    setMockUsers([...mockUsers, newUser])
-  }
+  };
 
-  const handleEditUser = (userData: any) => {
-    setMockUsers(
-      mockUsers.map((user) =>
-        user.id === userData.id
-          ? {
-              ...user,
-              name: userData.username,
-              email: userData.email,
-              role: userData.role.toLowerCase(),
-              status: userData.status,
-            }
-          : user,
-      ),
-    )
-  }
+  const openEditUserModal = (user: AdminProfile) => {
+    setSelectedUser(user);
+    setShowEditUserModal(true);
+  };
 
-  const handleDeleteUser = (userId: number) => {
-    setMockUsers(mockUsers.filter((user) => user.id !== userId))
-  }
+  const handleAddUser = async () => {
+    toast({
+      title: "Alta de usuario",
+      description:
+        "Los usuarios se crean al iniciar sesión. Edita rol/estado desde esta vista.",
+    });
+  };
 
-  const handleDeleteGame = (gameId: number) => {
-    setMockGames(mockGames.filter((game) => game.id !== gameId))
-  }
+  const handleEditUser = async (data: any) => {
+    // normalizamos rol a minúsculas válidas del schema
+    const role: "free" | "premium" | "admin" =
+      data.role === "admin" || data.role === "premium" || data.role === "free"
+        ? data.role
+        : "free";
 
-  const openEditUserModal = (user: any) => {
-    setSelectedUser(user)
-    setShowEditUserModal(true)
-  }
+    try {
+      await updateProfile({
+        id: data._id as Id<"profiles">,
+        name: data.username,
+        email: data.email,
+        role,              // ✅ sólo campos del schema
+        // status: no se envía porque no existe en el schema
+      } as any);
+      toast({ title: "Usuario actualizado", description: "Cambios guardados." });
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el usuario.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    toast({
+      title: "Eliminar usuario",
+      description:
+        "Borrado no implementado por seguridad. Si lo necesitas, agregamos una mutación.",
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
@@ -93,7 +138,9 @@ export default function AdminPanel() {
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-orange-400 text-center">Panel de Administración</h1>
+              <h1 className="text-3xl font-bold text-orange-400 text-center">
+                Panel de Administración
+              </h1>
               <p className="text-slate-400 mt-1 text-center">
                 Gestiona los usuarios y el catálogo de juegos de PlayVerse
               </p>
@@ -103,7 +150,7 @@ export default function AdminPanel() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Tab Navigation */}
+        {/* Tabs */}
         <div className="flex gap-2 mb-8 justify-center">
           <Button
             variant={activeTab === "games" ? "default" : "outline"}
@@ -131,7 +178,7 @@ export default function AdminPanel() {
           </Button>
         </div>
 
-        {/* Games Management */}
+        {/* Games */}
         {activeTab === "games" && (
           <div className="space-y-6">
             {/* Search and Add */}
@@ -159,24 +206,53 @@ export default function AdminPanel() {
                 <table className="w-full">
                   <thead className="bg-slate-800 border-b border-slate-700">
                     <tr>
-                      <th className="text-left p-4 text-slate-300 font-medium">Título</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Categoría</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Precio compra</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Precio alquiler</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Acciones</th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Título
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Categoría
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Precio compra
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Precio alquiler
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Acciones
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredGames.map((game) => (
-                      <tr key={game.id} className="border-b border-slate-700 hover:bg-slate-800/50">
-                        <td className="p-4 text-orange-400 font-medium">{game.title}</td>
-                        <td className="p-4 text-slate-300">{game.category}</td>
-                        <td className="p-4 text-slate-300">${game.purchasePrice}</td>
-                        <td className="p-4 text-slate-300">${game.rentalPrice}</td>
+                    {filteredGames.map((game: AdminGame) => (
+                      <tr
+                        key={String(game._id)}
+                        className="border-b border-slate-700 hover:bg-slate-800/50"
+                      >
+                        <td className="p-4 text-orange-400 font-medium">
+                          {game.title}
+                        </td>
+                        <td className="p-4 text-slate-300">
+                          {game.plan === "premium" ? "Premium" : "Free"}
+                        </td>
+                        <td className="p-4 text-slate-300">
+                          {game.purchasePrice != null
+                            ? `$${game.purchasePrice}`
+                            : "—"}
+                        </td>
+                        <td className="p-4 text-slate-300">
+                          {game.weeklyPrice != null
+                            ? `$${game.weeklyPrice}`
+                            : "—"}
+                        </td>
                         <td className="p-4">
                           <div className="flex items-center gap-2">
-                            <Link href={`/admin/edit-game/${game.id}`}>
-                              <Button size="sm" variant="ghost" className="text-orange-400 hover:text-orange-300">
+                            <Link href={`/admin/edit-game/${String(game._id)}`}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-orange-400 hover:text-orange-300"
+                              >
                                 <Edit className="w-4 h-4" />
                               </Button>
                             </Link>
@@ -184,7 +260,9 @@ export default function AdminPanel() {
                               size="sm"
                               variant="ghost"
                               className="text-red-400 hover:text-red-300"
-                              onClick={() => handleDeleteGame(game.id)}
+                              onClick={() =>
+                                handleDeleteGame(String(game._id))
+                              }
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -192,6 +270,16 @@ export default function AdminPanel() {
                         </td>
                       </tr>
                     ))}
+                    {filteredGames.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="p-6 text-center text-slate-400"
+                        >
+                          {games ? "Sin resultados" : "Cargando…"}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -199,7 +287,7 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* Users Management */}
+        {/* Users */}
         {activeTab === "users" && (
           <div className="space-y-6">
             {/* Search and Add */}
@@ -228,34 +316,65 @@ export default function AdminPanel() {
                 <table className="w-full">
                   <thead className="bg-slate-800 border-b border-slate-700">
                     <tr>
-                      <th className="text-left p-4 text-slate-300 font-medium">Nombre de usuario</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Email</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Rol</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Estado</th>
-                      <th className="text-left p-4 text-slate-300 font-medium">Acciones</th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Nombre de usuario
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Email
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Rol
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Estado
+                      </th>
+                      <th className="text-left p-4 text-slate-300 font-medium">
+                        Acciones
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-b border-slate-700 hover:bg-slate-800/50">
-                        <td className="p-4 text-orange-400 font-medium">{user.name}</td>
-                        <td className="p-4 text-slate-300">{user.email}</td>
+                    {(filteredUsers ?? []).map((u: AdminProfile) => (
+                      <tr
+                        key={String(u._id)}
+                        className="border-b border-slate-700 hover:bg-slate-800/50"
+                      >
+                        <td className="p-4 text-orange-400 font-medium">
+                          {u.name}
+                        </td>
+                        <td className="p-4 text-slate-300">{u.email}</td>
                         <td className="p-4">
                           <Badge
-                            variant={user.role === "admin" ? "default" : "secondary"}
+                            variant={
+                              u.role === "admin" ? "default" : "secondary"
+                            }
                             className={
-                              user.role === "admin" ? "bg-orange-400 text-slate-900" : "bg-slate-700 text-slate-300"
+                              u.role === "admin"
+                                ? "bg-orange-400 text-slate-900"
+                                : "bg-slate-700 text-slate-300"
                             }
                           >
-                            {user.role === "admin" ? "Admin" : "Usuario"}
+                            {u.role === "admin"
+                              ? "Admin"
+                              : u.role === "premium"
+                              ? "Premium"
+                              : "Usuario"}
                           </Badge>
                         </td>
                         <td className="p-4">
                           <Badge
-                            variant={user.status === "Activo" ? "default" : "destructive"}
-                            className={user.status === "Activo" ? "bg-green-600 text-white" : "bg-red-600 text-white"}
+                            variant={
+                              u.status === "Baneado"
+                                ? "destructive"
+                                : "default"
+                            }
+                            className={
+                              u.status === "Baneado"
+                                ? "bg-red-600 text-white"
+                                : "bg-green-600 text-white"
+                            }
                           >
-                            {user.status}
+                            {u.status ?? "Activo"}
                           </Badge>
                         </td>
                         <td className="p-4">
@@ -264,7 +383,7 @@ export default function AdminPanel() {
                               size="sm"
                               variant="ghost"
                               className="text-orange-400 hover:text-orange-300"
-                              onClick={() => openEditUserModal(user)}
+                              onClick={() => openEditUserModal(u)}
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
@@ -272,7 +391,7 @@ export default function AdminPanel() {
                               size="sm"
                               variant="ghost"
                               className="text-red-400 hover:text-red-300"
-                              onClick={() => handleDeleteUser(user.id)}
+                              onClick={handleDeleteUser}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -280,6 +399,16 @@ export default function AdminPanel() {
                         </td>
                       </tr>
                     ))}
+                    {(filteredUsers ?? []).length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="p-6 text-center text-slate-400"
+                        >
+                          {profiles ? "Sin resultados" : "Cargando…"}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -288,8 +417,11 @@ export default function AdminPanel() {
         )}
       </div>
 
-      {/* Modals */}
-      <AddUserModal isOpen={showAddUserModal} onClose={() => setShowAddUserModal(false)} onSave={handleAddUser} />
+      <AddUserModal
+        isOpen={showAddUserModal}
+        onClose={() => setShowAddUserModal(false)}
+        onSave={handleAddUser}
+      />
 
       <EditUserModal
         isOpen={showEditUserModal}
@@ -298,5 +430,5 @@ export default function AdminPanel() {
         user={selectedUser}
       />
     </div>
-  )
+  );
 }

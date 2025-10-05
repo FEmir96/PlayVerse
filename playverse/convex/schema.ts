@@ -17,6 +17,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     cover_url: v.optional(v.string()),
     trailer_url: v.optional(v.string()),
+
+    // extra media (opcionales)
+    extraTrailerUrl: v.optional(v.string()),
+    extraImages: v.optional(v.array(v.string())),
+
     plan: v.union(v.literal("free"), v.literal("premium")),
     createdAt: v.number(),
     genres: v.optional(v.array(v.string())),
@@ -40,14 +45,14 @@ export default defineSchema({
     firstReleaseDate: v.optional(v.number()),  // ms epoch
     developers: v.optional(v.array(v.string())),
     publishers: v.optional(v.array(v.string())),
-    languages: v.optional(v.array(v.string())), // nombres (English, Spanish, etc.)
+    languages: v.optional(v.array(v.string())),
 
-    // Age rating (preformateado + crudo)
-    ageRatingSystem: v.optional(v.string()),    // ESRB | PEGI | CERO | ...
-    ageRatingCode: v.optional(v.string()),      // "T", "M", "E10+", "18", etc.
+    // Age rating
+    ageRatingSystem: v.optional(v.string()),    // ESRB | PEGI | ...
+    ageRatingCode: v.optional(v.string()),      // "T", "M", "18", etc.
     ageRatingLabel: v.optional(v.string()),     // Teen, Mature, etc.
 
-    // >>> NUEVO: soporte juegos embebidos
+    // soporte juegos embebidos
     embed_url: v.optional(v.string()),
     embedUrl: v.optional(v.string()),
     embed_allow: v.optional(v.string()),
@@ -59,6 +64,19 @@ export default defineSchema({
     .index("by_title", ["title"])
     .index("by_createdAt", ["createdAt"])
     .index("by_popscore", ["popscore"]),
+
+  // 🟢 SCORES por usuario y juego (1 fila por userId+gameId, con el mejor score)
+  scores: defineTable({
+    userId: v.id("profiles"),
+    userEmail: v.string(),
+    gameId: v.id("games"),
+    gameTitle: v.optional(v.string()),
+    score: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_game", ["userId", "gameId"])
+    .index("by_game", ["gameId"]),
 
   transactions: defineTable({
     userId: v.id("profiles"),

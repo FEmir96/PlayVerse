@@ -138,11 +138,24 @@ export default function GameDetailPage() {
     };
   }, [game?.title, fetchShots]);
 
-  // Trailer de DB (si existe)
-  const trailerEmbed = useMemo(() => {
+  // Trailer de DB (si existe): prioriza el principal y cae al extra si está vacío
+  const trailerEmbedPrimary = useMemo(() => {
     const url = (game as any)?.trailer_url ?? null;
     return toEmbed(url);
   }, [game?.trailer_url]);
+
+  const trailerEmbedAlt = useMemo(() => {
+    const url = (game as any)?.extraTrailerUrl ?? null;
+    return toEmbed(url);
+  }, [(game as any)?.extraTrailerUrl]);
+
+  const trailerEmbed = trailerEmbedPrimary || trailerEmbedAlt || null;
+
+  // ⬇️ NUEVO: imágenes extra persistentes
+  const extraImages = useMemo(() => {
+    const arr = ((game as any)?.extraImages as string[] | undefined) ?? [];
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === "string" && s.trim()) : [];
+  }, [(game as any)?.extraImages]);
 
   // Media combinada
   const media: MediaItem[] = useMemo(() => {
@@ -159,11 +172,17 @@ export default function GameDetailPage() {
         ...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const))
       );
     }
+    // ⬇️ Añadir imágenes extra
+    if (extraImages.length) {
+      out.push(
+        ...extraImages.map<MediaItem>((u) => ({ type: "image", src: u } as const))
+      );
+    }
     if (out.length === 0 && (game as any)?.cover_url) {
       out.push({ type: "image", src: (game as any).cover_url } as const);
     }
     return out;
-  }, [trailerEmbed, igdbUrls, (game as any)?.cover_url]);
+  }, [trailerEmbed, igdbUrls, extraImages, (game as any)?.cover_url]);
 
   // Asegurar índice válido
   useEffect(() => {
@@ -244,13 +263,11 @@ export default function GameDetailPage() {
     | undefined;
 
   // ✅ (Opcional) Favoritos del servidor (sólo si el flag está activo)
-  // ✅ Nunca pasamos null a useQuery; si no existe la query, usamos un fallback y "skip"
   const shouldRunServerFav =
     process.env.NEXT_PUBLIC_USE_SERVER_FAVORITES === "1" &&
     Boolean((api as any).queries?.getUserFavorites?.getUserFavorites) &&
     Boolean(profile?._id);
 
-  // función a usar: la real si existe, o una cualquiera como fallback (no se ejecuta con "skip")
   const favoritesFnRef =
     shouldRunServerFav
       ? (api as any).queries.getUserFavorites.getUserFavorites
@@ -1024,20 +1041,20 @@ export default function GameDetailPage() {
 
       {/* Modal: requiere plan Premium */}
       <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
-          <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
-    {/* ⬇️ CENTRADO */}
-    <DialogHeader className="text-center items-center">
-      <DialogTitle className="text-orange-400 text-xl font-semibold text-center mx-auto">
-        Se requiere PREMIUM
-      </DialogTitle>
-    </DialogHeader>
+        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
+          {/* ⬇️ CENTRADO */}
+          <DialogHeader className="text-center items-center">
+            <DialogTitle className="text-orange-400 text-xl font-semibold text-center mx-auto">
+              Se requiere PREMIUM
+            </DialogTitle>
+          </DialogHeader>
 
-    <div className="space-y-4">
-      <p className="text-slate-300 text-center">
-        Para jugar o alquilar este título es necesario contar con la
-        suscripción <span className="text-amber-300 font-semibold">PREMIUM</span> de PlayVerse.
-      </p>
-    </div>
+          <div className="space-y-4">
+            <p className="text-slate-300 text-center">
+              Para jugar o alquilar este título es necesario contar con la
+              suscripción <span className="text-amber-300 font-semibold">PREMIUM</span> de PlayVerse.
+            </p>
+          </div>
 
           {/* ⬇️ Botones uno en cada punta */}
           <DialogFooter className="w-full">

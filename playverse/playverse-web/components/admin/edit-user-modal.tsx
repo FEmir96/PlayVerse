@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,8 +19,8 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
   const [formData, setFormData] = useState({
     username: "",
     email: "",
-    role: "Usuario",
-    status: "Activo",
+    role: "free",     // <- default válido según schema
+    status: "Activo", // <- sólo visual; no se guarda en Convex
   })
 
   useEffect(() => {
@@ -29,7 +28,8 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
       setFormData({
         username: user.name || "",
         email: user.email || "",
-        role: user.role === "admin" ? "Admin" : "Usuario",
+        // normalizamos a minúsculas válidas del schema
+        role: (user.role === "admin" || user.role === "premium" || user.role === "free") ? user.role : "free",
         status: user.status || "Activo",
       })
     }
@@ -73,34 +73,33 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-orange-400 mb-2 block">Rol</Label>
-              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+              <Select
+                value={formData.role}
+                onValueChange={(value) => setFormData({ ...formData, role: value })}
+              >
                 <SelectTrigger className="bg-slate-900 border-slate-700 text-orange-400">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-slate-700">
-                  <SelectItem value="Usuario" className="text-orange-400">
-                    Usuario
-                  </SelectItem>
-                  <SelectItem value="Admin" className="text-orange-400">
-                    Admin
-                  </SelectItem>
+                  <SelectItem value="free" className="text-orange-400">free</SelectItem>
+                  <SelectItem value="premium" className="text-orange-400">premium</SelectItem>
+                  <SelectItem value="admin" className="text-orange-400">admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <Label className="text-orange-400 mb-2 block">Estado</Label>
-              <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <Label className="text-orange-400 mb-2 block">Estado (visual)</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) => setFormData({ ...formData, status: value })}
+              >
                 <SelectTrigger className="bg-slate-900 border-slate-700 text-orange-400">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-slate-700">
-                  <SelectItem value="Activo" className="text-orange-400">
-                    Activo
-                  </SelectItem>
-                  <SelectItem value="Baneado" className="text-orange-400">
-                    Baneado
-                  </SelectItem>
+                  <SelectItem value="Activo" className="text-orange-400">Activo</SelectItem>
+                  <SelectItem value="Baneado" className="text-orange-400">Baneado</SelectItem>
                 </SelectContent>
               </Select>
             </div>

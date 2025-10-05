@@ -1,4 +1,4 @@
-// app/(tu-layout)/Header.tsx
+// playverse-web/components/Header.tsx 
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -199,6 +199,11 @@ export function Header() {
       showWelcome(); // "tu cuenta"
     }
   }, [searchParams, logged, pathname, router, toast, displayName]);
+
+  // ⛳️ NUEVO: no mostrar el header dentro de /static-games/*
+  if (pathname.startsWith("/static-games")) {
+    return null;
+  }
 
   return (
     <header className="bg-slate-900 border-b border-slate-700 relative">
