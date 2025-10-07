@@ -33,24 +33,24 @@ export default defineSchema({
     // IGDB / rating / popscore (opcionales)
     igdbId: v.optional(v.number()),
     igdbSlug: v.optional(v.string()),
-    igdbRating: v.optional(v.number()),        // 0..100
-    igdbUserRating: v.optional(v.number()),    // 0..100
-    igdbCriticRating: v.optional(v.number()),  // 0..100
+    igdbRating: v.optional(v.number()),
+    igdbUserRating: v.optional(v.number()),
+    igdbCriticRating: v.optional(v.number()),
     igdbRatingCount: v.optional(v.number()),
     igdbHypes: v.optional(v.number()),
     popscore: v.optional(v.number()),
     lastIgdbSyncAt: v.optional(v.number()),
 
     // Metadatos extra IGDB
-    firstReleaseDate: v.optional(v.number()),  // ms epoch
+    firstReleaseDate: v.optional(v.number()),
     developers: v.optional(v.array(v.string())),
     publishers: v.optional(v.array(v.string())),
     languages: v.optional(v.array(v.string())),
 
     // Age rating
-    ageRatingSystem: v.optional(v.string()),    // ESRB | PEGI | ...
-    ageRatingCode: v.optional(v.string()),      // "T", "M", "18", etc.
-    ageRatingLabel: v.optional(v.string()),     // Teen, Mature, etc.
+    ageRatingSystem: v.optional(v.string()),
+    ageRatingCode: v.optional(v.string()),
+    ageRatingLabel: v.optional(v.string()),
 
     // soporte juegos embebidos
     embed_url: v.optional(v.string()),
@@ -65,7 +65,7 @@ export default defineSchema({
     .index("by_createdAt", ["createdAt"])
     .index("by_popscore", ["popscore"]),
 
-  // 🟢 SCORES por usuario y juego (1 fila por userId+gameId, con el mejor score)
+  // SCORES
   scores: defineTable({
     userId: v.id("profiles"),
     userEmail: v.string(),
@@ -133,7 +133,8 @@ export default defineSchema({
     createdAt: v.float64(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_game", ["userId", "gameId"]),
+    .index("by_user_game", ["userId", "gameId"])
+    .index("by_game", ["gameId"]), // 👈 para recolectar interesados por juego
 
   upcomingGames: defineTable({
     title: v.string(),
@@ -147,4 +148,28 @@ export default defineSchema({
     .index("by_releaseAt", ["releaseAt"])
     .index("by_title", ["title"])
     .index("by_priority", ["priority"]),
+
+  // Notificaciones por usuario
+  notifications: defineTable({
+    userId: v.id("profiles"),
+    type: v.union(
+      v.literal("rental"),
+      v.literal("new-game"),
+      v.literal("discount"),
+      v.literal("achievement"),
+      v.literal("purchase"),
+      v.literal("game-update"),
+      v.literal("media-added") // 👈 agregado: coincide con tu Dropdown
+    ),
+    title: v.string(),
+    message: v.string(),
+    gameId: v.optional(v.id("games")),
+    transactionId: v.optional(v.id("transactions")),
+    isRead: v.boolean(),
+    readAt: v.optional(v.number()),
+    createdAt: v.number(),
+    meta: v.optional(v.any()),
+  })
+    .index("by_user_time", ["userId", "createdAt"])
+    .index("by_user_isRead", ["userId", "isRead"]),
 });

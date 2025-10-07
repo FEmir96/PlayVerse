@@ -1,7 +1,8 @@
 // convex/transactions.ts
-import { mutation } from "./_generated/server";
+import { mutation, query as txQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import {
   buildPurchaseEmail,
   buildRentalEmail,
@@ -225,5 +226,33 @@ export const purchaseGame = mutation({
     }
 
     return { ok: true as const };
+  },
+});
+
+/** ✅ NUEVO: Lista alquileres (type==='rental') con expiresAt ∈ [now, upTo]
+ *  Lo agrego al FINAL del archivo para no romper nada existente.
+ *  Esto habilita usar api.transactions.listRentalsExpiring desde tus actions.
+ */
+export const listRentalsExpiring = txQuery({
+  args: {
+    now: v.number(),
+    upTo: v.number(),
+  },
+  handler: async (ctx, { now, upTo }) => {
+    const all = await ctx.db.query("transactions").collect();
+    return all
+      .filter((t) => t.type === "rental")
+      .filter(
+        (t) =>
+          typeof t.expiresAt === "number" &&
+          (t.expiresAt as number) >= now &&
+          (t.expiresAt as number) <= upTo
+      )
+      .map((t) => ({
+        _id: t._id as Id<"transactions">,
+        userId: t.userId as Id<"profiles">,
+        gameId: t.gameId as Id<"games">,
+        expiresAt: t.expiresAt as number,
+      }));
   },
 });

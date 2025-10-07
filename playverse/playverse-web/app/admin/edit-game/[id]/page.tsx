@@ -1,3 +1,4 @@
+// playverse-web/app/admin/edit-game/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -56,13 +57,12 @@ export default function AdminEditGamePage() {
   const hasId = Boolean(gameId);
   const { toast } = useToast();
 
-  // ====== DATA: juego
   const game = useQuery(
     api.queries.getGameById.getGameById as any,
     hasId ? ({ id: gameId as Id<"games"> } as any) : "skip"
   ) as Doc<"games"> | null | undefined;
 
-  // ====== IGDB screenshots
+  // IGDB screenshots
   const fetchShots = useAction(api.actions.getIGDBScreenshots.getIGDBScreenshots as any);
   const [igdbUrls, setIgdbUrls] = useState<string[]>([]);
   useEffect(() => {
@@ -92,7 +92,7 @@ export default function AdminEditGamePage() {
     };
   }, [game?.title, fetchShots]);
 
-  // ====== FORM STATE
+  // FORM STATE
   const [title, setTitle] = useState("");
   const [plan, setPlan] = useState<"free" | "premium">("free");
   const [description, setDescription] = useState("");
@@ -104,7 +104,6 @@ export default function AdminEditGamePage() {
   const [genres, setGenres] = useState<string>("");
   const [extraImagesText, setExtraImagesText] = useState("");
 
-  // Cargar valores cuando llega el juego
   useEffect(() => {
     if (!game) return;
     setTitle(game.title ?? "");
@@ -123,10 +122,15 @@ export default function AdminEditGamePage() {
     setExtraImagesText(((game as any).extraImages ?? []).join("\n"));
   }, [game]);
 
-  // ====== PREVIEW: media (1 trailer + igdb + extraImages + fallback cover)
-  const trailerEmbedPrimary = useMemo(() => toEmbed((game as any)?.trailer_url ?? null), [game?.trailer_url]);
-  const trailerEmbedAlt = useMemo(() => toEmbed((game as any)?.extraTrailerUrl ?? null), [(game as any)?.extraTrailerUrl]);
-  const trailerEmbed = trailerEmbedPrimary || trailerEmbedAlt || null;
+  // PREVIEW: 2 trailers si hay ambos
+  const trailerEmbedPrimary = useMemo(
+    () => toEmbed((game as any)?.trailer_url ?? null),
+    [game?.trailer_url]
+  );
+  const trailerEmbedAlt = useMemo(
+    () => toEmbed((game as any)?.extraTrailerUrl ?? null),
+    [(game as any)?.extraTrailerUrl]
+  );
 
   const extraImages = useMemo(() => {
     const raw = (game as any)?.extraImages as string[] | undefined;
@@ -135,8 +139,11 @@ export default function AdminEditGamePage() {
 
   const media: MediaItem[] = useMemo(() => {
     const out: MediaItem[] = [];
-    if (trailerEmbed) {
-      out.push({ type: "video", src: trailerEmbed, thumb: (game as any)?.cover_url || undefined });
+    if (trailerEmbedPrimary) {
+      out.push({ type: "video", src: trailerEmbedPrimary, thumb: (game as any)?.cover_url || undefined });
+    }
+    if (trailerEmbedAlt) {
+      out.push({ type: "video", src: trailerEmbedAlt, thumb: (game as any)?.cover_url || undefined });
     }
     if (igdbUrls.length) {
       out.push(...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u })));
@@ -148,9 +155,9 @@ export default function AdminEditGamePage() {
       out.push({ type: "image", src: (game as any).cover_url });
     }
     return out;
-  }, [trailerEmbed, igdbUrls, extraImages, (game as any)?.cover_url]);
+  }, [trailerEmbedPrimary, trailerEmbedAlt, igdbUrls, extraImages, (game as any)?.cover_url]);
 
-  // slideshow UI
+  // slideshow
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [thumbStart, setThumbStart] = useState(0);
   const [isHoverMain, setIsHoverMain] = useState(false);
@@ -171,7 +178,7 @@ export default function AdminEditGamePage() {
 
   const current = media[selectedIndex];
 
-  // ====== SAVE
+  // SAVE
   const updateGame = useMutation(api.mutations.admin.updateGame.updateGame as any);
   const [saving, setSaving] = useState(false);
 
@@ -182,8 +189,9 @@ export default function AdminEditGamePage() {
   };
 
   const parseList = (text: string): string[] | undefined => {
-    const arr = text
-      .split(/\r?\n|,/g)
+    const clean = text.replace(/\r/g, "");
+    const arr = clean
+      .split(/\n|,/g)
       .map((s) => s.trim())
       .filter(Boolean);
     return arr.length ? arr : undefined;
@@ -195,29 +203,63 @@ export default function AdminEditGamePage() {
     try {
       const patch: any = {};
 
-      // Solo enviamos campos que cambian y que tienen valor válido
+      // texto plano
       if (title !== game.title) patch.title = title;
       if (plan !== (game as any).plan) patch.plan = plan;
-      if (description !== (game as any).description) patch.description = description || undefined;
+      if (description !== (game as any).description) {
+        patch.description = description || null; // permitir limpiar si queda vacío
+      }
 
-      if (coverUrl !== (game as any).cover_url) patch.cover_url = coverUrl || undefined;
-      if (trailerUrl !== (game as any).trailer_url) patch.trailer_url = trailerUrl || undefined;
-      if (extraTrailerUrl !== (game as any).extraTrailerUrl) patch.extraTrailerUrl = extraTrailerUrl || undefined;
+      // urls clearables: si input vacío => null
+      const origCover = (game as any).cover_url ?? "";
+      const origTrailer = (game as any).trailer_url ?? "";
+      const origTrailerExtra = (game as any).extraTrailerUrl ?? "";
 
-      // precios (omitir si vacío para no mandar null)
+      if (coverUrl !== origCover) {
+        patch.cover_url = coverUrl.trim() === "" ? null : coverUrl.trim();
+      }
+      if (trailerUrl !== origTrailer) {
+        patch.trailer_url = trailerUrl.trim() === "" ? null : trailerUrl.trim();
+      }
+      if (extraTrailerUrl !== origTrailerExtra) {
+        patch.extraTrailerUrl = extraTrailerUrl.trim() === "" ? null : extraTrailerUrl.trim();
+      }
+
+      // precios: si vacío y antes había algo -> null
       const pp = toNumberOrUndefined(purchasePrice);
+      const hadPP = typeof (game as any).purchasePrice === "number";
       if (typeof pp !== "undefined") patch.purchasePrice = pp;
+      else if (!hadPP && purchasePrice.trim() !== "") {
+        // si el valor es basura, ignoramos
+      } else if (hadPP && purchasePrice.trim() === "") {
+        patch.purchasePrice = null;
+      }
 
       const wp = toNumberOrUndefined(weeklyPrice);
+      const hadWP = typeof (game as any).weeklyPrice === "number";
       if (typeof wp !== "undefined") patch.weeklyPrice = wp;
+      else if (!hadWP && weeklyPrice.trim() !== "") {
+      } else if (hadWP && weeklyPrice.trim() === "") {
+        patch.weeklyPrice = null;
+      }
 
       // géneros
       const genresArr = parseList(genres);
       if (genresArr) patch.genres = genresArr;
+      else if (Array.isArray((game as any).genres) && (game as any).genres!.length && genres.trim() === "") {
+        patch.genres = []; // limpiar
+      }
 
       // imágenes extra
       const extras = parseList(extraImagesText);
-      if (typeof extras !== "undefined") patch.extraImages = extras;
+      if (typeof extras !== "undefined") {
+        patch.extraImages = extras; // set
+      } else {
+        const hadExtras = Array.isArray((game as any).extraImages) && (game as any).extraImages.length > 0;
+        if (hadExtras && extraImagesText.trim() === "") {
+          patch.extraImages = []; // clear
+        }
+      }
 
       if (Object.keys(patch).length === 0) {
         toast({ title: "Sin cambios", description: "No hay nada que guardar." });
@@ -273,9 +315,8 @@ export default function AdminEditGamePage() {
 
         {game && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* LEFT: Preview (igual estilo que detalle) */}
+            {/* LEFT: Preview */}
             <div className="space-y-6">
-              {/* Media box */}
               <div
                 className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden"
                 onMouseEnter={() => setIsHoverMain(true)}
@@ -299,7 +340,6 @@ export default function AdminEditGamePage() {
                 )}
               </div>
 
-              {/* Barra fija: título + plan */}
               <div className="bg-slate-800/70 border border-orange-400/20 rounded-lg px-4 py-3 flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-orange-400">{game.title}</h2>
                 <div className="flex items-center gap-2">
@@ -309,7 +349,7 @@ export default function AdminEditGamePage() {
                 </div>
               </div>
 
-              {/* Thumbnails */}
+              {/* thumbs */}
               <div className="relative">
                 <div className="flex items-center gap-2">
                   <Button
@@ -378,7 +418,6 @@ export default function AdminEditGamePage() {
                 </div>
               </div>
 
-              {/* Descripción (preview) */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-orange-400 mb-4">Descripción</h3>
                 <p className="text-slate-300 leading-relaxed">
@@ -498,9 +537,9 @@ export default function AdminEditGamePage() {
 
               <div className="bg-slate-900 rounded-lg border border-slate-700 p-4">
                 <p className="text-slate-400 text-sm">
-                  La vista previa usa: <span className="text-orange-300">trailer (principal o extra)</span>,{" "}
+                  La vista previa usa: <span className="text-orange-300">trailer principal y/o extra</span>,{" "}
                   <span className="text-orange-300">screenshots IGDB</span> y{" "}
-                  <span className="text-orange-300">imágenes extra</span>. El orden es el mismo que en la ficha pública.
+                  <span className="text-orange-300">imágenes extra</span>.
                 </p>
               </div>
             </div>

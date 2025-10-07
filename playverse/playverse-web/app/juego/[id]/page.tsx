@@ -138,7 +138,7 @@ export default function GameDetailPage() {
     };
   }, [game?.title, fetchShots]);
 
-  // Trailer de DB (si existe): prioriza el principal y cae al extra si está vacío
+  // ⬇️ OJO: ahora preparamos **dos** embeds si existen
   const trailerEmbedPrimary = useMemo(() => {
     const url = (game as any)?.trailer_url ?? null;
     return toEmbed(url);
@@ -149,40 +149,40 @@ export default function GameDetailPage() {
     return toEmbed(url);
   }, [(game as any)?.extraTrailerUrl]);
 
-  const trailerEmbed = trailerEmbedPrimary || trailerEmbedAlt || null;
-
-  // ⬇️ NUEVO: imágenes extra persistentes
+  // ⬇️ Imágenes extra persistentes
   const extraImages = useMemo(() => {
     const arr = ((game as any)?.extraImages as string[] | undefined) ?? [];
     return Array.isArray(arr) ? arr.filter((s) => typeof s === "string" && s.trim()) : [];
   }, [(game as any)?.extraImages]);
 
-  // Media combinada
+  // Media combinada (empuja **ambos** trailers si hay)
   const media: MediaItem[] = useMemo(() => {
     const out: MediaItem[] = [];
-    if (trailerEmbed) {
+    if (trailerEmbedPrimary) {
       out.push({
         type: "video",
-        src: trailerEmbed,
+        src: trailerEmbedPrimary,
         thumb: (game as any)?.cover_url || undefined,
-      } as const);
+      });
+    }
+    if (trailerEmbedAlt) {
+      out.push({
+        type: "video",
+        src: trailerEmbedAlt,
+        thumb: (game as any)?.cover_url || undefined,
+      });
     }
     if (Array.isArray(igdbUrls) && igdbUrls.length) {
-      out.push(
-        ...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u } as const))
-      );
+      out.push(...igdbUrls.map<MediaItem>((u) => ({ type: "image", src: u })));
     }
-    // ⬇️ Añadir imágenes extra
     if (extraImages.length) {
-      out.push(
-        ...extraImages.map<MediaItem>((u) => ({ type: "image", src: u } as const))
-      );
+      out.push(...extraImages.map<MediaItem>((u) => ({ type: "image", src: u })));
     }
     if (out.length === 0 && (game as any)?.cover_url) {
-      out.push({ type: "image", src: (game as any).cover_url } as const);
+      out.push({ type: "image", src: (game as any).cover_url });
     }
     return out;
-  }, [trailerEmbed, igdbUrls, extraImages, (game as any)?.cover_url]);
+  }, [trailerEmbedPrimary, trailerEmbedAlt, igdbUrls, extraImages, (game as any)?.cover_url]);
 
   // Asegurar índice válido
   useEffect(() => {

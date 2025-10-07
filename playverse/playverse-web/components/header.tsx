@@ -1,4 +1,4 @@
-// playverse-web/components/Header.tsx 
+// playverse-web/components/Header.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -10,14 +10,11 @@ import { Heart, User, LogOut, Shield } from "lucide-react";
 import { FavoritesDropdown } from "./favorites-dropdown";
 import { NotificationsDropdown } from "./notifications-dropdown";
 
-// auth store (email/password)
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
 
-// next-auth
 import { useSession } from "next-auth/react";
 
-// shadcn dropdown
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,39 +23,30 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// ✅ favoritos
 import { useFavoritesStore, setFavoritesScope } from "@/components/favoritesStore";
 
-// ✅ Convex: perfil para saber el rol
 import { useQuery } from "convex/react";
-import type { FunctionReference } from "convex/server";
-import { api } from "@convex";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 
-// ✅ toast
 import { useToast } from "@/hooks/use-toast";
-
-const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"]
-    .getUserByEmail as FunctionReference<"query">;
 
 export function Header() {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
   const [showFavorites, setShowFavorites] = useState(false);
+  const [userOpen, setUserOpen] = useState(false); // ⬅️ controlamos el menú de la personita
   const [loggingOut, setLoggingOut] = useState(false);
 
   const { toast } = useToast();
   const firedWelcome = useRef(false);
 
-  // store local (email/password)
   const localUser = useAuthStore((s: AuthState) => s.user);
   const clearAuth = useAuthStore((s: AuthState) => s.clear);
 
-  // sesión OAuth (Google / Microsoft / etc.)
   const { data: session, status } = useSession();
 
-  // logged: true si hay sesión de NextAuth o local
   const logged = useMemo(
     () => status === "authenticated" || Boolean(localUser),
     [status, localUser]
@@ -72,16 +60,15 @@ export function Header() {
     localUser?.email?.toLowerCase() ||
     null;
 
-  // Traer perfil para conocer rol
+  // perfil
   const profile = useQuery(
-    getUserByEmailRef,
+    api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
-  ) as { role?: "free" | "premium" | "admin" } | null | undefined;
+  ) as ({ _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined);
 
-  const role: "free" | "premium" | "admin" =
-    (profile?.role as any) || "free";
+  const role = (profile?.role as any) || "free";
+  const userId: Id<"profiles"> | null = profile?._id ?? null;
 
-  // Mostrar “Premium” sólo para FREE, ADMIN o visitantes
   const shouldShowPremium = !logged || role === "free" || role === "admin";
 
   const isActiveLink = (href: string) => {
@@ -89,7 +76,6 @@ export function Header() {
     return pathname.startsWith(href);
   };
 
-  // Activo vs hover
   const getLinkClasses = (href: string) => {
     const base =
       "font-medium transition-all duration-200 px-3 py-2 relative rounded-md text-orange-400";
@@ -106,20 +92,11 @@ export function Header() {
     ].join(" ");
   };
 
-  // Vincular scope de favoritos al email del usuario
   useEffect(() => {
     const scope = loginEmail ?? "__guest__";
     setFavoritesScope(scope);
   }, [loginEmail]);
 
-  /**
-   * Logout unificado:
-   * - Limpia auth local
-   * - signOut de NextAuth sin redirect
-   * - Scope favoritos a invitado
-   * - Navega a "/?logout=1"
-   * - ❗Sin toast local (evita duplicado: queda solo el rojo global)
-   */
   const handleLogout = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -146,33 +123,30 @@ export function Header() {
     }
   };
 
-  // contador favoritos
   const favCount = useFavoritesStore((s) => s.items.length);
 
-  /**
-   * Welcome toast después de login:
-   * - Caso 1: query ?auth=ok&provider=google|xbox|credentials → muestra y limpia query
-   * - Caso 2: si no viene query (p. ej. formulario), muestra 1 sola vez al detectar logged
-   */
   useEffect(() => {
     if (firedWelcome.current) return;
 
     const auth = searchParams.get("auth");
-    const provider = (searchParams.get("provider") || "").toLowerCase(); // "google" | "xbox" | "credentials"
+    const provider = (searchParams.get("provider") || "").toLowerCase();
 
     const showWelcome = (provLabel?: string) => {
       if (firedWelcome.current) return;
       firedWelcome.current = true;
 
-      // Evitar repetir entre navegaciones de la misma sesión
       try {
         if (sessionStorage.getItem("pv_welcomed") === "1") return;
         sessionStorage.setItem("pv_welcomed", "1");
       } catch {}
 
-      toast({
-        title: `¡Bienvenido, ${displayName ?? "gamer"}!`,
-        description: `Inicio de sesión con ${provLabel ?? "tu cuenta"} exitoso.`,
+      const name = displayName ?? "gamer";
+      const label = provLabel ?? "tu cuenta";
+      if (!logged) return;
+
+      (toast as any)({
+        title: `¡Bienvenido, ${name}!`,
+        description: `Inicio de sesión con ${label} exitoso.`,
       });
     };
 
@@ -185,7 +159,6 @@ export function Header() {
 
       showWelcome(provLabel);
 
-      // limpiar ?auth=ok&provider=...
       const params = new URLSearchParams(searchParams.toString());
       params.delete("auth");
       params.delete("provider");
@@ -194,13 +167,15 @@ export function Header() {
       return;
     }
 
-    // Fallback: si no hay query pero ya está logueado (ej. login por formulario sin qs)
-    if (logged) {
-      showWelcome(); // "tu cuenta"
-    }
+    if (logged) showWelcome();
   }, [searchParams, logged, pathname, router, toast, displayName]);
 
-  // ⛳️ NUEVO: no mostrar el header dentro de /static-games/*
+  // cerrar popovers al navegar
+  useEffect(() => {
+    setShowFavorites(false);
+    setUserOpen(false);
+  }, [pathname]);
+
   if (pathname.startsWith("/static-games")) {
     return null;
   }
@@ -209,7 +184,6 @@ export function Header() {
     <header className="bg-slate-900 border-b border-slate-700 relative">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          {/* Logo */}
           <Link href="/" className="flex items-center">
             <Image
               src="/images/playverse-logo.png"
@@ -221,36 +195,23 @@ export function Header() {
             />
           </Link>
 
-          {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-1">
-            <Link href="/" className={getLinkClasses("/")}>
-              Inicio
-            </Link>
-            <Link href="/catalogo" className={getLinkClasses("/catalogo")}>
-              Catálogo
-            </Link>
-            <Link href="/mis-juegos" className={getLinkClasses("/mis-juegos")}>
-              Mis juegos
-            </Link>
-
+            <Link href="/" className={getLinkClasses("/")}>Inicio</Link>
+            <Link href="/catalogo" className={getLinkClasses("/catalogo")}>Catálogo</Link>
+            <Link href="/mis-juegos" className={getLinkClasses("/mis-juegos")}>Mis juegos</Link>
             {shouldShowPremium && (
-              <Link href="/premium" className={getLinkClasses("/premium")}>
-                Premium
-              </Link>
+              <Link href="/premium" className={getLinkClasses("/premium")}>Premium</Link>
             )}
-
-            <Link href="/contacto" className={getLinkClasses("/contacto")}>
-              Contacto
-            </Link>
+            <Link href="/contacto" className={getLinkClasses("/contacto")}>Contacto</Link>
           </nav>
 
-          {/* Right side */}
           <div className="flex items-center space-x-3">
             {logged && (
               <>
-                <NotificationsDropdown />
+                {/* 🔔 100% server & por usuario */}
+                <NotificationsDropdown userId={userId} />
 
-                {/* Favorites */}
+                {/* ❤️ abre/cierra con animación; el panel maneja click-outside */}
                 <div className="relative">
                   <Button
                     size="icon"
@@ -261,8 +222,10 @@ export function Header() {
                                hover:ring-1 hover:ring-orange-400/40
                                focus-visible:outline-none
                                focus-visible:ring-2 focus-visible:ring-orange-400/60"
-                    onClick={() => setShowFavorites(!showFavorites)}
+                    onClick={() => setShowFavorites((v) => !v)}
                     title="Favoritos"
+                    aria-expanded={showFavorites}
+                    aria-controls="favorites-popover"
                   >
                     <Heart className="w-5 h-5" />
                     {favCount > 0 && (
@@ -271,15 +234,18 @@ export function Header() {
                       </span>
                     )}
                   </Button>
-                  <FavoritesDropdown
-                    isOpen={showFavorites}
-                    onClose={() => setShowFavorites(false)}
-                  />
+
+                  {/* wrapper para animación suave (el componente ya aplica transition) */}
+                  <div id="favorites-popover">
+                    <FavoritesDropdown
+                      isOpen={showFavorites}
+                      onClose={() => setShowFavorites(false)}
+                    />
+                  </div>
                 </div>
               </>
             )}
 
-            {/* Auth UI */}
             {!logged ? (
               <>
                 <Link href="/auth/login">
@@ -297,89 +263,103 @@ export function Header() {
                 </Link>
               </>
             ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="relative text-orange-400 rounded-xl transition-all duration-200
-                                 hover:text-amber-300 hover:bg-orange-400/10
-                                 hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
-                                 hover:ring-1 hover:ring-orange-400/40
-                                 focus-visible:outline-none
-                                 focus-visible:ring-2 focus-visible:ring-orange-400/60"
-                      title={displayName}
-                    >
-                      <User className="w-5 h-5" />
-                    </Button>
-                  </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  sideOffset={8}
-                  className="z-50 bg-slate-900 border border-slate-700 text-orange-400"
-                >
-                  <div className="px-3 py-2 text-sm">
-                    {displayName && (
-                      <div className="font-semibold">{displayName}</div>
-                    )}
-                    {displayEmail && (
-                      <div className="text-xs text-slate-400">{displayEmail}</div>
-                    )}
-                  </div>
-                  <DropdownMenuSeparator className="bg-slate-700" />
-
-                  <DropdownMenuItem asChild>
-                    <Link
-                      href="/perfil"
-                      className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
-                                hover:bg-orange-400/10 hover:text-amber-300
-                                hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
-                                hover:ring-1 hover:ring-orange-400/40
-                                focus-visible:outline-none
-                                focus-visible:ring-2 focus-visible:ring-orange-400/60"
-                    >
-                      <User className="w-4 h-4" />
-                      Ver perfil
-                    </Link>
-                  </DropdownMenuItem>
-
-                  {/* Solo admins ven el panel */}
-                  {role === "admin" && (
-                    <DropdownMenuItem asChild className="cursor-pointer">
-                      <Link
-                        href="/admin"
-                        className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
-                                  hover:bg-orange-400/10 hover:text-amber-300
-                                  hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
-                                  hover:ring-1 hover:ring-orange-400/40
-                                  focus-visible:outline-none
-                                  focus-visible:ring-2 focus-visible:ring-orange-400/60"
+              <div className="relative">
+                {/* Controlamos el Dropdown de shadcn para poder hacer transición + toggle confiable */}
+                <DropdownMenu open={userOpen} onOpenChange={setUserOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="relative text-orange-400 rounded-xl transition-all duration-200
+                                   hover:text-amber-300 hover:bg-orange-400/10
+                                   hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                                   hover:ring-1 hover:ring-orange-400/40
+                                   focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                        title={displayName}
+                        onClick={() => setUserOpen((v) => !v)}
+                        aria-expanded={userOpen}
+                        aria-controls="user-menu-pop"
                       >
-                        <Shield className="w-4 h-4" />
-                        Panel Administrador
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
+                        <User className="w-5 h-5" />
+                      </Button>
+                    </div>
+                  </DropdownMenuTrigger>
 
-                  <DropdownMenuSeparator className="bg-slate-700" />
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className={`cursor-pointer rounded-md transition-all duration-200
-                                text-red-400 focus:text-red-400
-                                hover:bg-red-400/10
-                                hover:shadow-[0_0_18px_rgba(248,113,113,0.35)]
-                                hover:ring-1 hover:ring-red-400/40
-                                focus-visible:outline-none
-                                focus-visible:ring-2 focus-visible:ring-red-400/60
-                                ${loggingOut ? "opacity-60 pointer-events-none" : ""}`}
+                  {/* Borde degradado + animación suave */}
+                  <DropdownMenuContent
+                    id="user-menu-pop"
+                    align="end"
+                    sideOffset={8}
+                    className="z-50 bg-transparent border-0 p-0
+                               transition-all duration-200 ease-out
+                               data-[state=closed]:opacity-0 data-[state=closed]:translate-y-1 data-[state=closed]:scale-95"
                   >
-                    <LogOut className="w-4 h-4" />
-                    {loggingOut ? "Cerrando..." : "Cerrar sesión"}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-orange-400/40 to-purple-500/40">
+                      <div className="rounded-2xl bg-slate-900 border border-slate-700 overflow-hidden">
+                        <div className="px-3 py-2 text-sm">
+                          {displayName && <div className="font-semibold text-orange-400">{displayName}</div>}
+                          {displayEmail && (
+                            <div className="text-xs text-slate-400">{displayEmail}</div>
+                          )}
+                        </div>
+                        <DropdownMenuSeparator className="bg-slate-700" />
+
+                        <DropdownMenuItem asChild>
+                          <Link
+                            href="/perfil"
+                            className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
+                                      hover:bg-orange-400/10 hover:text-amber-300
+                                      hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                                      hover:ring-1 hover:ring-orange-400/40
+                                      focus-visible:outline-none
+                                      focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400"
+                            onClick={() => setUserOpen(false)}
+                          >
+                            <User className="w-4 h-4" />
+                            Ver perfil
+                          </Link>
+                        </DropdownMenuItem>
+
+                        {role === "admin" && (
+                          <DropdownMenuItem asChild className="cursor-pointer">
+                            <Link
+                              href="/admin"
+                              className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
+                                        hover:bg-orange-400/10 hover:text-amber-300
+                                        hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                                        hover:ring-1 hover:ring-orange-400/40
+                                        focus-visible:outline-none
+                                        focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400"
+                              onClick={() => setUserOpen(false)}
+                            >
+                              <Shield className="w-4 h-4" />
+                              Panel Administrador
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
+
+                        <DropdownMenuSeparator className="bg-slate-700" />
+                        <DropdownMenuItem
+                          onClick={handleLogout}
+                          className={`cursor-pointer rounded-md transition-all duration-200
+                                      text-red-400 focus:text-red-400
+                                      hover:bg-red-400/10
+                                      hover:shadow-[0_0_18px_rgba(248,113,113,0.35)]
+                                      hover:ring-1 hover:ring-red-400/40
+                                      focus-visible:outline-none
+                                      focus-visible:ring-2 focus-visible:ring-red-400/60
+                                      ${loggingOut ? "opacity-60 pointer-events-none" : ""}`}
+                        >
+                          <LogOut className="w-4 h-4" />
+                          {loggingOut ? "Cerrando..." : "Cerrar sesión"}
+                        </DropdownMenuItem>
+                      </div>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
           </div>
         </div>

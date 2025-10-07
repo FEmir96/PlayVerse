@@ -1,6 +1,7 @@
 // convex/mutations/admin/updateGame.ts
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
+import type { Id } from "../../_generated/dataModel";
 
 function toNum(x: unknown): number | undefined {
   if (typeof x === "number") return Number.isFinite(x) ? x : undefined;
@@ -25,15 +26,13 @@ export const updateGame = mutation({
       plan: v.optional(v.union(v.literal("free"), v.literal("premium"), v.string())),
       genres: v.optional(v.array(v.string())),
 
-      // precios (permitimos number|string|null)
       purchasePrice: v.optional(v.union(v.number(), v.string(), v.null())),
       weeklyPrice: v.optional(v.union(v.number(), v.string(), v.null())),
 
-      // NUEVO
       extraTrailerUrl: v.optional(v.union(v.string(), v.null())),
       extraImages: v.optional(v.array(v.string())),
 
-      // Aliases tolerados
+      // aliases tolerados
       price_buy: v.optional(v.union(v.number(), v.string(), v.null())),
       weekly_price: v.optional(v.union(v.number(), v.string(), v.null())),
       extra_images: v.optional(v.array(v.string())),
@@ -45,9 +44,13 @@ export const updateGame = mutation({
     const gid = gameId ?? id;
     if (!gid) throw new Error("Falta gameId (o id).");
 
+    // 1) Traer estado actual para comparar cambios
+    const before = await ctx.db.get(gid);
+    if (!before) throw new Error("Juego no encontrado");
+
     const raw: Record<string, any> = { ...patch };
 
-    // plan → minúsculas válidas
+    // plan → normalizar
     if (typeof raw.plan === "string") {
       const p = raw.plan.trim().toLowerCase();
       raw.plan = p === "premium" ? "premium" : p === "free" ? "free" : undefined;
@@ -67,51 +70,165 @@ export const updateGame = mutation({
       raw.extraTrailerUrl = raw.extra_trailer_url; delete raw.extra_trailer_url;
     }
 
-    // precios a número; null => ignorar
+    // precios a número; null => limpiar
     if (raw.purchasePrice !== undefined) {
-      if (raw.purchasePrice === null) delete raw.purchasePrice;
-      else {
+      if (raw.purchasePrice === null) {
+        raw.purchasePrice = null;
+      } else {
         const n = toNum(raw.purchasePrice);
-        if (n === undefined) delete raw.purchasePrice; else raw.purchasePrice = n;
+        raw.purchasePrice = n ?? null;
       }
     }
     if (raw.weeklyPrice !== undefined) {
-      if (raw.weeklyPrice === null) delete raw.weeklyPrice;
-      else {
+      if (raw.weeklyPrice === null) {
+        raw.weeklyPrice = null;
+      } else {
         const n = toNum(raw.weeklyPrice);
-        if (n === undefined) delete raw.weeklyPrice; else raw.weeklyPrice = n;
+        raw.weeklyPrice = n ?? null;
       }
     }
 
-    // extraTrailerUrl: permitir limpiar si viene null/"" (lo ignoramos si null/empty)
-    if (raw.extraTrailerUrl !== undefined) {
-      const s = typeof raw.extraTrailerUrl === "string" ? raw.extraTrailerUrl.trim() : "";
-      if (!s) delete raw.extraTrailerUrl;
-      else raw.extraTrailerUrl = s;
+    // clearables: string | null, normalizar vacíos a null
+    const clearableStrings = ["cover_url", "trailer_url", "extraTrailerUrl"] as const;
+    for (const k of clearableStrings) {
+      if (k in raw) {
+        if (raw[k] === null) {
+          raw[k] = null;
+        } else if (typeof raw[k] === "string") {
+          const s = raw[k].trim();
+          raw[k] = s.length ? s : null;
+        } else {
+          raw[k] = null;
+        }
+      }
     }
 
-    // extraImages: filtrar vacíos
+    // extraImages: [] limpia, normalizar strings
     if (raw.extraImages !== undefined) {
       if (Array.isArray(raw.extraImages)) {
-        const imgs = raw.extraImages.map((x: any) => (typeof x === "string" ? x.trim() : ""))
+        const imgs = raw.extraImages
+          .map((x: any) => (typeof x === "string" ? x.trim() : ""))
           .filter(Boolean);
-        if (!imgs.length) delete raw.extraImages;
-        else raw.extraImages = imgs;
+        raw.extraImages = imgs; // [] si quedó vacío
       } else {
-        delete raw.extraImages;
+        raw.extraImages = [];
       }
     }
 
-    // Quitar null/undefined
+    // Filtrar undefined; permitir null/[] en campos clearables
+    const allowNull = new Set(["cover_url", "trailer_url", "extraTrailerUrl", "purchasePrice", "weeklyPrice"]);
     const toSave = Object.fromEntries(
-      Object.entries(raw).filter(([, v]) => v !== undefined && v !== null)
+      Object.entries(raw).filter(([k, v]) => v !== undefined && (v !== null || allowNull.has(k)))
     );
 
-    if (Object.keys(toSave).length > 0) {
-      (toSave as any).updatedAt = Date.now();
-      await ctx.db.patch(gid, toSave as any);
+    // 2) Si no hay nada para guardar, cortar
+    if (Object.keys(toSave).length === 0) {
+      return { ok: true, changed: [] as string[] };
     }
 
-    return { ok: true };
+    // 3) Detectar cambios por categorías (comparando con `before`)
+    const changed: string[] = [];
+
+    const changedField = (k: keyof typeof before | string) => {
+      // @ts-ignore
+      const prev = (before as any)[k];
+      const next = (toSave as any)[k];
+      return (k in toSave) && JSON.stringify(prev) !== JSON.stringify(next);
+    };
+
+    // Texto
+    const textChanged: string[] = [];
+    if (changedField("title")) textChanged.push("título");
+    if (changedField("description")) textChanged.push("sinopsis");
+
+    // Precios
+    const priceChanged: string[] = [];
+    if (changedField("purchasePrice")) priceChanged.push("precio de compra");
+    if (changedField("weeklyPrice")) priceChanged.push("precio de alquiler");
+
+    // Meta
+    const metaChanged: string[] = [];
+    if (changedField("genres")) metaChanged.push("géneros");
+    if (changedField("plan")) metaChanged.push("plan");
+
+    // Media
+    const mediaChanged: string[] = [];
+    if (changedField("cover_url")) mediaChanged.push("portada");
+    if (changedField("trailer_url")) mediaChanged.push("trailer principal");
+    if (changedField("extraTrailerUrl")) mediaChanged.push("trailer extra");
+    if (changedField("extraImages")) mediaChanged.push("imágenes");
+
+    if (textChanged.length) changed.push(...textChanged);
+    if (priceChanged.length) changed.push(...priceChanged);
+    if (metaChanged.length) changed.push(...metaChanged);
+    if (mediaChanged.length) changed.push(...mediaChanged);
+
+    // 4) Guardar
+    (toSave as any).updatedAt = Date.now();
+    await ctx.db.patch(gid, toSave as any);
+
+    // 5) Notificar interesados (favoritos + transacciones del juego)
+    if (changed.length > 0) {
+      const interestedUserIds = new Set<Id<"profiles">>();
+
+      // Favoritos por juego
+      const favs = await ctx.db
+        .query("favorites")
+        .withIndex("by_game", (q) => q.eq("gameId", gid))
+        .take(10000);
+      for (const f of favs) interestedUserIds.add(f.userId);
+
+      // Transacciones por juego
+      const txs = await ctx.db
+        .query("transactions")
+        .withIndex("by_game", (q) => q.eq("gameId", gid))
+        .take(10000);
+      for (const t of txs) interestedUserIds.add(t.userId);
+
+      if (interestedUserIds.size > 0) {
+        const title = `Actualización: ${before.title ?? "Juego"}`;
+
+        const hadMedia = mediaChanged.length > 0;
+        const hadNonMedia = textChanged.length > 0 || priceChanged.length > 0 || metaChanged.length > 0;
+
+        const makeMsg = () => {
+          const parts: string[] = [];
+          if (textChanged.length) parts.push(`texto (${textChanged.join(", ")})`);
+          if (priceChanged.length) parts.push(`precios (${priceChanged.join(", ")})`);
+          if (metaChanged.length) parts.push(`metadatos (${metaChanged.join(", ")})`);
+          if (mediaChanged.length) parts.push(`multimedia (${mediaChanged.join(", ")})`);
+          return `Se actualizaron: ${parts.join("; ")}.`;
+        };
+
+        const now = Date.now();
+
+        // Insertar 1 notificación por usuario
+        await Promise.all(
+          Array.from(interestedUserIds).map((uid) => {
+            const type = hadMedia && !hadNonMedia ? "media-added" : "game-update";
+            return ctx.db.insert("notifications", {
+              userId: uid,
+              type: type as any,
+              title,
+              message: makeMsg(),
+              gameId: gid,
+              transactionId: undefined,
+              isRead: false,
+              readAt: undefined,
+              createdAt: now,
+              meta: {
+                changed,
+                mediaChanged,
+                textChanged,
+                priceChanged,
+                metaChanged,
+              },
+            });
+          })
+        );
+      }
+    }
+
+    return { ok: true, changed };
   },
 });

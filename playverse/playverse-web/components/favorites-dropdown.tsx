@@ -1,6 +1,7 @@
+// playverse-web/components/favorites-dropdown.tsx
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { X, Trash2, ShoppingCart, PlaySquare } from "lucide-react";
@@ -8,7 +9,7 @@ import { useFavoritesStore } from "@/components/favoritesStore";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
-// ➕ imports para sesión y convex (no tocan el UI)
+// sesión + convex
 import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
@@ -41,18 +42,47 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
     api.mutations.toggleFavorite.toggleFavorite as any
   );
 
+  // 🔒 cerrar al click afuera (sin tocar estilos)
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (!isOpen) return;
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape" && isOpen) onClose();
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [isOpen, onClose]);
+
   useEffect(() => {
     const handler = () => {};
     window.addEventListener("pv:favorites:changed", handler);
     return () => window.removeEventListener("pv:favorites:changed", handler);
   }, []);
 
-  if (!isOpen) return null;
-
   const hasItems = items && items.length > 0;
 
+  // ⬇️ SIEMPRE montado para animación suave
   return (
-    <div className="absolute right-0 mt-3 w-[380px] z-50">
+    <div
+      className={`
+        absolute right-0 mt-3 w-[380px] z-50
+        transition-all duration-200 ease-out
+        ${isOpen ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-1 scale-95 pointer-events-none"}
+      `}
+      ref={wrapRef}
+      role="dialog"
+      aria-hidden={!isOpen}
+    >
       <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-orange-400/40 to-purple-500/40">
         <div className="rounded-2xl bg-slate-900 border border-slate-700 overflow-hidden shadow-2xl">
           {/* Header */}
@@ -121,7 +151,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                         {/* Papelera con glow en hover */}
                         <button
                           onClick={async () => {
-                            // 1) UI optimista: quito local y aviso
+                            // 1) UI optimista
                             remove(g.id);
                             try {
                               window.dispatchEvent(new Event("pv:favorites:changed"));
@@ -131,16 +161,14 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                               description: `${g.title} se quitó de tu lista.`,
                             });
 
-                            // 2) Server: usar toggleFavorite para que quede REMOVIDO
+                            // 2) Server
                             try {
                               if (profile?._id) {
-                                // primer toggle
                                 const res = await toggleFavorite({
                                   userId: profile._id as Id<"profiles">,
                                   gameId: g.id as unknown as Id<"games">,
                                 } as any);
 
-                                // algunas implementaciones devuelven {added: boolean} o boolean
                                 const added =
                                   typeof res === "boolean"
                                     ? res
@@ -151,7 +179,6 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                                           res.result === "added")
                                       );
 
-                                // si por desincronización el server lo "agregó", togglear otra vez para forzar eliminación
                                 if (added) {
                                   await toggleFavorite({
                                     userId: profile._id as Id<"profiles">,
@@ -160,7 +187,6 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                                 }
                               }
                             } catch (err) {
-                              // no rompo UX; sólo log y un aviso suave si querés
                               console.error("toggleFavorite (trash) error:", err);
                             }
                           }}

@@ -7,11 +7,15 @@ import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { FunctionReference } from "convex/server";
 
-type GameKey = "snake" | "pulse-riders";
+// 👇 URL del Tetris hosteado en Vercel (de .env)
+const TETRIS_URL = process.env.NEXT_PUBLIC_TETRIS_URL || "";
+
+type GameKey = "snake" | "pulse-riders" | "tetris";
 
 const GAME_META: Record<GameKey, { title: string; embedUrl: string }> = {
-  snake:          { title: "Snake (Freeware)", embedUrl: "/static-games/snake" },
-  "pulse-riders": { title: "Pulse Riders",     embedUrl: "/static-games/pulse-riders" },
+  snake:          { title: "Snake (Freeware)",   embedUrl: "/static-games/snake" },
+  "pulse-riders": { title: "Pulse Riders",       embedUrl: "/static-games/pulse-riders" },
+  tetris:         { title: "Tetris (PlayVerse)", embedUrl: TETRIS_URL },
 };
 
 // ✅ Query: top de scores
@@ -33,11 +37,30 @@ export default function LeaderboardPage() {
   const router = useRouter();
 
   const gameParam = params.get("game");
-  const selected: GameKey = gameParam === "pulse-riders" ? "pulse-riders" : "snake";
+  const selected: GameKey =
+    gameParam === "pulse-riders"
+      ? "pulse-riders"
+      : gameParam === "tetris"
+      ? "tetris"
+      : "snake";
+
   const meta = GAME_META[selected];
 
-  // Datos del top
-  const rows = useQuery(
+  // 🔁 Fallback para Tetris: absoluta (env) + relativa (/tetris)
+  const tetrisAbs = GAME_META.tetris.embedUrl; // puede estar vacío si falta el .env
+  let tetrisRel = "/tetris";
+  try {
+    if (tetrisAbs) {
+      const u = new URL(tetrisAbs, "https://example.org");
+      tetrisRel = u.pathname || "/tetris";
+    }
+  } catch {
+    // si TETRIS_URL no es URL válida, usamos /tetris
+  }
+
+  // ---------- TOP SCORES ----------
+  // Primaria: usa el embedUrl del tab seleccionado (tal cual ya tenías)
+  const rowsPrimary = useQuery(
     topByGameRef as any,
     { embedUrl: meta.embedUrl, limit: 25 } as any
   ) as Array<{
@@ -48,13 +71,50 @@ export default function LeaderboardPage() {
     updatedAt?: number;
   }> | undefined;
 
-  // 🔎 Resolver /play/[id] del juego seleccionado
-  const selectedInfo = useQuery(
+  // Fallback (solo efectivo para Tetris): consulta también por la ruta relativa
+  const rowsTetrisFallback = useQuery(
+    topByGameRef as any,
+    { embedUrl: tetrisRel, limit: 25 } as any
+  ) as Array<{
+    _id: string;
+    userName: string;
+    userEmail: string;
+    score: number;
+    updatedAt?: number;
+  }> | undefined;
+
+  const rows =
+    selected === "tetris"
+      ? (rowsPrimary && rowsPrimary.length > 0
+          ? rowsPrimary
+          : rowsTetrisFallback)
+      : rowsPrimary;
+
+  // ---------- RESOLVER /play/[id] ----------
+  // Para cada juego, resolvemos id por su embedUrl “natural”
+  const selectedInfoPrimary = useQuery(
     getIdByEmbedUrlRef as any,
     { embedUrl: meta.embedUrl } as any
   ) as { id: string; title: string; embedUrl: string } | null | undefined;
 
-  // 🔎 También resolvemos los dos ids para los “enlaces directos”
+  // Para Tetris, resolvemos también por la ruta relativa
+  const tetrisInfoAbs = useQuery(
+    getIdByEmbedUrlRef as any,
+    { embedUrl: tetrisAbs } as any
+  ) as { id: string } | null | undefined;
+
+  const tetrisInfoRel = useQuery(
+    getIdByEmbedUrlRef as any,
+    { embedUrl: tetrisRel } as any
+  ) as { id: string } | null | undefined;
+
+  // Elegimos id para el botón "Jugar ..."
+  const selectedInfo =
+    selected === "tetris"
+      ? (tetrisInfoAbs ?? tetrisInfoRel ?? selectedInfoPrimary)
+      : selectedInfoPrimary;
+
+  // También resolvemos ids para los enlaces directos
   const snakeInfo = useQuery(
     getIdByEmbedUrlRef as any,
     { embedUrl: GAME_META.snake.embedUrl } as any
@@ -68,6 +128,9 @@ export default function LeaderboardPage() {
   const playHrefSelected = selectedInfo?.id ? `/play/${selectedInfo.id}` : undefined;
   const playHrefSnake = snakeInfo?.id ? `/play/${snakeInfo.id}` : undefined;
   const playHrefPR = prInfo?.id ? `/play/${prInfo.id}` : undefined;
+  const playHrefTetris = (tetrisInfoAbs ?? tetrisInfoRel)?.id
+    ? `/play/${(tetrisInfoAbs ?? tetrisInfoRel)!.id}`
+    : undefined;
 
   const when = (t?: number) => (t ? new Date(t).toLocaleString() : "-");
 
@@ -96,7 +159,7 @@ export default function LeaderboardPage() {
             Leaderboard
           </h1>
 
-          {/* 👉 Ahora lleva a /play/[id] del juego seleccionado (cuando esté resuelto) */}
+          {/* CTA → /play/[id] del juego seleccionado */}
           {playHrefSelected ? (
             <Link
               href={playHrefSelected}
@@ -115,10 +178,11 @@ export default function LeaderboardPage() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Tab k="snake">Snake (Freeware)</Tab>
           <Tab k="pulse-riders">Pulse Riders</Tab>
+          <Tab k="tetris">Tetris</Tab>
 
           {/* Muestra del destino al costado */}
           <span className="ml-2 text-xs text-slate-400 hidden sm:inline">
-            {playHrefSelected ? playHrefSelected : meta.embedUrl}
+            {playHrefSelected ? playHrefSelected : meta.embedUrl || "/tetris"}
           </span>
           <span className="ml-auto text-xs text-slate-400">
             Fuente: Convex · query <code>scores/topByGame</code>
@@ -163,7 +227,7 @@ export default function LeaderboardPage() {
             </table>
           </div>
 
-          {/* Enlaces directos → ahora a /play/[id] */}
+          {/* Enlaces directos → /play/[id] */}
           <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-700/60">
             Enlaces directos:&nbsp;
             {playHrefSnake ? (
@@ -186,6 +250,17 @@ export default function LeaderboardPage() {
               </Link>
             ) : (
               <span className="opacity-60">/play/[id] (Pulse Riders)</span>
+            )}
+            &nbsp;·&nbsp;
+            {playHrefTetris ? (
+              <Link
+                href={playHrefTetris}
+                className="underline decoration-slate-600 hover:text-slate-300"
+              >
+                {playHrefTetris}
+              </Link>
+            ) : (
+              <span className="opacity-60">/play/[id] (Tetris)</span>
             )}
             &nbsp;· Tamaño: &amp;limit=25.
           </div>
