@@ -9,28 +9,47 @@ import { useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { api } from "@convex";
 
+// Convex
 const getUserByEmailRef =
   (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
+
+// Sanea "next" (solo rutas internas)
+function safeInternalNext(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const dec = decodeURIComponent(raw);
+    return dec.startsWith("/") ? dec : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function PremiumCheckoutRedirect() {
   const router = useRouter();
   const sp = useSearchParams();
+
+  // tomamos plan/trial/next y preservamos todo
   const plan = sp?.get("plan") ?? "monthly";
   const trial = sp?.get("trial") ?? "";
+  const nextParam = safeInternalNext(sp?.get("next") ?? null);
 
+  // sesión / store
   const { data: session, status } = useSession();
   const storeUser = useAuthStore((s) => s.user);
   const loginEmail =
-    session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
+    session?.user?.email?.toLowerCase() ||
+    storeUser?.email?.toLowerCase() ||
+    null;
 
-  // Esperar a que el store hidrate
+  // esperar hidratación (evita parpadeos)
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // perfil por email (cuando lo tengamos)
   const profile = useQuery(
     getUserByEmailRef,
-    loginEmail ? { email: loginEmail } : "skip"
-  ) as any;
+    loginEmail ? { email: loginEmail } : undefined
+  ) as { _id?: string } | null | undefined;
 
   const redirectedOnce = useRef(false);
 
@@ -39,23 +58,38 @@ export default function PremiumCheckoutRedirect() {
     if (redirectedOnce.current) return;
     if (status === "loading") return;
 
-    // Si ya conocemos el perfil → directo al checkout con id
-    if (loginEmail && profile?._id) {
+    // sin login → ir al login con next a ESTA ruta (con los params actuales)
+    if (!loginEmail) {
       redirectedOnce.current = true;
       const q = new URLSearchParams();
       q.set("plan", plan);
       if (trial) q.set("trial", trial);
-      router.replace(`/checkout/premium/${profile._id}?${q.toString()}`);
+      if (nextParam) q.set("next", nextParam);
+      const backHere = `/checkout/premium?${q.toString()}`;
+      router.replace(`/auth/login?next=${encodeURIComponent(backHere)}`);
       return;
     }
 
-    // Si no hay email tras montar → ir al login con next a este redirector
-    if (!loginEmail) {
-      redirectedOnce.current = true;
-      const next = `/checkout/premium?plan=${encodeURIComponent(plan)}${trial ? `&trial=${trial}` : ""}`;
-      router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
-    }
-  }, [mounted, status, loginEmail, profile?._id, plan, trial, router]);
+    // tenemos email: esperamos a que cargue el perfil
+    if (typeof profile === "undefined") return;
 
-  return null;
+    // si ya llegó el perfil con _id → mandamos al checkout con id
+    if (profile?._id) {
+      redirectedOnce.current = true;
+      const q = new URLSearchParams();
+      q.set("plan", plan);
+      if (trial) q.set("trial", trial);
+      if (nextParam) q.set("next", nextParam);
+      router.replace(`/checkout/premium/${profile._id}?${q.toString()}`);
+    }
+    // si profile === null, aún no existe en DB; normalmente el callback de NextAuth lo crea.
+    // Podés dejarlo esperar, o poner un fallback aquí si quisieras.
+  }, [mounted, status, loginEmail, profile, plan, trial, nextParam, router]);
+
+  // pequeño loader mientras redirige
+  return (
+    <div className="min-h-[50vh] grid place-items-center text-slate-300">
+      Redirigiendo al checkout…
+    </div>
+  );
 }

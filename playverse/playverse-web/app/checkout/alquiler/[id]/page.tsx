@@ -1,6 +1,7 @@
+// playverse-web/app/checkout/alquiler/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
@@ -41,18 +42,51 @@ type PM = {
   expYear: number;
 };
 
-/* === TÍTULO “Boca naranja” reutilizable === */
+/* === MODAL Upgrade Premium === */
+function UpgradeModal({
+  open,
+  onClose,
+  onUpgrade,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onUpgrade: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="absolute inset-0 grid place-items-center p-4">
+        <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-400/30 p-6 shadow-2xl">
+          <h3 className="text-xl font-bold text-amber-300">Solo para usuarios Premium</h3>
+          <p className="text-slate-300 mt-2">
+            Este juego es de categoría <span className="text-amber-300 font-semibold">Premium</span>.{" "}
+            Para poder <span className="font-semibold">alquilarlo</span> necesitás mejorar tu cuenta.
+          </p>
+          <ul className="text-slate-400 text-sm mt-3 list-disc pl-5 space-y-1">
+            <li>Acceso completo a juegos Premium</li>
+            <li>Descuentos y beneficios exclusivos</li>
+            <li>Cancelás cuando quieras</li>
+          </ul>
+          <div className="flex gap-3 justify-end mt-6">
+            <Button variant="outline" onClick={onClose} className="border-slate-600 text-slate-200">
+              Cerrar
+            </Button>
+            <Button onClick={onUpgrade} className="bg-orange-400 hover:bg-orange-500 text-slate-900">
+              Mejorar a Premium
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* === TÍTULO === */
 function CheckoutTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-center mb-6">
-      <h1
-        className="
-          text-3xl md:text-4xl font-black tracking-tight
-          bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300
-          bg-clip-text text-transparent
-          drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]
-        "
-      >
+      <h1 className="text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">
         {children}
       </h1>
       <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
@@ -77,13 +111,53 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   }, [loginEmail, router, pathname]);
 
   // Perfil
-  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined);
+  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined) as
+    | { _id: Id<"profiles">; role?: "free" | "premium" | "admin" }
+    | null
+    | undefined;
 
   // Juego
   const game = useQuery(
     getGameByIdRef as any,
     HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
-  ) as { _id: Id<"games">; title?: string; cover_url?: string; weekly_price?: number } | null | undefined;
+  ) as
+    | {
+        _id: Id<"games">;
+        title?: string;
+        cover_url?: string;
+        weekly_price?: number;
+        is_premium?: boolean;
+        category?: string;
+        categories?: string[];
+        tier?: string;
+        access?: string;
+      }
+    | null
+    | undefined;
+
+  // ¿El juego requiere premium?
+  const isGamePremium = useMemo(() => {
+    const g: any = game;
+    if (!g) return false;
+    if (typeof g.is_premium === "boolean") return g.is_premium;
+    const low = (v: any) => String(v ?? "").toLowerCase();
+    if (Array.isArray(g.categories) && g.categories.some((c: any) => low(c).includes("premium"))) return true;
+    return /premium/.test([g.category, g.tier, g.access].map(low).join("|"));
+  }, [game]);
+
+  const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
+  const payDisabled = isGamePremium && userRole === "free";
+
+  // Abrimos el modal automáticamente una sola vez si corresponde
+  const openedOnce = useRef(false);
+  useEffect(() => {
+    if (openedOnce.current) return;
+    if (typeof profile === "undefined" || typeof game === "undefined") return; // esperar carga
+    if (payDisabled) {
+      openedOnce.current = true;
+      setShowUpgrade(true);
+    }
+  }, [payDisabled, profile, game]);
 
   // Métodos guardados
   const methods = useQuery(
@@ -103,6 +177,8 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   const [number, setNumber] = useState("");
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
+
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const weeklyPrice = useMemo(() => {
     if (typeof (game as any)?.weekly_price === "number") return (game as any).weekly_price;
@@ -153,6 +229,13 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
   const onRent = async () => {
     if (!profile?._id || !game?._id) return;
+
+    // 🚫 bloqueo en acción también
+    if (payDisabled) {
+      setShowUpgrade(true);
+      return;
+    }
+
     try {
       if (!useSaved && rememberNew) {
         await savePaymentMethod({
@@ -175,6 +258,12 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
     }
   };
 
+  const goUpgrade = () => {
+    if (!profile?._id) return;
+    const next = pathname ?? "/";
+    router.push(`/checkout/premium/${profile._id}?plan=monthly&next=${encodeURIComponent(next)}`);
+  };
+
   if (!loginEmail) {
     return (
       <div className="container mx-auto px-4 py-16">
@@ -192,23 +281,20 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
       <p className="text-slate-300 text-center mb-8">Estás alquilando:</p>
 
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Izquierda — COVER escalado y con buen encuadre */}
+        {/* Izquierda */}
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
-
           <div className="mx-auto max-w-[380px] md:max-w-[420px]">
-            <div
-              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
-              style={{ aspectRatio: "3 / 4" }}
-            >
-              <img
-                src={cover}
-                alt={title}
-                className="absolute inset-0 w-full h-full object-contain"
-                draggable={false}
-              />
+            <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60" style={{ aspectRatio: "3 / 4" }}>
+              <img src={cover} alt={title} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
             </div>
           </div>
+
+          {payDisabled && (
+            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
+              Este juego es de categoría Premium. Necesitas Premium para <b>alquilarlo</b>.
+            </div>
+          )}
         </div>
 
         {/* Derecha */}
@@ -230,7 +316,7 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
           {/* Pago */}
           {primaryPM ? (
-            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3 opacity-100">
               <div className="flex items-center justify-between">
                 <p className="text-white font-medium">Método de pago</p>
                 <div className="flex items-center gap-2 text-sm">
@@ -345,11 +431,23 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
             </div>
           )}
 
-          <Button onClick={onRent} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold">
-            Pagar {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+          <Button
+            onClick={onRent}
+            disabled={payDisabled}
+            className={`w-full text-slate-900 text-lg py-6 font-bold ${
+              payDisabled ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"
+            }`}
+          >
+            {payDisabled ? "Requiere Premium" : `Pagar ${total.toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
           </Button>
         </div>
       </div>
+
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        onUpgrade={goUpgrade}
+      />
     </div>
   );
 }

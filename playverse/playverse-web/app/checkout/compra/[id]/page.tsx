@@ -1,4 +1,3 @@
-// app/checkout/compra/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -45,6 +44,16 @@ type PM = {
   expYear: number;
 };
 
+/* === Detectar premium === */
+function isPremiumFromGame(g: any): boolean {
+  if (!g) return false;
+  if (typeof g.is_premium === "boolean") return g.is_premium;
+  const s = (v: any) => String(v ?? "").toLowerCase();
+  if (Array.isArray(g.categories) && g.categories.some((c: any) => s(c).includes("premium"))) return true;
+  const guess = [g.category, g.tier, g.access].map(s).join("|");
+  return /premium/.test(guess);
+}
+
 /* === TÍTULO “Boca naranja” reutilizable === */
 function CheckoutTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -79,14 +88,33 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     }
   }, [loginEmail, router, pathname]);
 
-  // Perfil
-  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined);
+  // Perfil + rol
+  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined) as
+    | { _id: Id<"profiles">; role?: "free" | "premium" | "admin" }
+    | null
+    | undefined;
+  const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
 
   // Juego
   const game = useQuery(
     getGameByIdRef as any,
     HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
-  ) as { _id: Id<"games">; title?: string; cover_url?: string; price_buy?: number } | null | undefined;
+  ) as
+    | {
+        _id: Id<"games">;
+        title?: string;
+        cover_url?: string;
+        price_buy?: number;
+        is_premium?: boolean;
+        category?: string;
+        categories?: string[];
+        tier?: string;
+        access?: string;
+      }
+    | null
+    | undefined;
+
+  const isGamePremium = useMemo(() => isPremiumFromGame(game), [game]);
 
   // Métodos guardados
   const methods = useQuery(
@@ -112,9 +140,12 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
 
+  // Precio base (tarifa plana). No aplicamos descuento si user es FREE y juego es premium.
   const price = useMemo(() => {
-    if (typeof (game as any)?.price_buy === "number") return (game as any).price_buy;
-    return 49.99; // fallback
+    const base = typeof (game as any)?.price_buy === "number" ? (game as any).price_buy : 49.99;
+    // Si quisieras aplicar descuento a Premium (no solicitado), acá sería el lugar.
+    // Para este parche, siempre cobramos tarifa plana (base).
+    return base;
   }, [game]);
 
   const formatMoney = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -245,9 +276,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
 
-          {/* Wrapper para controlar tamaño */}
           <div className="mx-auto max-w-[380px] md:max-w-[420px]">
-            {/* Marco con relación de aspecto 3/4 y borde */}
             <div
               className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
               style={{ aspectRatio: "3 / 4" }}
@@ -261,21 +290,29 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
             </div>
           </div>
 
-          {/* Aviso si ya lo tiene (sin cambios) */}
-          {alreadyOwned && (
+          {/* Aviso según categoría/rol: compra permitida para free sin descuento */}
+          {isGamePremium && userRole === "free" && (
             <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
+              Este título es <b>Premium</b>. Como usuario <b>Free</b> podés <u>comprarlo</u> a <b>tarifa plana</b> (sin descuentos).
+            </div>
+          )}
+
+          {alreadyOwned && (
+            <div className="mt-4 bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 rounded-xl p-3 text-sm">
               Ya tienes este juego en tu biblioteca. No es necesario volver a comprarlo.
             </div>
           )}
         </div>
 
-        {/* Derecha (igual que antes) */}
+        {/* Derecha */}
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <div className="text-3xl font-black text-emerald-300">{formatMoney(price)}</div>
-            <p className="text-sm text-amber-400 mt-2">
-              Podrías ahorrarte un 10% suscribiéndote a premium, ¡no te lo pierdas!
-            </p>
+            {userRole !== "premium" && (
+              <p className="text-sm text-amber-400 mt-2">
+                ¿Querés descuentos? Suscríbete a Premium y aprovecha beneficios en próximas compras.
+              </p>
+            )}
           </div>
 
           {(() => {

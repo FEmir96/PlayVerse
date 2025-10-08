@@ -29,15 +29,10 @@ import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
 
 import { useSession } from "next-auth/react";
-import { useAuthStore } from "@/lib/useAuthStore";
 import { useToast } from "@/hooks/use-toast";
 import { useFavoritesStore } from "@/components/favoritesStore";
 
 type MediaItem = { type: "image" | "video"; src: string; thumb?: string };
-
-// ⬇️ Sólo activa favoritos del servidor si está seteado el flag
-const ENABLE_SERVER_FAVORITES =
-  process.env.NEXT_PUBLIC_USE_SERVER_FAVORITES === "1";
 
 function toEmbed(url?: string | null): string | null {
   if (!url) return null;
@@ -61,7 +56,7 @@ function toEmbed(url?: string | null): string | null {
   }
 }
 
-/** ⭐ fila de estrellitas (0..5 con pasos 0.5 → mostramos número con una decimal) */
+/** ⭐ fila de estrellitas (0..5 con pasos 0.5) */
 function StarRow({ value }: { value: number }) {
   const rounded = Math.round(value * 2) / 2;
   const full = Math.floor(rounded);
@@ -94,9 +89,15 @@ export default function GameDetailPage() {
   const [isHoverMain, setIsHoverMain] = useState(false);
   const thumbsPerView = 4;
 
+  // Para reanudar acción post-login (comprar/alquilar/extender/jugar no embebible)
+  const [pendingAction, setPendingAction] =
+    useState<"purchase" | "rental" | "extend" | "play" | null>(null);
+
   // Param estable
   const idParamRaw = params?.id;
-  const idParam = Array.isArray(idParamRaw) ? (idParamRaw as string[])[0] : (idParamRaw as string | undefined);
+  const idParam = Array.isArray(idParamRaw)
+    ? (idParamRaw as string[])[0]
+    : (idParamRaw as string | undefined);
   const hasId = Boolean(idParam);
 
   // Query de juego
@@ -105,7 +106,7 @@ export default function GameDetailPage() {
     hasId ? ({ id: idParam as Id<"games"> } as any) : "skip"
   ) as Doc<"games"> | null | undefined;
 
-  // Action screenshots IGDB
+  // Screenshots IGDB
   const fetchShots = useAction(
     api.actions.getIGDBScreenshots.getIGDBScreenshots as any
   );
@@ -125,7 +126,9 @@ export default function GameDetailPage() {
           includeVideo: false,
         } as any);
         if (!cancelled) {
-          const urls = Array.isArray((res as any)?.urls) ? (res as any).urls : [];
+          const urls = Array.isArray((res as any)?.urls)
+            ? (res as any).urls
+            : [];
           setIgdbUrls(urls);
         }
       } catch {
@@ -138,7 +141,7 @@ export default function GameDetailPage() {
     };
   }, [game?.title, fetchShots]);
 
-  // ⬇️ OJO: ahora preparamos **dos** embeds si existen
+  // Embeds
   const trailerEmbedPrimary = useMemo(() => {
     const url = (game as any)?.trailer_url ?? null;
     return toEmbed(url);
@@ -149,13 +152,14 @@ export default function GameDetailPage() {
     return toEmbed(url);
   }, [(game as any)?.extraTrailerUrl]);
 
-  // ⬇️ Imágenes extra persistentes
   const extraImages = useMemo(() => {
     const arr = ((game as any)?.extraImages as string[] | undefined) ?? [];
-    return Array.isArray(arr) ? arr.filter((s) => typeof s === "string" && s.trim()) : [];
+    return Array.isArray(arr)
+      ? arr.filter((s) => typeof s === "string" && s.trim())
+      : [];
   }, [(game as any)?.extraImages]);
 
-  // Media combinada (empuja **ambos** trailers si hay)
+  // Media combinada
   const media: MediaItem[] = useMemo(() => {
     const out: MediaItem[] = [];
     if (trailerEmbedPrimary) {
@@ -182,7 +186,13 @@ export default function GameDetailPage() {
       out.push({ type: "image", src: (game as any).cover_url });
     }
     return out;
-  }, [trailerEmbedPrimary, trailerEmbedAlt, igdbUrls, extraImages, (game as any)?.cover_url]);
+  }, [
+    trailerEmbedPrimary,
+    trailerEmbedAlt,
+    igdbUrls,
+    extraImages,
+    (game as any)?.cover_url,
+  ]);
 
   // Asegurar índice válido
   useEffect(() => {
@@ -207,11 +217,9 @@ export default function GameDetailPage() {
   };
 
   // ====== Sesión / Perfil / Validaciones ======
-  const { data: session } = useSession();
-  const localUser = useAuthStore((s) => s.user);
-  const loggedEmail =
-    session?.user?.email?.toLowerCase() || localUser?.email?.toLowerCase() || null;
-  const isLogged = Boolean(loggedEmail);
+  const { data: session, status: sessionStatus } = useSession();
+  const loggedEmail = session?.user?.email?.toLowerCase() ?? null;
+  const isLogged = sessionStatus === "authenticated" && !!loggedEmail;
 
   const profile = useQuery(
     api.queries.getUserByEmail.getUserByEmail as any,
@@ -246,7 +254,6 @@ export default function GameDetailPage() {
       }>
     | undefined;
 
-  // ✅ (Opcional) Biblioteca
   const hasLibraryQuery =
     (api as any).queries?.getUserLibrary?.getUserLibrary ?? null;
   const library = useQuery(
@@ -262,16 +269,14 @@ export default function GameDetailPage() {
       }>
     | undefined;
 
-  // ✅ (Opcional) Favoritos del servidor (sólo si el flag está activo)
   const shouldRunServerFav =
     process.env.NEXT_PUBLIC_USE_SERVER_FAVORITES === "1" &&
     Boolean((api as any).queries?.getUserFavorites?.getUserFavorites) &&
     Boolean(profile?._id);
 
-  const favoritesFnRef =
-    shouldRunServerFav
-      ? (api as any).queries.getUserFavorites.getUserFavorites
-      : (api as any).queries.getGameById.getGameById; // fallback inocuo
+  const favoritesFnRef = shouldRunServerFav
+    ? (api as any).queries.getUserFavorites.getUserFavorites
+    : (api as any).queries.getGameById.getGameById;
 
   const serverFavorites = useQuery(
     favoritesFnRef as any,
@@ -318,7 +323,8 @@ export default function GameDetailPage() {
   const hasActiveRental = useMemo(() => {
     if (!game?._id || !Array.isArray(rentals)) return false;
     return rentals.some((r) => {
-      const same = String(r?.game?._id ?? r?.gameId ?? "") === String(game._id);
+      const same =
+        String(r?.game?._id ?? r?.gameId ?? "") === String(game._id);
       const active = typeof r.expiresAt === "number" ? r.expiresAt > now : true;
       return same && active;
     });
@@ -330,14 +336,13 @@ export default function GameDetailPage() {
     return typeof u === "string" && u.trim().length > 0;
   }, [game]);
 
-  // ====== NUEVO: permisos por suscripción premium ======
+  // Suscripción premium efectiva
   const isPremiumSub = profile?.role === "premium";
   const canPlayBySubscription = isPremiumPlan && (isPremiumSub || isAdmin);
-  const canPlayEffective = canPlayBySubscription || hasPurchased || hasActiveRental || isAdmin;
+  const canPlayEffective =
+    canPlayBySubscription || hasPurchased || hasActiveRental || isAdmin;
 
   const canExtend = !hasPurchased && hasActiveRental;
-  const showBuyAndRent = !canPlayEffective;
-
   const requiresPremium =
     isPremiumPlan &&
     profile &&
@@ -350,7 +355,6 @@ export default function GameDetailPage() {
   const addFav = useFavoritesStore((s) => s.add);
   const removeFav = useFavoritesStore((s) => s.remove);
 
-  // Estado de favorito según servidor (si tenemos la query)
   const isFavServer = useMemo(() => {
     if (!serverFavorites || !game?._id) return undefined;
     const gid = String(game._id);
@@ -359,81 +363,83 @@ export default function GameDetailPage() {
     );
   }, [serverFavorites, game?._id]);
 
-  // Fallback: store local
   const isFavLocal = useMemo(() => {
-    const byId = !!(game?._id && favItems.some((i) => i.id === String(game._id)));
+    const byId = !!(
+      game?._id && favItems.some((i) => i.id === String(game._id))
+    );
     if (byId) return true;
     const title = String(game?.title || "").trim();
     return !!title && favItems.some((i) => i.title === title);
   }, [favItems, game?._id, game?.title]);
 
-  // Valor final a usar en UI
   const isFav = (typeof isFavServer === "boolean" ? isFavServer : isFavLocal) as boolean;
 
   const [showAuthFav, setShowAuthFav] = useState(false);
   const [showAuthAction, setShowAuthAction] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
-  // 🔁 Mutación Convex para favoritos
+  // Mutación Convex para favoritos
   const toggleFavoriteMutation = useMutation(
     api.mutations.toggleFavorite.toggleFavorite as any
   );
 
   // ========== HANDLERS ==========
 
-  // Comprar → checkout, con tarifa plana si user FREE compra juego PREMIUM
   const handlePurchase = () => {
     if (!game?._id) return;
+    if (!isLogged) {
+      setPendingAction("purchase");
+      setShowAuthAction(true);
+      return;
+    }
     const gid = String(game._id);
 
     if (hasPurchased) {
       toast({ title: "Ya lo tienes", description: "Este juego ya está en tu biblioteca." });
-      router.push(`/juego/${gid}`);
       return;
     }
-
-    // FREE comprando juego premium → checkout con tarifa plana
     if (isPremiumPlan && profile?.role === "free") {
       router.push(`/checkout/compra/${gid}?pricing=flat_premium`);
       return;
     }
-
     if (requiresPremium) {
       setShowPremiumModal(true);
       return;
     }
-
     router.push(`/checkout/compra/${gid}`);
   };
 
-  // Alquilar
   const handleRental = () => {
     if (!game?._id) return;
+    if (!isLogged) {
+      setPendingAction("rental");
+      setShowAuthAction(true);
+      return;
+    }
     const gid = String(game._id);
 
     if (hasPurchased) {
       toast({ title: "Ya comprado", description: "Ya posees este título." });
-      router.push(`/juego/${gid}`);
       return;
     }
-
     if (hasActiveRental) {
-      toast({ title: "Alquiler activo", description: "Puedes extender tu alquiler." });
       router.push(`/checkout/extender/${gid}`);
       return;
     }
-
     if (requiresPremium) {
       setShowPremiumModal(true);
       return;
     }
-
     router.push(`/checkout/alquiler/${gid}`);
   };
 
-  // Extender
   const handleExtend = () => {
     if (!game?._id) return;
+    if (!isLogged) {
+      setPendingAction("extend");
+      setShowAuthAction(true);
+      return;
+    }
     router.push(`/checkout/extender/${game._id}`);
   };
 
@@ -443,41 +449,28 @@ export default function GameDetailPage() {
 
     const playUrl = `/play/${game._id}`;
 
+    // embebible
     if (isEmbeddable) {
       if (!isLogged) {
         router.push(`/auth/login?next=${encodeURIComponent(playUrl)}`);
         return;
       }
-      if (isAdmin) {
-        router.push(playUrl);
-        return;
-      }
-      if (isFreePlan) {
-        router.push(playUrl);
-        return;
-      }
       if (isPremiumPlan) {
-        if (isPremiumSub) {
+        if (isAdmin || isPremiumSub || hasPurchased || hasActiveRental) {
           router.push(playUrl);
           return;
         }
-        if (!canPlayEffective) {
-          toast({
-            title: "No disponible",
-            description: "Necesitás comprar o alquilar este juego para jugar.",
-            variant: "destructive",
-          });
-          return;
-        }
-        router.push(playUrl);
+        setShowPremiumModal(true);
         return;
       }
+      // free embebible → pasa directo
       router.push(playUrl);
       return;
     }
 
-    // No embebible
+    // no embebible
     if (!isLogged) {
+      setPendingAction("play");
       setShowAuthAction(true);
       return;
     }
@@ -492,7 +485,6 @@ export default function GameDetailPage() {
     toast({ title: "Lanzando juego…", description: "¡Feliz gaming! 🎮" });
   };
 
-  // ⭐ Favoritos (local + Convex) con alineación al resultado del server
   const onToggleFavorite = async () => {
     if (!game?._id) return;
     if (!isLogged || !profile?._id) {
@@ -509,14 +501,12 @@ export default function GameDetailPage() {
     };
 
     let addedFromServer: boolean | undefined;
-
     try {
       const result = await toggleFavoriteMutation({
         userId: profile._id as Id<"profiles">,
         gameId: game._id as Id<"games">,
       } as any);
 
-      // Soportar varias formas de respuesta
       if (typeof result === "boolean") {
         addedFromServer = result;
       } else if (result && typeof result === "object") {
@@ -534,30 +524,19 @@ export default function GameDetailPage() {
       });
     }
 
-    // Fallback: si el server no dijo, invertimos el estado actual
     if (typeof addedFromServer !== "boolean") {
       addedFromServer = !isFav;
     }
 
-    // Actualizar store local según lo que realmente pasó en server
     if (addedFromServer) {
       addFav(item);
-      toast({
-        title: "Añadido a favoritos",
-        description: `${item.title} se agregó a tu lista.`,
-      });
+      toast({ title: "Añadido a favoritos", description: `${item.title} se agregó a tu lista.` });
     } else {
       removeFav(item.id);
-      toast({
-        title: "Quitado de favoritos",
-        description: `${item.title} se quitó de tu lista.`,
-      });
+      toast({ title: "Quitado de favoritos", description: `${item.title} se quitó de tu lista.` });
     }
 
-    // Notificar a otros componentes (dropdown, etc.)
-    try {
-      window.dispatchEvent(new Event("pv:favorites:changed"));
-    } catch {}
+    try { window.dispatchEvent(new Event("pv:favorites:changed")); } catch {}
   };
 
   const copyToClipboard = async () => {
@@ -572,7 +551,7 @@ export default function GameDetailPage() {
   const notFound = hasId && game === null;
   const current = media[selectedIndex];
 
-  // 🟠 ratings
+  // ratings
   const igdbRating = (game as any)?.igdbRating as number | undefined;
   const igdbUserRating = (game as any)?.igdbUserRating as number | undefined;
 
@@ -586,7 +565,7 @@ export default function GameDetailPage() {
   const userStars =
     typeof score100 === "number" ? +(score100 / 20).toFixed(1) : undefined;
 
-  // Fecha formateada
+  // Fecha
   const firstReleaseDate = (game as any)?.firstReleaseDate as number | undefined;
   const releaseStr =
     typeof firstReleaseDate === "number"
@@ -597,25 +576,48 @@ export default function GameDetailPage() {
         })
       : undefined;
 
-  // Otros metadatos
+  // Metadatos
   const developers = ((game as any)?.developers as string[] | undefined) ?? [];
   const publishers = ((game as any)?.publishers as string[] | undefined) ?? [];
   const languages = ((game as any)?.languages as string[] | undefined) ?? [];
   const ageRatingSystem = (game as any)?.ageRatingSystem as string | undefined;
   const ageRatingLabel = (game as any)?.ageRatingLabel as string | undefined;
 
+  // ▶️ Reanudar acciones al volver del login (fav / play no embebible)
+  useEffect(() => {
+    if (!isLogged || !game?._id) return;
+    if (typeof profile === "undefined") return; // esperar perfil
+
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const post = sp.get("post");
+      const gid = sp.get("gid");
+      if (!post || (gid && gid !== String(game._id))) return;
+
+      const clean = () => {
+        sp.delete("post");
+        sp.delete("gid");
+        const url =
+          window.location.pathname + (sp.toString() ? `?${sp.toString()}` : "");
+        router.replace(url);
+      };
+
+      if (post === "fav") {
+        onToggleFavorite();
+        clean();
+      } else if (post === "play") {
+        handlePlay();
+        clean();
+      }
+    } catch {}
+  }, [isLogged, profile, game?._id, router]);
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-8">
-        {!hasId && (
-          <div className="p-6 text-slate-300">Juego no encontrado.</div>
-        )}
-        {hasId && isLoading && (
-          <div className="p-6 text-slate-300">Cargando…</div>
-        )}
-        {hasId && notFound && (
-          <div className="p-6 text-slate-300">Juego no encontrado.</div>
-        )}
+        {!hasId && <div className="p-6 text-slate-300">Juego no encontrado.</div>}
+        {hasId && isLoading && <div className="p-6 text-slate-300">Cargando…</div>}
+        {hasId && notFound && <div className="p-6 text-slate-300">Juego no encontrado.</div>}
 
         {hasId && game && (
           <div className="grid lg:grid-cols-3 gap-8">
@@ -681,18 +683,12 @@ export default function GameDetailPage() {
                             className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
                               selected ? "border-orange-400" : "border-slate-600"
                             }`}
-                            title={
-                              m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`
-                            }
+                            title={m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`}
                           >
                             {m.type === "video" ? (
                               <>
                                 <Image
-                                  src={
-                                    m.thumb ||
-                                    (game as any).cover_url ||
-                                    "/placeholder.svg"
-                                  }
+                                  src={m.thumb || (game as any).cover_url || "/placeholder.svg"}
                                   alt="Trailer"
                                   width={120}
                                   height={68}
@@ -732,9 +728,7 @@ export default function GameDetailPage() {
 
               {/* Descripción */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
-                <h3 className="text-xl font-semibold text-orange-400 mb-4">
-                  Descripción
-                </h3>
+                <h3 className="text-xl font-semibold text-orange-400 mb-4">Descripción</h3>
                 <p className="text-slate-300 leading-relaxed">
                   {game.description ?? "Sin descripción"}
                 </p>
@@ -746,56 +740,97 @@ export default function GameDetailPage() {
               {/* Acciones */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <div className="text-center mb-4">
-                  <p className="text-orange-400 text-sm">
-                    ¡Suscribite a premium para más ventajas!
-                  </p>
+                  <p className="text-orange-400 text-sm">¡Suscribite a premium para más ventajas!</p>
                 </div>
 
                 <div className="space-y-3">
-                  {/* ➜ Free + embebible → botón jugar directo */}
-                  {isEmbeddable && (game as any).plan === "free" ? (
-                    <Button
-                      onClick={handlePlay}
-                      className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                    >
-                      Jugar gratis
-                    </Button>
-                  ) : canPlayEffective ? (
+                  {isEmbeddable ? (
                     <>
-                      <Button
-                        onClick={handlePlay}
-                        className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                      >
-                        Jugar
-                      </Button>
-                      {canExtend && (
+                      {/* Freeware embebible → SOLO Jugar */}
+                      {isFreePlan ? (
                         <Button
-                          onClick={handleExtend}
-                          variant="outline"
-                          className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                          onClick={handlePlay}
+                          className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
                         >
-                          Extender
+                          Jugar gratis
                         </Button>
+                      ) : (
+                        <>
+                          {/* Premium embebible → Jugar + (Comprar/Alquilar si no puede) */}
+                          <Button
+                            onClick={handlePlay}
+                            className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                          >
+                            Jugar
+                          </Button>
+                          {!canPlayEffective && (
+                            <>
+                              <Button
+                                onClick={handlePurchase}
+                                className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                              >
+                                Comprar ahora
+                              </Button>
+                              <Button
+                                onClick={handleRental}
+                                variant="outline"
+                                className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                              >
+                                Alquilar
+                              </Button>
+                            </>
+                          )}
+                          {canExtend && (
+                            <Button
+                              onClick={handleExtend}
+                              variant="outline"
+                              className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                            >
+                              Extender
+                            </Button>
+                          )}
+                        </>
                       )}
                     </>
                   ) : (
-                    showBuyAndRent && (
-                      <>
-                        <Button
-                          onClick={handlePurchase}
-                          className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
-                        >
-                          Comprar ahora
-                        </Button>
-                        <Button
-                          onClick={handleRental}
-                          variant="outline"
-                          className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                        >
-                          Alquilar
-                        </Button>
-                      </>
-                    )
+                    // NO embebible
+                    <>
+                      {canPlayEffective ? (
+                        <>
+                          <Button
+                            onClick={handlePlay}
+                            className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                          >
+                            Jugar
+                          </Button>
+                          {canExtend && (
+                            <Button
+                              onClick={handleExtend}
+                              variant="outline"
+                              className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                            >
+                              Extender
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            onClick={handlePurchase}
+                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                          >
+                            Comprar ahora
+                          </Button>
+                          <Button
+                            onClick={handleRental}
+                            variant="outline"
+                            className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                          >
+                            Alquilar
+                          </Button>
+                        </>
+                      )}
+                    </>
                   )}
 
                   <div className="flex gap-2">
@@ -804,10 +839,7 @@ export default function GameDetailPage() {
                       variant="outline"
                       className="flex-1 border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
                     >
-                      <Heart
-                        className="w-4 h-4 mr-2"
-                        fill={isFav ? "currentColor" : "none"}
-                      />
+                      <Heart className="w-4 h-4 mr-2" fill={isFav ? "currentColor" : "none"} />
                       {isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
                     </Button>
                     <Button
@@ -826,12 +858,9 @@ export default function GameDetailPage() {
 
               {/* Información del juego */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
-                <h3 className="text-xl font-semibold text-orange-400 mb-4">
-                  Información del juego
-                </h3>
+                <h3 className="text-xl font-semibold text-orange-400 mb-4">Información del juego</h3>
 
                 <div className="space-y-3 text-sm">
-                  {/* ⭐ User rating */}
                   {typeof userStars === "number" && userStars > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">User rating:</span>
@@ -839,19 +868,15 @@ export default function GameDetailPage() {
                     </div>
                   )}
 
-                  {/* Clasificación */}
                   {ageRatingLabel && ageRatingLabel !== "Not Rated" && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Clasificación:</span>
                       <span className="text-orange-400 font-semibold">
-                        {ageRatingSystem
-                          ? `${ageRatingSystem} ${ageRatingLabel}`
-                          : ageRatingLabel}
+                        {ageRatingSystem ? `${ageRatingSystem} ${ageRatingLabel}` : ageRatingLabel}
                       </span>
                     </div>
                   )}
 
-                  {/* Fecha de lanzamiento */}
                   {releaseStr && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Lanzamiento:</span>
@@ -859,7 +884,6 @@ export default function GameDetailPage() {
                     </div>
                   )}
 
-                  {/* Desarrollador / Editor */}
                   {developers.length > 0 && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Desarrollador:</span>
@@ -873,7 +897,6 @@ export default function GameDetailPage() {
                     </div>
                   )}
 
-                  {/* Idiomas */}
                   {languages.length > 0 && (
                     <div className="">
                       <span className="block text-slate-400 mb-2">Idiomas:</span>
@@ -973,7 +996,6 @@ export default function GameDetailPage() {
               Para añadir a favoritos debes iniciar sesión o registrarte.
             </p>
           </div>
-          {/* Footer original: alineado a la derecha */}
           <DialogFooter className="flex gap-2 justify-end">
             <Button
               variant="outline"
@@ -984,13 +1006,9 @@ export default function GameDetailPage() {
             </Button>
             <Button
               onClick={() => {
-                const next =
-                  typeof window !== "undefined"
-                    ? window.location.pathname
-                    : `/juego/${String(game?._id ?? "")}`;
-                window.location.href = `/auth/login?next=${encodeURIComponent(
-                  next
-                )}`;
+                const gid = String(game?._id ?? "");
+                const next = `/juego/${gid}?post=fav&gid=${gid}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"
             >
@@ -1000,7 +1018,7 @@ export default function GameDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: login requerido (Comprar / Alquilar / Jugar) */}
+      {/* Modal: login requerido (Comprar / Alquilar / Extender / Jugar no embebible) */}
       <Dialog open={showAuthAction} onOpenChange={setShowAuthAction}>
         <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
           <DialogHeader>
@@ -1023,13 +1041,13 @@ export default function GameDetailPage() {
             </Button>
             <Button
               onClick={() => {
-                const next =
-                  typeof window !== "undefined"
-                    ? window.location.pathname
-                    : `/juego/${String(game?._id ?? "")}`;
-                window.location.href = `/auth/login?next=${encodeURIComponent(
-                  next
-                )}`;
+                const gid = String(game?._id ?? "");
+                let next = `/juego/${gid}`;
+                if (pendingAction === "purchase") next = `/checkout/compra/${gid}`;
+                else if (pendingAction === "rental") next = `/checkout/alquiler/${gid}`;
+                else if (pendingAction === "extend") next = `/checkout/extender/${gid}`;
+                else if (pendingAction === "play") next = `/juego/${gid}?post=play&gid=${gid}`;
+                window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"
             >
@@ -1042,7 +1060,6 @@ export default function GameDetailPage() {
       {/* Modal: requiere plan Premium */}
       <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
         <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
-          {/* ⬇️ CENTRADO */}
           <DialogHeader className="text-center items-center">
             <DialogTitle className="text-orange-400 text-xl font-semibold text-center mx-auto">
               Se requiere PREMIUM
@@ -1056,7 +1073,6 @@ export default function GameDetailPage() {
             </p>
           </div>
 
-          {/* ⬇️ Botones uno en cada punta */}
           <DialogFooter className="w-full">
             <div className="w-full flex items-center justify-between gap-3">
               <Button

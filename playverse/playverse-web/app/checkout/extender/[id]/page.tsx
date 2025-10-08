@@ -17,12 +17,9 @@ import { useAuthStore } from "@/lib/useAuthStore";
 
 // —— Refs robustas
 const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"]
-    .getUserByEmail as FunctionReference<"query">;
+  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
 
-const HAS_PM_QUERY = Boolean(
-  (api as any)["queries/getPaymentMethods"]?.getPaymentMethods
-);
+const HAS_PM_QUERY = Boolean((api as any)["queries/getPaymentMethods"]?.getPaymentMethods);
 const getPaymentMethodsRef = (HAS_PM_QUERY
   ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
   : (api as any)["queries/getUserByEmail"].getUserByEmail) as FunctionReference<"query">;
@@ -32,16 +29,9 @@ const getGameByIdRef = (HAS_GET_BY_ID
   ? (api as any)["queries/getGameById"].getGameById
   : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
 
-const extendRentalRef =
-  (api as any).transactions.extendRental as FunctionReference<"mutation">;
-
-const savePaymentMethodRef =
-  (api as any)["mutations/savePaymentMethod"]
-    .savePaymentMethod as FunctionReference<"mutation">;
-
-const makePaymentRef =
-  (api as any)["mutations/makePayment"]
-    .makePayment as FunctionReference<"mutation">;
+const extendRentalRef = (api as any).transactions.extendRental as FunctionReference<"mutation">;
+const savePaymentMethodRef = (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
+const makePaymentRef = (api as any)["mutations/makePayment"].makePayment as FunctionReference<"mutation">;
 
 type PM = {
   _id: string;
@@ -51,7 +41,41 @@ type PM = {
   expYear: number;
 };
 
-/* === TÍTULO “Boca naranja” reutilizable === */
+function UpgradeModal({
+  open,
+  onClose,
+  onUpgrade,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onUpgrade: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="absolute inset-0 grid place-items-center p-4">
+        <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-400/30 p-6 shadow-2xl">
+          <h3 className="text-xl font-bold text-amber-300">Solo para usuarios Premium</h3>
+          <p className="text-slate-300 mt-2">
+            Este juego es de categoría <span className="text-amber-300 font-semibold">Premium</span>. 
+            Para <span className="font-semibold">extender el alquiler</span> necesitás ser Premium.
+          </p>
+          <div className="flex gap-3 justify-end mt-6">
+            <Button variant="outline" onClick={onClose} className="border-slate-600 text-slate-200">
+              Cancelar
+            </Button>
+            <Button onClick={onUpgrade} className="bg-orange-400 hover:bg-orange-500 text-slate-900">
+              Mejorar a Premium
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* === TÍTULO === */
 function CheckoutTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-center mb-6">
@@ -78,10 +102,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   // Identidad
   const { data: session, status } = useSession();
   const storeUser = useAuthStore((s) => s.user);
-  const loginEmail =
-    session?.user?.email?.toLowerCase() ||
-    storeUser?.email?.toLowerCase() ||
-    null;
+  const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
 
   // Guard de sesión
   useEffect(() => {
@@ -95,15 +116,38 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   const profile = useQuery(
     getUserByEmailRef,
     loginEmail ? { email: loginEmail } : "skip"
-  ) as any;
+  ) as { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
+
+  const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
 
   // Juego
   const game = useQuery(
     getGameByIdRef as any,
-    HAS_GET_BY_ID
-      ? ({ id: params.id as Id<"games"> } as any)
-      : (undefined as any)
-  ) as { _id: Id<"games">; title?: string; cover_url?: string; weekly_price?: number } | null | undefined;
+    HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
+  ) as
+    | {
+        _id: Id<"games">;
+        title?: string;
+        cover_url?: string;
+        weekly_price?: number;
+        is_premium?: boolean;
+        category?: string;
+        categories?: string[];
+        tier?: string;
+        access?: string;
+      }
+    | null
+    | undefined;
+
+  const isGamePremium = useMemo(() => {
+    const g: any = game;
+    if (!g) return false;
+    if (typeof g.is_premium === "boolean") return g.is_premium;
+    const fromStr = (v: any) => String(v ?? "").toLowerCase();
+    if (Array.isArray(g.categories) && g.categories.some((c: any) => fromStr(c).includes("premium"))) return true;
+    const guess = [g.category, g.tier, g.access].map(fromStr).join("|");
+    return /premium/.test(guess);
+  }, [game]);
 
   // Métodos guardados
   const methods = useQuery(
@@ -124,6 +168,8 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   const [number, setNumber] = useState("");
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
+
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const weeklyPrice = useMemo(() => {
     if (typeof (game as any)?.weekly_price === "number") return (game as any).weekly_price;
@@ -178,8 +224,13 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   const onExtend = async () => {
     if (!profile?._id || !game?._id) return;
 
+    // 🚫 Si el juego es Premium y el usuario es FREE → modal
+    if (isGamePremium && userRole === "free") {
+      setShowUpgrade(true);
+      return;
+    }
+
     try {
-      // Guardar nuevo método si corresponde
       if (!useSaved && rememberNew) {
         await savePaymentMethod({
           userId: profile._id,
@@ -198,7 +249,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         provider: "manual",
       });
 
-      // 2) Extender alquiler (¡sin 'currency' para respetar el validator!)
+      // 2) Extender alquiler
       await extendRental({
         userId: profile._id,
         gameId: game._id,
@@ -221,6 +272,12 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
     }
   };
 
+  const goUpgrade = () => {
+    if (!profile?._id) return;
+    const next = pathname ?? "/";
+    router.push(`/checkout/premium/${profile._id}?plan=monthly&next=${encodeURIComponent(next)}`);
+  };
+
   if (!loginEmail || status === "loading") {
     return (
       <div className="container mx-auto px-4 py-16">
@@ -238,23 +295,20 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
       <p className="text-slate-300 text-center mb-8">Seleccione semanas adicionales:</p>
 
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Izquierda — COVER escalado y con buen encuadre */}
+        {/* Izquierda */}
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
-
           <div className="mx-auto max-w-[380px] md:max-w-[420px]">
-            <div
-              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
-              style={{ aspectRatio: "3 / 4" }}
-            >
-              <img
-                src={cover}
-                alt={title}
-                className="absolute inset-0 w-full h-full object-contain"
-                draggable={false}
-              />
+            <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60" style={{ aspectRatio: "3 / 4" }}>
+              <img src={cover} alt={title} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
             </div>
           </div>
+
+          {isGamePremium && userRole === "free" && (
+            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
+              Este juego es de categoría Premium. Necesitas Premium para <b>extender</b> el alquiler.
+            </div>
+          )}
         </div>
 
         {/* Derecha */}
@@ -281,7 +335,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
             </div>
           </div>
 
-          {/* Pago */}
+          {/* Pago (igual que antes) */}
           {primaryPM ? (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -414,14 +468,17 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
             </div>
           )}
 
-          <Button
-            onClick={onExtend}
-            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold"
-          >
+          <Button onClick={onExtend} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold">
             Pagar {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
           </Button>
         </div>
       </div>
+
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        onUpgrade={goUpgrade}
+      />
     </div>
   );
 }

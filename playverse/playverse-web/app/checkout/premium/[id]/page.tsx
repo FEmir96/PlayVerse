@@ -1,4 +1,3 @@
-// app/checkout/premium/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -26,16 +25,13 @@ const getPaymentMethodsRef = (HAS_PM_QUERY
   : (api as any)["queries/getUserById"].getUserById) as FunctionReference<"query">;
 
 const savePaymentMethodRef =
-  (api as any)["mutations/savePaymentMethod"]
-    .savePaymentMethod as FunctionReference<"mutation">;
+  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
 
 const makePaymentRef =
-  (api as any)["mutations/makePayment"]
-    .makePayment as FunctionReference<"mutation">;
+  (api as any)["mutations/makePayment"].makePayment as FunctionReference<"mutation">;
 
 const upgradePlanRef =
-  (api as any)["mutations/upgradePlan"]
-    .upgradePlan as FunctionReference<"mutation">;
+  (api as any)["mutations/upgradePlan"].upgradePlan as FunctionReference<"mutation">;
 
 type PM = {
   _id: string;
@@ -72,6 +68,17 @@ const PLANS: Record<
   },
 };
 
+/* saneo next interno */
+function safeInternalNext(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const dec = decodeURIComponent(raw);
+    return dec.startsWith("/") ? dec : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function PremiumCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -87,7 +94,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     storeUser?.email?.toLowerCase() ??
     null;
 
-  // Esperar a que cargue la sesión: no redirigimos mientras status === "loading"
+  // Si no hay sesión → login con return a esta ruta (con query intacta)
   useEffect(() => {
     if (status === "loading") return;
     if (!loginEmail && !storeUser) {
@@ -128,6 +135,9 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
   const planKey = sp?.get("plan") ?? "monthly";
   const trial = sp?.get("trial") === "true";
   const plan = PLANS[planKey] ?? PLANS.monthly;
+
+  // next opcional (para volver donde estabas tras upgrade)
+  const nextParam = safeInternalNext(sp?.get("next") ?? null);
 
   const formatMoney = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -204,16 +214,25 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         userId: profile._id,
         toRole: "premium",
         plan: planKey,
-        paymentId: payRes?.paymentId,
+        paymentId: (payRes as any)?.paymentId,
         trial: Boolean(trial),
       });
 
-      // 3) UX
+      // 3) UX: si hay next, volvemos ahí; si no, success page
+      if (nextParam) {
+        // opcional: añadimos un flag para que arriba salga toast
+        const u = new URL(nextParam, typeof window !== "undefined" ? window.location.origin : "https://local");
+        u.searchParams.set("auth", "ok");
+        u.searchParams.set("upgraded", "1");
+        router.replace(u.pathname + u.search);
+      } else {
+        router.replace("/premium/success");
+      }
+
       toast({
         title: `¡Bienvenido a Premium, ${profile?.name ?? "gamer"}!`,
         description: "Tu suscripción se activó correctamente.",
       });
-      router.replace("/premium/success");
     } catch (e: any) {
       toast({
         title: "No se pudo completar la suscripción",

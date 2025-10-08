@@ -11,12 +11,6 @@ type Props = {
   game: Doc<"games">;
 };
 
-// Heurística simple: si la URL suena a screenshot/banner la tratamos como landscape.
-function isLandscapeFromUrl(url?: string) {
-  if (!url) return false;
-  return /screenshot|artwork|banner|widescreen|hero|landscape/i.test(url);
-}
-
 /** Convierte ratings 0..100 → estrellas /5 con 1 decimal.
  *  Fallback: igdbUserRating → igdbRating → popscore.
  */
@@ -41,19 +35,20 @@ function getUserStars(g: any): number | null {
 
 export default function GameCard({ game }: Props) {
   const isPremium = (game as any).plan === "premium";
-  const primaryGenre = (Array.isArray((game as any).genres) && (game as any).genres[0]) || "General";
-  const href = `/juego/${game._id}`; // Id<"games"> -> string por template literal
+  const primaryGenre =
+    (Array.isArray((game as any).genres) && (game as any).genres[0]) || "General";
+  const href = `/juego/${game._id}`;
 
-  const landscape = isLandscapeFromUrl((game as any).cover_url);
-  const aspectClass = landscape ? "aspect-video" : "aspect-[3/4]";
-  const objectClass = landscape ? "object-cover" : "object-contain";
+  // Ratio fijo para TODAS las portadas (consistencia visual).
+  // IGDB cover_big ~ 2:3; pero 3/4 también funciona. Elegimos 2/3.
+  const ASPECT = "aspect-[2/3]";
 
   // ⭐ rating de usuario (como en detalle)
   const userStars = getUserStars(game);
 
   return (
     <Link href={href}>
-      <Card className="bg-slate-800 border-slate-700 gap-1 p-0 overflow-hidden hover:shadow-lg hover:shadow-orange-400/10 transition">
+      <Card className="bg-slate-800 border-slate-700 gap-1 p-0 overflow-hidden hover:shadow-lg hover:shadow-orange-400/10 transition h-full flex flex-col">
         <div className="relative">
           {/* Género */}
           <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">
@@ -69,36 +64,30 @@ export default function GameCard({ game }: Props) {
             </div>
           )}
 
-          {/* Portada con manejo de orientación */}
-          <div className={`relative w-full ${aspectClass} bg-slate-800 overflow-hidden`}>
-            {/* Fondo blur para portrait (evita “cajas” vacías) */}
-            {!landscape && (game as any).cover_url && (
-              <div
-                className="absolute inset-0 blur-xl opacity-30 scale-110"
-                style={{
-                  backgroundImage: `url(${(game as any).cover_url})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }}
-              />
-            )}
-
+          {/* Portada: contenedor con ratio fijo + imagen cubriendo siempre */}
+          <div className={`relative w-full ${ASPECT} bg-slate-800 overflow-hidden`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={(game as any).cover_url || "/placeholder_game.jpg"}
               alt={game.title}
-              className={`relative z-[1] w-full h-full ${objectClass}`}
+              className="absolute inset-0 w-full h-full object-cover"
               loading="lazy"
+              decoding="async"
             />
           </div>
         </div>
 
-        <CardContent className="p-4">
+        <CardContent className="p-4 flex-1 flex flex-col">
           {/* ⭐ fila rating (solo si hay dato) */}
           {typeof userStars === "number" && userStars > 0 && (
-            <div className="flex items-center gap-1 mb-2" title={`User rating: ${userStars.toFixed(1)}/5`}>
+            <div
+              className="flex items-center gap-1 mb-2"
+              title={`User rating: ${userStars.toFixed(1)}/5`}
+            >
               <Star className="w-4 h-4 fill-orange-400 text-orange-400" />
-              <span className="text-orange-400 font-semibold">{userStars.toFixed(1)}</span>
+              <span className="text-orange-400 font-semibold">
+                {userStars.toFixed(1)}
+              </span>
             </div>
           )}
 
@@ -110,7 +99,7 @@ export default function GameCard({ game }: Props) {
             {game.description || "Sin descripción por ahora."}
           </p>
 
-          <div className="flex items-center justify-between text-sm text-slate-300">
+          <div className="mt-auto flex items-center justify-between text-sm text-slate-300">
             <span>Plan</span>
             <span className={isPremium ? "text-yellow-300" : "text-teal-300"}>
               {isPremium ? "Premium" : "Free"}

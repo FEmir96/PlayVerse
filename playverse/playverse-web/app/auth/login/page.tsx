@@ -1,41 +1,105 @@
-// playverse-web/app/auth/login/page.tsx
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import Image from "next/image";
-import { useToast } from "@/hooks/use-toast";
+
+import { useSession } from "next-auth/react";
 
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
 import { setFavoritesScope } from "@/components/favoritesStore";
 
+/* ===================== Helpers robustos ===================== */
+function safeInternalNext(raw: string | null | undefined): string {
+  const def = "/";
+  if (!raw) return def;
+  try {
+    const dec = decodeURIComponent(raw);
+    return dec.startsWith("/") ? dec : def;
+  } catch {
+    return def;
+  }
+}
+
+/** Soporta ?next= directo o el callbackUrl que arma NextAuth */
+function pickNextParam(sp: URLSearchParams | null): string {
+  if (!sp) return "/";
+  const direct = sp.get("next");
+  if (direct) return direct;
+
+  const cb = sp.get("callbackUrl");
+  if (!cb) return "/";
+  try {
+    const u = new URL(
+      decodeURIComponent(cb),
+      typeof window !== "undefined" ? window.location.origin : "https://local"
+    );
+    const innerNext = u.searchParams.get("next");
+    if (innerNext) return innerNext;
+    const internal = u.pathname + u.search;
+    return internal.startsWith("/") ? internal : "/";
+  } catch {
+    return "/";
+  }
+}
+
+/** Agrega flags para que el Header dispare el toast de bienvenida */
+function withWelcomeFlags(nextPath: string, provider?: string) {
+  try {
+    const u = new URL(
+      nextPath,
+      typeof window !== "undefined" ? window.location.origin : "https://local"
+    );
+    u.searchParams.set("auth", "ok");
+    if (provider) u.searchParams.set("provider", provider);
+    return u.pathname + u.search;
+  } catch {
+    return nextPath;
+  }
+}
+
+/** Construye /auth/after?next=...&auth=ok&provider=... */
+function buildAfterUrl(next: string, provider?: "credentials" | "google" | "xbox" | "microsoft") {
+  const base = "/auth/after";
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "http://local";
+  const u = new URL(base, origin);
+  if (next) u.searchParams.set("next", safeInternalNext(next));
+  u.searchParams.set("auth", "ok");
+  if (provider) u.searchParams.set("provider", provider);
+  return u.pathname + u.search;
+}
+
+/* ===================== Componente ===================== */
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const sp = useSearchParams();
   const { toast } = useToast();
 
+  // sesión (si ya estás adentro, salimos a next)
+  const { status } = useSession();
+
+  // estado UI
   const [formData, setFormData] = useState({ email: "", password: "", remember: false });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const [oauthPending, setOauthPending] = useState(false); // ⬅️ nuevo
+  const [oauthPending, setOauthPending] = useState(false);
 
+  // store local
   const setUser = useAuthStore((s: AuthState) => s.setUser);
 
-  // ✅ Decodificamos y saneamos ?next
-  const nextUrl = useMemo(() => {
-    const raw = searchParams?.get("next") || "";
-    const decoded = raw ? decodeURIComponent(raw) : "/";
-    return decoded.startsWith("/") ? decoded : "/";
-  }, [searchParams]);
+  // next robusto (acepta ?next= o viene adentro de ?callbackUrl=)
+  const nextUrl = useMemo(() => safeInternalNext(pickNextParam(sp)), [sp]);
 
   // Si venís de registro exitoso: ?registered=1
   useEffect(() => {
-    const registered = searchParams?.get("registered");
+    const registered = sp?.get("registered");
     if (registered === "1") {
       toast({
         title: "Cuenta creada con éxito 🎉",
@@ -43,7 +107,7 @@ export default function LoginPage() {
       });
       router.replace("/auth/login");
     }
-  }, [searchParams, router, toast]);
+  }, [sp, router, toast]);
 
   // Autocompletar email recordado
   useEffect(() => {
@@ -51,19 +115,18 @@ export default function LoginPage() {
     if (saved) setFormData((s) => ({ ...s, email: saved, remember: true }));
   }, []);
 
-  const buildAfterUrl = (next: string, provider?: "credentials" | "google" | "xbox") => {
-    const base = "/auth/after";
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "http://local";
-    const u = new URL(base, origin);
-    if (next) u.searchParams.set("next", next);
-    if (provider) {
-      u.searchParams.set("auth", "ok");
-      u.searchParams.set("provider", provider);
-    }
-    return u.pathname + u.search;
-  };
+  // Si ya estás autenticado, salimos YA al destino preservando flags
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const dest = withWelcomeFlags(nextUrl, "session");
+    router.replace(dest);
+    // aseguramos refresco del header
+    setTimeout(() => {
+      try { router.refresh(); } catch {}
+    }, 0);
+  }, [status, nextUrl, router]);
 
+  // Submit credenciales
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -80,7 +143,7 @@ export default function LoginPage() {
         callbackUrl,
       });
 
-      // Si el navegador no redirige (dev), al menos dejamos el estado listo:
+      // Estado local si el navegador no redirige de inmediato
       if (formData.remember) {
         localStorage.setItem("pv_email", formData.email.trim().toLowerCase());
       } else {
@@ -95,7 +158,7 @@ export default function LoginPage() {
     }
   };
 
-  // ⬇️ handlers OAuth con bloqueo de doble click
+  // OAuth Google (con bloqueo de doble click)
   const loginWithGoogle = () => {
     if (oauthPending || pending) return;
     setOauthPending(true);
@@ -104,14 +167,16 @@ export default function LoginPage() {
     );
   };
 
+  // OAuth Microsoft/Xbox (con bloqueo de doble click)
   const loginWithXbox = () => {
     if (oauthPending || pending) return;
     setOauthPending(true);
     import("next-auth/react").then(({ signIn }) =>
-      signIn("azure-ad", { callbackUrl: buildAfterUrl(nextUrl, "xbox") })
+      signIn("azure-ad", { callbackUrl: buildAfterUrl(nextUrl, "microsoft") })
     );
   };
 
+  /* ===================== UI (estilos originales) ===================== */
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -253,6 +318,10 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
+
+        <p className="text-center text-sm text-slate-400 mt-4">
+          ¿No tenés cuenta? Crea una al iniciar con Google/Microsoft.
+        </p>
       </div>
     </div>
   );
