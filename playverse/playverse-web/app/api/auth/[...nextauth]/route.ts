@@ -12,8 +12,10 @@ const convex = new ConvexHttpClient(convexUrl);
 async function getRoleByEmail(email?: string | null) {
   if (!email) return "free";
   try {
-    const profile = await convex.query(api.queries.getUserByEmail.getUserByEmail as any, { email });
-    // profile?.role puede ser "free" | "premium" | "admin"
+    const profile = await convex.query(
+      api.queries.getUserByEmail.getUserByEmail as any,
+      { email }
+    );
     return (profile as any)?.role ?? "free";
   } catch {
     return "free";
@@ -25,14 +27,12 @@ export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
 
   providers: [
-    // ───── OAuth: Google
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
     }),
 
-    // ───── OAuth: Microsoft/Xbox
     AzureAd({
       clientId: process.env.MICROSOFT_CLIENT_ID!,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
@@ -42,7 +42,6 @@ export const authOptions: AuthOptions = {
       allowDangerousEmailAccountLinking: true,
     }),
 
-    // ───── Email/Password con Convex (usa tu mutation authLogin)
     Credentials({
       name: "credentials",
       credentials: {
@@ -51,69 +50,69 @@ export const authOptions: AuthOptions = {
       },
       async authorize(creds) {
         if (!creds?.email || !creds?.password) return null;
-        // valida contra Convex
         const res = await convex.mutation(api.auth.authLogin as any, {
           email: String(creds.email).toLowerCase().trim(),
           password: String(creds.password),
         });
         if (!res?.ok) return null;
         const p = res.profile;
+        // IMPORTANTE: no incluir picture/image para no inflar el JWT
         return {
           id: String(p._id),
           name: p.name ?? "",
           email: p.email,
           role: p.role ?? "free",
-          picture: (p as any)?.avatarUrl ?? undefined,
         } as any;
       },
     }),
   ],
 
   callbacks: {
-    // ── Al hacer sign-in por OAuth, aseguramos upsert del perfil
     async signIn({ user, account }) {
       try {
         if (!user?.email) return false;
         await convex.mutation(api.auth.oauthUpsert as any, {
           email: user.email,
           name: user.name ?? "",
-          avatarUrl: (user as any).image ?? undefined,
+          // OJO: no dependemos del avatar acá; se maneja desde tu perfil.
+          avatarUrl: undefined,
           provider: account?.provider ?? "unknown",
           providerId: account?.providerAccountId ?? undefined,
         });
         return true;
       } catch (err) {
         console.error("oauthUpsert failed:", err);
-        return true; // no bloqueamos el login
+        return true;
       }
     },
 
-    // ── JWT: GUARDA SIEMPRE EL ROLE REAL
+    // JWT minimalista: solo id/email/name/role. Nada de imágenes ni objetos grandes.
     async jwt({ token, user }) {
-      // En el primer login (credentials u oauth) puede venir user
       if (user) {
         (token as any).role = (user as any).role ?? (token as any).role ?? "free";
         token.email = user.email ?? token.email;
         token.name = user.name ?? token.name;
-        (token as any).picture = (user as any).picture ?? (token as any).picture;
+        token.sub = (user as any).id ?? token.sub;
       }
 
-      // Refrescar role desde Convex si aún no está o quedó desactualizado
-      if (!(token as any).role || (token as any).role === "free") {
-        const role = await getRoleByEmail(token.email as string | undefined);
-        (token as any).role = role ?? (token as any).role ?? "free";
-      }
+      // Refrescar role desde Convex por si cambió
+      const role = await getRoleByEmail(token.email as string | undefined);
+      (token as any).role = role ?? (token as any).role ?? "free";
+
+      // Sanear posibles arrastres de sesiones viejas
+      if ("picture" in (token as any)) delete (token as any).picture;
+      if ("image" in (token as any)) delete (token as any).image;
 
       return token;
     },
 
-    // ── Session: expone role al cliente (session.user.role)
     async session({ session, token }) {
       if (session.user) {
         session.user.email = token.email as string;
         session.user.name = token.name as string;
-        (session.user as any).image = (token as any).picture;
         (session.user as any).role = (token as any).role ?? "free";
+        // No seteamos image desde token para no depender del JWT
+        // El front puede leer avatar desde Convex (getUserByEmail) cuando lo necesite.
       }
       return session;
     },

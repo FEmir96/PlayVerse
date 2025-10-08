@@ -28,6 +28,7 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [oauthPending, setOauthPending] = useState(false); // ⬅️ nuevo
 
   const createUser = useMutation(api.auth.createUser);
 
@@ -39,8 +40,6 @@ export default function RegisterPage() {
   }, [searchParams]);
 
   // ✅ si hay sesión en Register, nunca nos quedamos aquí:
-  // - si viene de OAuth (?oauth=1) -> muestra toast y redirige
-  // - si no, sólo redirige rápido
   useEffect(() => {
     if (status !== "authenticated") return;
 
@@ -49,7 +48,6 @@ export default function RegisterPage() {
     const dest = nextUrl || "/";
 
     if (fromOAuth) {
-      // mostramos toast y damos un pequeño margen para que se vea
       toast({
         title: `¡Bienvenido, ${name}!`,
         description: "Inicio de sesión exitoso.",
@@ -99,6 +97,23 @@ export default function RegisterPage() {
 
   // callback de vuelta para que Register maneje el toast y salida
   const oauthCallback = `/auth/register?oauth=1&next=${encodeURIComponent(nextUrl)}`;
+
+  // ⬇️ handlers OAuth con bloqueo de doble click
+  const oauthGoogle = () => {
+    if (oauthPending || pending) return;
+    setOauthPending(true);
+    import("next-auth/react").then(({ signIn }) =>
+      signIn("google", { callbackUrl: oauthCallback })
+    );
+  };
+
+  const oauthXbox = () => {
+    if (oauthPending || pending) return;
+    setOauthPending(true);
+    import("next-auth/react").then(({ signIn }) =>
+      signIn("azure-ad", { callbackUrl: oauthCallback })
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -153,7 +168,7 @@ export default function RegisterPage() {
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
               />
-              {!emailOk && formData.email.length > 0 && (
+              {formData.email.length > 0 && !emailOk && (
                 <p className="text-xs text-red-400 mt-1">Email inválido</p>
               )}
             </div>
@@ -180,7 +195,7 @@ export default function RegisterPage() {
                 className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
                 required
               />
-              {!matchOk && formData.confirmPassword.length > 0 && (
+              {formData.confirmPassword.length > 0 && !matchOk && (
                 <p className="text-xs text-red-400 mt-1">No coinciden</p>
               )}
             </div>
@@ -206,7 +221,7 @@ export default function RegisterPage() {
 
             <Button
               type="submit"
-              disabled={!canSubmit || pending}
+              disabled={!canSubmit || pending || oauthPending}
               className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pending ? "Creando..." : "Registrarse"}
@@ -225,21 +240,18 @@ export default function RegisterPage() {
             {/* Google */}
             <button
               type="button"
-              onClick={() =>
-                import("next-auth/react").then(({ signIn }) =>
-                  signIn("google", { callbackUrl: `/auth/register?oauth=1&next=${encodeURIComponent(nextUrl)}` })
-                )
-              }
+              onClick={oauthGoogle}
+              disabled={pending || oauthPending}
               className="w-full flex items-center justify-center gap-3 rounded-md
                          border border-orange-400/40 bg-slate-800/60 px-4 py-2.5
                          text-[15px] font-medium text-slate-200 transition
                          hover:bg-slate-800 hover:border-orange-400/70
-                         active:scale-[0.99] cursor-pointer"
+                         active:scale-[0.99] cursor-pointer disabled:opacity-60"
               aria-label="Continuar con Google"
               title="Continuar con Google"
             >
               <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-                <path fill="#FFC107" d="M43.6 20.5h-1.9V20H24v8h11.3C33.9 31 29.4 34 24 34c-6.6 0-12-5.4-12-12S17.4 10 24 10c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 3.7 29.2 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.1-.1-2.2-.4-3.5z"/>
+                <path fill="#FFC107" d="M43.6 20.5h-1.9V20H24v8h11.3C33.9 31 29.4 34 24 34c-6.6 0-12-5.4-12-12S17.4 10 24 10c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 3.7 29.2 2 24 2 15 2 7.4 7.3 4.1 14.7z"/>
                 <path fill="#FF3D00" d="M6.3 14.7L13 19c2-4 6.1-7 11-7 3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 3.7 29.2 2 24 2 15 2 7.4 7.3 4.1 14.7z"/>
                 <path fill="#4CAF50" d="M24 46c5.2 0 9.9-1.7 13.6-4.6l-6.3-5.2C29.2 38 26.7 39 24 39c-5.4 0-9.9-3-12.3-7.4l-6.5 5C7.4 40.7 15 46 24 46z"/>
                 <path fill="#1976D2" d="M43.6 20.5H24v8h11.3c-1.6 3.8-5.6 6.5-10.3 6.5-5.4 0-9.9-3-12.3-7.4l-6.5 5C7.4 40.7 15 46 24 46c11 0 21-8 21-22 0-1.1-.1-2.2-.4-3.5z"/>
@@ -250,17 +262,14 @@ export default function RegisterPage() {
             {/* Xbox / Microsoft */}
             <button
               type="button"
-              onClick={() =>
-                import("next-auth/react").then(({ signIn }) =>
-                  signIn("azure-ad", { callbackUrl: `/auth/register?oauth=1&next=${encodeURIComponent(nextUrl)}` })
-                )
-              }
+              onClick={oauthXbox}
+              disabled={pending || oauthPending}
               className="w-full flex items-center justify-center gap-3 rounded-md
                          border border-[#107C10]/50 bg-slate-800/60 px-4 py-2.5
                          text[15px] font-medium text-slate-200 transition
                          hover:bg-slate-800 hover:border-[#107C10]/80
                          hover:shadow-[0_0_14px_rgba(16,124,16,0.35)]
-                         active:scale-[0.99] cursor-pointer"
+                         active:scale-[0.99] cursor-pointer disabled:opacity-60"
               aria-label="Continuar con Xbox"
               title="Continuar con Xbox"
             >

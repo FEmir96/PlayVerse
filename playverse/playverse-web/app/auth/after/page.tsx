@@ -1,7 +1,7 @@
 // app/auth/after/page.tsx
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -37,8 +37,7 @@ function safeInternalNext(raw: string | null | undefined): string {
   if (!raw) return def;
   try {
     const dec = decodeURIComponent(raw);
-    // solo permitimos rutas internas
-    if (dec.startsWith("/")) return dec;
+    if (dec.startsWith("/")) return dec; // solo rutas internas
     return def;
   } catch {
     return def;
@@ -47,7 +46,6 @@ function safeInternalNext(raw: string | null | undefined): string {
 
 // (3) helper: detecta si el next apunta a checkout premium
 function isPremiumCheckout(nextPath: string) {
-  // /checkout/premium?plan=monthly|quarterly|annual
   if (!nextPath.startsWith("/checkout/premium")) return false;
   try {
     const u = new URL(
@@ -58,6 +56,22 @@ function isPremiumCheckout(nextPath: string) {
     return plan === "monthly" || plan === "quarterly" || plan === "annual";
   } catch {
     return false;
+  }
+}
+
+// (4) anexar flags de bienvenida (para que Header dispare el toast)
+function withWelcomeFlags(nextPath: string, provider?: string) {
+  try {
+    const u = new URL(
+      nextPath,
+      typeof window !== "undefined" ? window.location.origin : "https://local"
+    );
+    u.searchParams.set("auth", "ok");
+    if (provider) u.searchParams.set("provider", provider);
+    return u.pathname + u.search;
+  } catch {
+    // si falla por ser ruta relativa sin base, devolvemos tal cual
+    return nextPath;
   }
 }
 
@@ -81,44 +95,51 @@ export default function AfterAuthPage() {
   const rawNext = sp.get("next");
   const next = useMemo(() => safeInternalNext(rawNext), [rawNext]);
 
+  // flags para toast
+  const authFlag = sp.get("auth");        // "ok" si viene de login
+  const provider = sp.get("provider") || undefined;
+
   // perfil (rol) desde Convex
   const profile = useQuery(
     getUserByEmailRef,
     loginEmail ? { email: loginEmail } : "skip"
   ) as { role?: "free" | "premium" | "admin" } | null | undefined;
 
+  // Evitar doble navegación (Strict Mode / back button)
+  const didNav = useRef(false);
+
   // redirección según reglas:
   useEffect(() => {
-    // 1) si todavía no hay sesión, no hacemos nada
     if (status === "loading") return;
 
-    // 2) sin sesión -> volvemos a login (manteniendo el next)
     if (status === "unauthenticated") {
+      if (didNav.current) return;
+      didNav.current = true;
       router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
       return;
     }
 
-    // 3) tenemos sesión. Si aún no llegó el perfil desde Convex, esperamos.
+    // tenemos sesión. Si aún no llegó el perfil desde Convex, esperamos.
     if (typeof profile === "undefined") return;
 
-    // 4) ya tenemos todo: decidimos
+    if (didNav.current) return;
+    didNav.current = true;
+
     const role = (profile?.role ?? "free") as "free" | "premium" | "admin";
 
-    // si el destino es checkout premium:
+    // destino base
+    let dest = next;
+
     if (isPremiumCheckout(next)) {
-      // - premium: no necesita pasar por checkout → home sin parpadeo
-      if (role === "premium") {
-        router.replace("/");
-        return;
-      }
-      // - free o admin: lo dejamos ir al checkout del plan elegido
-      router.replace(next);
-      return;
+      // premium ya no necesita ir a checkout → home
+      if (role === "premium") dest = "/";
     }
 
-    // si NO es un checkout premium, simplemente vamos a `next`
-    router.replace(next);
-  }, [status, profile, next, router]);
+    // si venimos de login, propagamos flags para que Header muestre el toast
+    const finalDest = authFlag === "ok" ? withWelcomeFlags(dest, provider) : dest;
+
+    router.replace(finalDest);
+  }, [status, profile, next, router, authFlag, provider]);
 
   // pantalla de transición
   return <ScreenLoader />;

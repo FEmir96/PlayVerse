@@ -1,4 +1,4 @@
-// playverse-web/components/Header.tsx
+// playverse-web/components/header.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -50,22 +50,23 @@ export function Header() {
     [status, localUser]
   );
 
-  const displayName = session?.user?.name ?? localUser?.name ?? undefined;
-  const displayEmail = session?.user?.email ?? localUser?.email ?? undefined;
-
   const loginEmail =
     session?.user?.email?.toLowerCase() ||
     localUser?.email?.toLowerCase() ||
     null;
 
-  // perfil
+  // perfil (ahora tipamos con name opcional para usarlo en el toast)
   const profile = useQuery(
     api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
-  ) as ({ _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined);
+  ) as ({ _id: Id<"profiles">; name?: string; role?: "free" | "premium" | "admin" } | null | undefined);
 
   const role = (profile?.role as any) || "free";
   const userId: Id<"profiles"> | null = profile?._id ?? null;
+
+  // nombre y email para UI (prioriza el nombre del perfil Convex)
+  const displayName = profile?.name ?? session?.user?.name ?? localUser?.name ?? undefined;
+  const displayEmail = session?.user?.email ?? localUser?.email ?? undefined;
 
   const shouldShowPremium = !logged || role === "free" || role === "admin";
 
@@ -120,50 +121,48 @@ export function Header() {
 
   const favCount = useFavoritesStore((s) => s.items.length);
 
+  // ✅ Ajuste: espera a que el perfil (Convex) esté resuelto para usar el nombre correcto en el toast
   useEffect(() => {
-    if (firedWelcome.current) return;
-
     const auth = searchParams.get("auth");
     const provider = (searchParams.get("provider") || "").toLowerCase();
 
-    const showWelcome = (provLabel?: string) => {
-      if (firedWelcome.current) return;
+    // sólo seguimos si venimos del callback (?auth=ok), hay sesión/logged
+    if (auth !== "ok" || !logged) return;
+
+    // si el perfil aún no resolvió (undefined), esperamos al próximo render
+    if (typeof profile === "undefined") return;
+
+    if (!firedWelcome.current) {
       firedWelcome.current = true;
 
-      try {
-        if (sessionStorage.getItem("pv_welcomed") === "1") return;
-        sessionStorage.setItem("pv_welcomed", "1");
-      } catch {}
-
-      const name = displayName ?? "gamer";
-      const label = provLabel ?? "tu cuenta";
-      if (!logged) return;
-
-      (toast as any)({
-        title: `¡Bienvenido, ${name}!`,
-        description: `Inicio de sesión con ${label} exitoso.`,
-      });
-    };
-
-    if (auth === "ok" && logged) {
       const provLabel =
         provider === "xbox" ? "Xbox" :
         provider === "google" ? "Google" :
         provider === "credentials" ? "tu cuenta" :
         "tu cuenta";
 
-      showWelcome(provLabel);
+      // nombre para toast: prioriza Convex.name, luego NextAuth y por último store local
+      const nameForToast =
+        profile?.name ||
+        session?.user?.name ||
+        localUser?.name ||
+        "gamer";
 
+      (toast as any)({
+        title: `¡Bienvenido, ${nameForToast}!`,
+        description: `Inicio de sesión con ${provLabel} exitoso.`,
+      });
+
+      // limpiamos los flags de la URL sin "parpadeo"
       const params = new URLSearchParams(searchParams.toString());
       params.delete("auth");
       params.delete("provider");
       const nextUrl = pathname + (params.toString() ? `?${params.toString()}` : "");
-      router.replace(nextUrl);
-      return;
-    }
 
-    if (logged) showWelcome();
-  }, [searchParams, logged, pathname, router, toast, displayName]);
+      const tid = setTimeout(() => router.replace(nextUrl), 120);
+      return () => clearTimeout(tid);
+    }
+  }, [searchParams, logged, pathname, router, toast, profile, session, localUser]);
 
   if (pathname.startsWith("/static-games")) {
     return null;
