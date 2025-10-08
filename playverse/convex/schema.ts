@@ -158,8 +158,7 @@ export default defineSchema({
       v.literal("discount"),
       v.literal("achievement"),
       v.literal("purchase"),
-      v.literal("game-update"),
-      v.literal("media-added") // 👈 agregado: coincide con tu Dropdown
+      v.literal("game-update")
     ),
     title: v.string(),
     message: v.string(),
@@ -170,6 +169,8 @@ export default defineSchema({
     createdAt: v.number(),
     meta: v.optional(v.any()),
   })
-    .index("by_user_time", ["userId", "createdAt"])
+    // feed ordenado por fecha de creación para un usuario:
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    // conteo rápido de no leídas por usuario:
     .index("by_user_isRead", ["userId", "isRead"]),
 });

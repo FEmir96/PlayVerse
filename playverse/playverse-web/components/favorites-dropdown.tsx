@@ -42,23 +42,14 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
     api.mutations.toggleFavorite.toggleFavorite as any
   );
 
-  // 🔒 cerrar al click afuera (sin tocar estilos)
+  // ⬇️ ya no cerramos por click-afuera acá (lo maneja Header) — sólo Escape por accesibilidad
   const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (!isOpen) return;
-      if (!wrapRef.current) return;
-      if (!wrapRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
     function onEsc(e: KeyboardEvent) {
       if (e.key === "Escape" && isOpen) onClose();
     }
-    document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onEsc);
     return () => {
-      document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onEsc);
     };
   }, [isOpen, onClose]);
@@ -74,11 +65,8 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
   // ⬇️ SIEMPRE montado para animación suave
   return (
     <div
-      className={`
-        absolute right-0 mt-3 w-[380px] z-50
-        transition-all duration-200 ease-out
-        ${isOpen ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-1 scale-95 pointer-events-none"}
-      `}
+      className={`absolute right-0 mt-3 w-[380px] z-50 transition-all duration-200 ease-out
+        ${isOpen ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-1 scale-95 pointer-events-none"}`}
       ref={wrapRef}
       role="dialog"
       aria-hidden={!isOpen}
@@ -95,7 +83,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                 {items.length}
               </span>
             </div>
-            {/* ❗Solo hover: glow suave */}
+            {/* Cerrar */}
             <button
               onClick={onClose}
               className="text-slate-400 rounded-md transition-all duration-200
@@ -105,6 +93,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60"
               aria-label="Cerrar"
               title="Cerrar"
+              type="button"
             >
               <X className="w-4 h-4" />
             </button>
@@ -141,25 +130,20 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                         <Link
                           href={`/juego/${g.id}`}
                           onClick={onClose}
-                          className="text-orange-400 hover:text-orange-300 hover:underline font-medium truncate
-                                     transition-colors"
+                          className="text-orange-400 hover:text-orange-300 hover:underline font-medium truncate transition-colors"
                           title={g.title}
                         >
                           {g.title}
                         </Link>
 
-                        {/* Papelera con glow en hover */}
+                        {/* Papelera */}
                         <button
                           onClick={async () => {
                             // 1) UI optimista
                             remove(g.id);
-                            try {
-                              window.dispatchEvent(new Event("pv:favorites:changed"));
-                            } catch {}
-                            toast({
-                              title: "Eliminado de favoritos",
-                              description: `${g.title} se quitó de tu lista.`,
-                            });
+                            try { window.dispatchEvent(new Event("pv:favorites:changed")); } catch {}
+                            const t = g.title;
+                            toast({ title: "Eliminado de favoritos", description: `${t} se quitó de tu lista.` });
 
                             // 2) Server
                             try {
@@ -172,12 +156,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                                 const added =
                                   typeof res === "boolean"
                                     ? res
-                                    : !!(
-                                        res &&
-                                        (res.added === true ||
-                                          res.status === "added" ||
-                                          res.result === "added")
-                                      );
+                                    : !!(res && (res.added === true || res.status === "added" || res.result === "added"));
 
                                 if (added) {
                                   await toggleFavorite({
@@ -196,6 +175,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                                      hover:ring-1 hover:ring-red-400/30
                                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
                           title="Quitar de favoritos"
+                          type="button"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -206,8 +186,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                         <Link
                           href={`/checkout/alquiler/${g.id}`}
                           onClick={onClose}
-                          className="text-cyan-300 hover:text-cyan-200 text-sm inline-flex items-center gap-1
-                                     transition-colors"
+                          className="text-cyan-300 hover:text-cyan-200 text-sm inline-flex items-center gap-1 transition-colors"
                         >
                           <PlaySquare className="w-4 h-4" />
                           Alquiler
@@ -215,8 +194,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                         <Link
                           href={`/checkout/compra/${g.id}`}
                           onClick={onClose}
-                          className="text-emerald-300 hover:text-emerald-200 text-sm inline-flex items-center gap-1
-                                     transition-colors"
+                          className="text-emerald-300 hover:text-emerald-200 text-sm inline-flex items-center gap-1 transition-colors"
                         >
                           <ShoppingCart className="w-4 h-4" />
                           Compra

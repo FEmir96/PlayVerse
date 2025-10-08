@@ -186,14 +186,25 @@ export default function PlayEmbeddedPage() {
 
   const showCountdown = typeof expiresInMs === "number";
 
+  // ⬇️⬇️ ⬅️ AQUÍ EL CAMBIO CLAVE
+  // Armamos la URL final del iframe con los query params:
+  //   - email (para identificar al usuario en el juego)
+  //   - gid   (para que el juego mande gameId a Convex y no falle por embedUrl)
+  const qp: Record<string, string> = {};
+  if (email) qp.email = email;
+  if (gameId) qp.gid = gameId;
+  const qs = Object.keys(qp).length ? (embedUrl.includes("?") ? "&" : "?") + new URLSearchParams(qp).toString() : "";
+  const finalSrc = embedUrl + qs;
+  // ⬆️⬆️
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-6">
-        {/* ⬆️ Header con botón Ranking + Volver (nuevo: Ranking) */}
+        {/* Header con botón Ranking + Volver */}
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl md:text-2xl font-bold text-orange-400">{title}</h1>
           <div className="flex items-center gap-2">
-            <RankingButton embedUrl={embedUrl ?? undefined} />
+            <RankingButton embedUrl={(game as any)?.embed_url ?? (game as any)?.embedUrl ?? undefined} />
             <Button
               variant="outline"
               onClick={() => router.push(`/juego/${gameId}`)}
@@ -238,7 +249,8 @@ export default function PlayEmbeddedPage() {
           )}
 
           <iframe
-            src={embedUrl}
+            // ⬇️ usamos la URL con email + gid
+            src={finalSrc}
             title={title}
             className="w-full h-full"
             allow={allow ?? "autoplay; fullscreen; gamepad; clipboard-read; clipboard-write; cross-origin-isolated"}

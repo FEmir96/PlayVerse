@@ -12,7 +12,6 @@ import { NotificationsDropdown } from "./notifications-dropdown";
 
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
-
 import { useSession } from "next-auth/react";
 
 import {
@@ -36,7 +35,6 @@ export function Header() {
   const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
   const [showFavorites, setShowFavorites] = useState(false);
-  const [userOpen, setUserOpen] = useState(false); // ⬅️ controlamos el menú de la personita
   const [loggingOut, setLoggingOut] = useState(false);
 
   const { toast } = useToast();
@@ -102,10 +100,7 @@ export function Header() {
     setLoggingOut(true);
     try {
       clearAuth();
-      try {
-        localStorage.removeItem("pv_email");
-      } catch {}
-
+      try { localStorage.removeItem("pv_email"); } catch {}
       setFavoritesScope("__guest__");
 
       if (status === "authenticated") {
@@ -170,15 +165,32 @@ export function Header() {
     if (logged) showWelcome();
   }, [searchParams, logged, pathname, router, toast, displayName]);
 
-  // cerrar popovers al navegar
-  useEffect(() => {
-    setShowFavorites(false);
-    setUserOpen(false);
-  }, [pathname]);
-
   if (pathname.startsWith("/static-games")) {
     return null;
   }
+
+  // ⬇️ refs para manejo de click-afuera
+  const favContainerRef = useRef<HTMLDivElement>(null);
+
+  // cerrar favoritos con click afuera + Escape (controlado desde Header)
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (!showFavorites) return;
+      const target = e.target as Node;
+      if (favContainerRef.current && !favContainerRef.current.contains(target)) {
+        setShowFavorites(false);
+      }
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape" && showFavorites) setShowFavorites(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [showFavorites]);
 
   return (
     <header className="bg-slate-900 border-b border-slate-700 relative">
@@ -211,11 +223,12 @@ export function Header() {
                 {/* 🔔 100% server & por usuario */}
                 <NotificationsDropdown userId={userId} />
 
-                {/* ❤️ abre/cierra con animación; el panel maneja click-outside */}
-                <div className="relative">
+                {/* ❤️ Toggle real y cierre al click afuera (controlado acá) */}
+                <div className="relative" ref={favContainerRef}>
                   <Button
                     size="icon"
                     variant="ghost"
+                    type="button"
                     className="relative text-orange-400 rounded-xl transition-all duration-200
                                hover:text-amber-300 hover:bg-orange-400/10
                                hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
@@ -234,8 +247,6 @@ export function Header() {
                       </span>
                     )}
                   </Button>
-
-                  {/* wrapper para animación suave (el componente ya aplica transition) */}
                   <div id="favorites-popover">
                     <FavoritesDropdown
                       isOpen={showFavorites}
@@ -264,8 +275,7 @@ export function Header() {
               </>
             ) : (
               <div className="relative">
-                {/* Controlamos el Dropdown de shadcn para poder hacer transición + toggle confiable */}
-                <DropdownMenu open={userOpen} onOpenChange={setUserOpen}>
+                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <div>
                       <Button
@@ -278,23 +288,17 @@ export function Header() {
                                    focus-visible:outline-none
                                    focus-visible:ring-2 focus-visible:ring-orange-400/60"
                         title={displayName}
-                        onClick={() => setUserOpen((v) => !v)}
-                        aria-expanded={userOpen}
-                        aria-controls="user-menu-pop"
                       >
                         <User className="w-5 h-5" />
                       </Button>
                     </div>
                   </DropdownMenuTrigger>
 
-                  {/* Borde degradado + animación suave */}
+                  {/* wrapper con borde degradado tipo Favorites */}
                   <DropdownMenuContent
-                    id="user-menu-pop"
                     align="end"
                     sideOffset={8}
-                    className="z-50 bg-transparent border-0 p-0
-                               transition-all duration-200 ease-out
-                               data-[state=closed]:opacity-0 data-[state=closed]:translate-y-1 data-[state=closed]:scale-95"
+                    className="z-50 bg-transparent border-0 p-0"
                   >
                     <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-orange-400/40 to-purple-500/40">
                       <div className="rounded-2xl bg-slate-900 border border-slate-700 overflow-hidden">
@@ -315,7 +319,6 @@ export function Header() {
                                       hover:ring-1 hover:ring-orange-400/40
                                       focus-visible:outline-none
                                       focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400"
-                            onClick={() => setUserOpen(false)}
                           >
                             <User className="w-4 h-4" />
                             Ver perfil
@@ -332,7 +335,6 @@ export function Header() {
                                         hover:ring-1 hover:ring-orange-400/40
                                         focus-visible:outline-none
                                         focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400"
-                              onClick={() => setUserOpen(false)}
                             >
                               <Shield className="w-4 h-4" />
                               Panel Administrador
