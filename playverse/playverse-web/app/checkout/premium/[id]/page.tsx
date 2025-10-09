@@ -25,7 +25,8 @@ const getPaymentMethodsRef = (HAS_PM_QUERY
   : (api as any)["queries/getUserById"].getUserById) as FunctionReference<"query">;
 
 const savePaymentMethodRef =
-  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
+  (api as any)["mutations/savePaymentMethod"]
+    .savePaymentMethod as FunctionReference<"mutation">;
 
 const makePaymentRef =
   (api as any)["mutations/makePayment"].makePayment as FunctionReference<"mutation">;
@@ -52,6 +53,13 @@ const PLANS: Record<
     period: "/mes",
     description: "Perfecto para probar la experiencia",
   },
+  quarterly: {
+    name: "Premium Trimestral",
+    price: 24.99,
+    priceLabel: "$24.99",
+    period: "/3 meses",
+    description: "Equilibrio entre precio y flexibilidad",
+  },
   annual: {
     name: "Premium Anual",
     price: 89.99,
@@ -59,6 +67,7 @@ const PLANS: Record<
     period: "/año",
     description: "Ahorra $30",
   },
+  // Compatibilidad hacia atrás si llega a venir "lifetime" desde algún enlace viejo
   lifetime: {
     name: "Premium Lifetime",
     price: 239.99,
@@ -201,7 +210,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         });
       }
 
-      // 1) Registrar pago
+      // 1) Registrar pago (mock/provider manual)
       const payRes = await makePayment({
         userId: profile._id,
         amount: plan.price,
@@ -218,10 +227,18 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         trial: Boolean(trial),
       });
 
-      // 3) UX: si hay next, volvemos ahí; si no, success page
+      // 3) Toast futuro en success
+      try {
+        if (profile?.name) sessionStorage.setItem("pv_premium_welcome", profile.name);
+      } catch {}
+
+      // 4) UX: si hay next, volvemos ahí; si no, success page
       if (nextParam) {
-        // opcional: añadimos un flag para que arriba salga toast
-        const u = new URL(nextParam, typeof window !== "undefined" ? window.location.origin : "https://local");
+        const u = new URL(
+          nextParam,
+          typeof window !== "undefined" ? window.location.origin : "https://local"
+        );
+        // flags útiles para mostrar toasts arriba si querés
         u.searchParams.set("auth", "ok");
         u.searchParams.set("upgraded", "1");
         router.replace(u.pathname + u.search);
@@ -242,11 +259,20 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     }
   };
 
-  // Si todavía no sabemos el email (sesión cargando), mostramos loader simple
-  if (status === "loading") {
+  // Loaders: sesión o perfil (cuando hay sesión)
+  if (status === "loading" || (status === "authenticated" && typeof profile === "undefined")) {
     return (
       <div className="min-h-[60vh] grid place-items-center text-slate-300">
         Cargando…
+      </div>
+    );
+  }
+
+  // Si el perfil no existe (id inválido)
+  if (status === "authenticated" && profile === null) {
+    return (
+      <div className="min-h-[60vh] grid place-items-center text-slate-300">
+        No encontramos tu perfil. Volvé a intentarlo.
       </div>
     );
   }

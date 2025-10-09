@@ -1,7 +1,6 @@
-// app/premium/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,11 +15,10 @@ import type { FunctionReference } from "convex/server";
 import { api } from "@convex";
 
 const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"]
-    .getUserByEmail as FunctionReference<"query">;
+  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
 
 // ───────────────────────────────────────────────────────────────────────────────
-// Datos UI (mismo estilo)
+// Datos UI (idénticos a los que tenías)
 // ───────────────────────────────────────────────────────────────────────────────
 const premiumPlans = [
   {
@@ -97,7 +95,7 @@ export default function PremiumPage() {
   const search = useSearchParams();
   const pathname = usePathname() || "/premium";
 
-  // Estado UI (como lo tenías)
+  // Estado UI (se mantiene aunque no sea estrictamente necesario)
   const [selectedPlan, setSelectedPlan] = useState("annual");
 
   // Sesión + store local
@@ -108,11 +106,11 @@ export default function PremiumPage() {
     storeUser?.email?.toLowerCase() ||
     null;
 
-  // Perfil para conocer rol
+  // Perfil para conocer rol (y _id para el checkout dinámico)
   const profile = useQuery(
     getUserByEmailRef,
     loginEmail ? { email: loginEmail } : "skip"
-  ) as { role?: "free" | "premium" | "admin" } | null | undefined;
+  ) as ({ _id: string; role?: "free" | "premium" | "admin" } | null | undefined);
 
   const role: "free" | "premium" | "admin" = (profile?.role as any) || "free";
   const profileLoaded = loginEmail ? profile !== undefined : true;
@@ -125,12 +123,12 @@ export default function PremiumPage() {
   // Evitar dobles redirecciones en dev/StrictMode
   const redirectedOnce = useRef(false);
 
-  // Redirección centralizada para el flujo de suscripción
+  // Redirección centralizada para el flujo de suscripción (PATCH aplicado)
   useEffect(() => {
     if (intent !== "subscribe") return;
     if (redirectedOnce.current) return;
 
-    // Mientras carga la sesión, esperamos
+    // Mientras carga la sesión, esperamos (evita parpadeo)
     if (status === "loading") return;
 
     // Si no hay sesión → mandar a login con next=esta misma URL (para continuar después)
@@ -141,17 +139,24 @@ export default function PremiumPage() {
       return;
     }
 
-    // Si hay sesión, esperamos a tener rol
+    // Si hay sesión, esperamos a tener rol/_id
     if (!profileLoaded) return;
 
-    // Con rol en mano: premium → Home | free/admin → Checkout Premium
+    // Con rol en mano: premium → Home | free/admin → Checkout Premium **dinámico por ID**
     redirectedOnce.current = true;
     if (role === "premium") {
       router.replace("/");
     } else {
-      router.replace(`/checkout/premium?plan=${planParam}${trial ? "&trial=true" : ""}`);
+      const pid = profile?._id;
+      const qs = `plan=${planParam}${trial ? "&trial=true" : ""}`;
+      if (pid) {
+        router.replace(`/checkout/premium/${pid}?${qs}`);
+      } else {
+        // Fallback por si tu query no devuelve _id (no debería pasar)
+        router.replace(`/checkout/premium?${qs}`);
+      }
     }
-  }, [intent, status, loginEmail, profileLoaded, role, planParam, trial, router, pathname, search]);
+  }, [intent, status, loginEmail, profileLoaded, role, planParam, trial, router, pathname, search, profile?._id]);
 
   // Guard anti-flash: no renderizar Premium mientras decide a dónde ir
   const isRedirecting =
@@ -166,7 +171,7 @@ export default function PremiumPage() {
     );
   }
 
-  // Handlers de botones (no rompen nada: disparan el intent)
+  // Handlers (disparan el intent sin tocar el UI)
   const pushSubscribeIntent = (planId: string, withTrial = false) => {
     const q = new URLSearchParams({ intent: "subscribe", plan: planId });
     if (withTrial) q.set("trial", "true");
@@ -174,15 +179,17 @@ export default function PremiumPage() {
   };
 
   const handleSubscribe = (planId: string) => {
+    setSelectedPlan(planId);
     pushSubscribeIntent(planId, false);
   };
 
   const handleFreeTrial = () => {
+    setSelectedPlan("monthly");
     pushSubscribeIntent("monthly", true);
   };
 
   // ────────────────────────────────────────────────────────────────────────────
-  // Render UI (igual a tu diseño original)
+  // Render UI (idéntico al que compartiste)
   // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -303,7 +310,7 @@ export default function PremiumPage() {
                 }`}
                 variant={plan.popular ? "default" : "outline"}
               >
-                {plan.id === "quarterly" ? "Suscribirse" : plan.id === "annual" ? "Suscribirse" : "Suscribirse"}
+                Suscribirse
               </Button>
             </div>
           ))}

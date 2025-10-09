@@ -1,11 +1,14 @@
-// app/auth/after/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuery } from "convex/react";
-import { api } from "@convex/_generated/api";
+import type { FunctionReference } from "convex/server";
+import { api } from "@convex";
+
+import { useAuthStore } from "@/lib/useAuthStore";
+import type { AuthState } from "@/lib/useAuthStore";
 
 function ScreenLoader() {
   return (
@@ -18,6 +21,19 @@ function ScreenLoader() {
   );
 }
 
+type TraceItem = { t: number; page: string; evt: string; data?: Record<string, any> };
+function pushTrace(evt: string, data?: Record<string, any>) {
+  try {
+    const key = "pv_trace";
+    const arr: TraceItem[] = JSON.parse(sessionStorage.getItem(key) || "[]");
+    arr.push({ t: Date.now(), page: "after", evt, data });
+    sessionStorage.setItem(key, JSON.stringify(arr.slice(-80)));
+  } catch {}
+}
+
+const getUserByEmailRef =
+  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
+
 function safeInternalNext(raw: string | null | undefined): string {
   const def = "/";
   if (!raw) return def;
@@ -29,25 +45,30 @@ function safeInternalNext(raw: string | null | undefined): string {
   }
 }
 
-// acepta ?next=... o ?callbackUrl=...
-function pickNextParam(sp: URLSearchParams): string | null {
-  const directNext = sp.get("next");
-  if (directNext) return directNext;
-
-  const cb = sp.get("callbackUrl");
-  if (!cb) return null;
+function isPremiumCheckout(path: string) {
+  if (!path.startsWith("/checkout/premium")) return false;
   try {
     const u = new URL(
-      decodeURIComponent(cb),
+      path,
       typeof window !== "undefined" ? window.location.origin : "https://local"
     );
-    const innerNext = u.searchParams.get("next");
-    if (innerNext) return innerNext;
-    const internal = u.pathname + u.search;
-    return internal.startsWith("/") ? internal : null;
+    const plan = u.searchParams.get("plan");
+    return plan === "monthly" || plan === "quarterly" || plan === "annual" || plan === "lifetime";
   } catch {
-    return null;
+    return false;
   }
+}
+
+function isRoleSensitiveCheckout(path: string) {
+  return (
+    isPremiumCheckout(path) ||
+    path.startsWith("/checkout/alquiler/") ||
+    path.startsWith("/checkout/extender/")
+  );
+}
+
+function needsProfileFor(nextPath: string) {
+  return isRoleSensitiveCheckout(nextPath);
 }
 
 function withWelcomeFlags(nextPath: string, provider?: string) {
@@ -56,7 +77,6 @@ function withWelcomeFlags(nextPath: string, provider?: string) {
       nextPath,
       typeof window !== "undefined" ? window.location.origin : "https://local"
     );
-    // preserva post, gid, etc.
     u.searchParams.set("auth", "ok");
     if (provider) u.searchParams.set("provider", provider);
     return u.pathname + u.search;
@@ -68,52 +88,81 @@ function withWelcomeFlags(nextPath: string, provider?: string) {
 export default function AfterAuthPage() {
   const router = useRouter();
   const sp = useSearchParams();
-  const { data: session, status } = useSession();
 
-  const email = session?.user?.email?.toLowerCase() || null;
-  const rawNext = pickNextParam(sp);
+  const { status, data: session } = useSession();
+  const localUser = useAuthStore((s: AuthState) => s.user);
+  const loginEmail = session?.user?.email?.toLowerCase() || localUser?.email?.toLowerCase() || null;
+
+  const rawNext = sp.get("next");
   const next = useMemo(() => safeInternalNext(rawNext), [rawNext]);
 
   const authFlag = sp.get("auth");
   const provider = sp.get("provider") || undefined;
 
-  // opcional: lo seguimos consultando, pero NO bloqueamos la navegación
   const profile = useQuery(
-    api.queries.getUserByEmail.getUserByEmail as any,
-    email ? { email } : "skip"
+    getUserByEmailRef,
+    loginEmail ? { email: loginEmail } : "skip"
   ) as { role?: "free" | "premium" | "admin" } | null | undefined;
 
   const didNav = useRef(false);
 
   useEffect(() => {
-    if (status === "loading") return;
+    pushTrace("MOUNT", { rawNext, next });
+  }, [rawNext, next]);
 
-    if (didNav.current) return;
+  useEffect(() => {
+    pushTrace("SESSION", { status, email: loginEmail });
+  }, [status, loginEmail]);
 
-    if (status === "unauthenticated") {
-      didNav.current = true;
-      router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
+  useEffect(() => {
+    if (status === "loading") {
+      pushTrace("WAIT_SESSION");
       return;
     }
 
-    // ✅ con sesión → navega YA (sin esperar profile) para evitar “hang”
-    didNav.current = true;
+    const go = (dest: string, reason: string) => {
+      if (didNav.current) return;
+      didNav.current = true;
+      pushTrace("NAVIGATE", { dest, reason });
+      router.replace(dest);
+      // refresco (no bloquea, no duplica navegación)
+      setTimeout(() => {
+        try { router.refresh(); } catch {}
+      }, 0);
+    };
 
-    // Si querés evitar mandar premium a su propio checkout, podés descomentar esto:
-    // const isPremiumCheckout = next.startsWith("/checkout/premium");
-    // if (isPremiumCheckout && (profile?.role ?? "free") === "premium") {
-    //   router.replace("/");
-    //   setTimeout(() => router.refresh(), 0);
-    //   return;
-    // }
+    if (status === "unauthenticated") {
+      const dest = `/auth/login?next=${encodeURIComponent(next)}`;
+      pushTrace("UNAUTH→LOGIN", { dest });
+      go(dest, "unauthenticated");
+      return;
+    }
 
-    const finalDest = authFlag === "ok" ? withWelcomeFlags(next, provider) : next;
-    router.replace(finalDest);
-    // refresco corto para que el Header levante la sesión
-    setTimeout(() => {
-      try { router.refresh(); } catch {}
-    }, 0);
-  }, [status, next, router, authFlag, provider, profile?.role]);
+    const finalWithFlags = (d: string) =>
+      authFlag === "ok" ? withWelcomeFlags(d, provider) : d;
+
+    if (needsProfileFor(next)) {
+      pushTrace("ROLE_SENSITIVE", { next, haveEmail: !!loginEmail, profileType: typeof profile });
+      if (!loginEmail) return;
+      if (typeof profile === "undefined") {
+        pushTrace("WAIT_PROFILE");
+        return;
+      }
+      const role = (profile?.role ?? "free") as "free" | "premium" | "admin";
+      pushTrace("PROFILE_READY", { role });
+
+      let dest = next;
+      if (isPremiumCheckout(next) && role === "premium") {
+        dest = "/";
+        pushTrace("REWRITE_PREMIUM_TO_HOME");
+      }
+      go(finalWithFlags(dest), "profile-ready");
+      return;
+    }
+
+    pushTrace("NO_ROLE_NEEDED", { next });
+    go(finalWithFlags(next), "no-role-needed");
+  }, [status, profile, next, router, authFlag, provider, loginEmail]);
 
   return <ScreenLoader />;
 }

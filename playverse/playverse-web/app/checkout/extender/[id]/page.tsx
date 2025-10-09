@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
@@ -30,8 +30,10 @@ const getGameByIdRef = (HAS_GET_BY_ID
   : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
 
 const extendRentalRef = (api as any).transactions.extendRental as FunctionReference<"mutation">;
-const savePaymentMethodRef = (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
-const makePaymentRef = (api as any)["mutations/makePayment"].makePayment as FunctionReference<"mutation">;
+const savePaymentMethodRef =
+  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
+const makePaymentRef =
+  (api as any)["mutations/makePayment"].makePayment as FunctionReference<"mutation">;
 
 type PM = {
   _id: string;
@@ -41,41 +43,7 @@ type PM = {
   expYear: number;
 };
 
-function UpgradeModal({
-  open,
-  onClose,
-  onUpgrade,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onUpgrade: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="absolute inset-0 grid place-items-center p-4">
-        <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-400/30 p-6 shadow-2xl">
-          <h3 className="text-xl font-bold text-amber-300">Solo para usuarios Premium</h3>
-          <p className="text-slate-300 mt-2">
-            Este juego es de categoría <span className="text-amber-300 font-semibold">Premium</span>. 
-            Para <span className="font-semibold">extender el alquiler</span> necesitás ser Premium.
-          </p>
-          <div className="flex gap-3 justify-end mt-6">
-            <Button variant="outline" onClick={onClose} className="border-slate-600 text-slate-200">
-              Cancelar
-            </Button>
-            <Button onClick={onUpgrade} className="bg-orange-400 hover:bg-orange-500 text-slate-900">
-              Mejorar a Premium
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* === TÍTULO === */
+/* === TÍTULO (faltaba esta función en tu archivo) === */
 function CheckoutTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-center mb-6">
@@ -94,15 +62,125 @@ function CheckoutTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+/* === DEBUG helpers === */
+const DEBUG = true;
+const logE = (...a: any[]) =>
+  DEBUG && console.log("%c[EXTENDER]", "color:#f0f;font-weight:bold", ...a);
+
+function TraceViewer({ show }: { show: boolean }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (!show) return;
+    const id = setInterval(() => force((x) => x + 1), 600);
+    return () => clearInterval(id);
+  }, [show]);
+  if (!show) return null;
+  let items: any[] = [];
+  try {
+    items = JSON.parse(sessionStorage.getItem("pv_trace") || "[]");
+  } catch {}
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 12,
+        left: 12,
+        zIndex: 9999,
+        background: "rgba(15,23,42,.97)",
+        color: "#fff",
+        border: "1px solid #f0f",
+        padding: "12px",
+        borderRadius: 8,
+        fontSize: 12,
+        maxWidth: 540,
+        maxHeight: 280,
+        overflow: "auto",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+        <b>TRACE (/auth/after → extender)</b>
+        <button
+          onClick={() => sessionStorage.removeItem("pv_trace")}
+          style={{
+            fontSize: 11,
+            padding: "2px 6px",
+            border: "1px solid #555",
+            borderRadius: 6,
+            background: "transparent",
+            color: "#ddd",
+          }}
+        >
+          Limpiar
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <div style={{ marginTop: 6, opacity: 0.7 }}>Sin eventos</div>
+      ) : (
+        <ul style={{ marginTop: 6 }}>
+          {items.map((it, i) => (
+            <li key={i} style={{ marginBottom: 6 }}>
+              <code>
+                {new Date(it.t).toLocaleTimeString()} · [{it.page}] {it.evt} ·{" "}
+                {JSON.stringify(it.data)}
+              </code>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* === Detección robusta de Premium === */
+function computeIsPremium(g: any): { premium: boolean; reason: string } {
+  if (!g) return { premium: false, reason: "game=null" };
+
+  const boolC = [
+    { key: "is_premium", val: g?.is_premium },
+    { key: "isPremium", val: g?.isPremium },
+    { key: "premium", val: g?.premium },
+    { key: "requiresPremium", val: g?.requiresPremium },
+    { key: "only_premium", val: g?.only_premium },
+  ];
+  const hit = boolC.find((c) => c.val === true);
+  if (hit) return { premium: true, reason: `bool:${hit.key}=true` };
+
+  const norm = (v: any) => String(v ?? "").toLowerCase();
+  const strF = ["category", "tier", "access", "plan", "level", "type", "status"];
+  for (const f of strF) if (norm(g?.[f]).includes("premium")) return { premium: true, reason: `str:${f}~premium` };
+
+  const arrF = ["categories", "tags", "labels", "flags"];
+  for (const f of arrF) {
+    const arr = g?.[f];
+    if (Array.isArray(arr) && arr.some((x: any) => norm(x).includes("premium")))
+      return { premium: true, reason: `arr:${f} has premium` };
+  }
+
+  try {
+    const flat = Object.values(g)
+      .filter((v: any) => typeof v === "string")
+      .map((v: any) => norm(v))
+      .join("|");
+    if (flat.includes("premium"))
+      return { premium: true, reason: "flat:string contains premium" };
+  } catch {}
+
+  return { premium: false, reason: "no-premium-field-detected" };
+}
+
 export default function ExtendCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const pathname = usePathname();
+  const sp = useSearchParams();
+  const showDebug = sp?.get("debug") === "1";
+  const forcePremium = sp?.get("forcePremium") === "1";
   const { toast } = useToast();
 
   // Identidad
   const { data: session, status } = useSession();
   const storeUser = useAuthStore((s) => s.user);
-  const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
+  const loginEmail =
+    session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
 
   // Guard de sesión
   useEffect(() => {
@@ -131,23 +209,30 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         cover_url?: string;
         weekly_price?: number;
         is_premium?: boolean;
+        isPremium?: boolean;
+        premium?: boolean;
+        requiresPremium?: boolean;
+        only_premium?: boolean;
         category?: string;
         categories?: string[];
         tier?: string;
         access?: string;
+        plan?: string;
+        level?: string;
+        type?: string;
+        status?: string;
+        tags?: string[];
+        labels?: string[];
+        flags?: string[];
       }
     | null
     | undefined;
 
-  const isGamePremium = useMemo(() => {
-    const g: any = game;
-    if (!g) return false;
-    if (typeof g.is_premium === "boolean") return g.is_premium;
-    const fromStr = (v: any) => String(v ?? "").toLowerCase();
-    if (Array.isArray(g.categories) && g.categories.some((c: any) => fromStr(c).includes("premium"))) return true;
-    const guess = [g.category, g.tier, g.access].map(fromStr).join("|");
-    return /premium/.test(guess);
-  }, [game]);
+  const { isGamePremium, premiumReason } = useMemo(() => {
+    if (forcePremium) return { isGamePremium: true, premiumReason: "forced-by-query" };
+    const { premium, reason } = computeIsPremium(game as any);
+    return { isGamePremium: premium, premiumReason: reason };
+  }, [game, forcePremium]);
 
   // Métodos guardados
   const methods = useQuery(
@@ -170,6 +255,25 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   const [cvc, setCvc] = useState("");
 
   const [showUpgrade, setShowUpgrade] = useState(false);
+
+  // Abrir modal automáticamente si corresponde
+  const openedOnce = useRef(false);
+  useEffect(() => {
+    logE("modal-check", {
+      profileLoading: typeof profile === "undefined",
+      gameLoading: typeof game === "undefined",
+      role: userRole,
+      isGamePremium,
+      premiumReason,
+    });
+    if (openedOnce.current) return;
+    if (typeof profile === "undefined" || typeof game === "undefined") return;
+    if (isGamePremium && userRole === "free") {
+      openedOnce.current = true;
+      logE("open-upgrade-modal");
+      setShowUpgrade(true);
+    }
+  }, [isGamePremium, userRole, premiumReason, profile, game]);
 
   const weeklyPrice = useMemo(() => {
     if (typeof (game as any)?.weekly_price === "number") return (game as any).weekly_price;
@@ -221,11 +325,53 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
+  useEffect(() => {
+    const keys = game ? Object.keys(game as any) : [];
+    logE(
+      "status:",
+      status,
+      "email:",
+      loginEmail,
+      "role:",
+      userRole,
+      "game.keys:",
+      keys,
+      "isGamePremium:",
+      isGamePremium,
+      "premiumReason:",
+      premiumReason,
+      "gameId:",
+      (game as any)?._id
+    );
+    if (showDebug && game) {
+      const dump: any = { id: (game as any)?._id };
+      [
+        "is_premium",
+        "isPremium",
+        "premium",
+        "requiresPremium",
+        "only_premium",
+        "category",
+        "categories",
+        "tier",
+        "access",
+        "plan",
+        "level",
+        "type",
+        "status",
+        "tags",
+        "labels",
+        "flags",
+      ].forEach((k) => (dump[k] = (game as any)[k]));
+      console.table(dump);
+    }
+  }, [status, loginEmail, userRole, isGamePremium, premiumReason, game, showDebug]);
+
   const onExtend = async () => {
     if (!profile?._id || !game?._id) return;
 
-    // 🚫 Si el juego es Premium y el usuario es FREE → modal
     if (isGamePremium && userRole === "free") {
+      logE("blocked-by-role → open modal");
       setShowUpgrade(true);
       return;
     }
@@ -241,7 +387,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         });
       }
 
-      // 1) Registrar pago en payments
+      // 1) Cobrar
       await makePayment({
         userId: profile._id,
         amount: total,
@@ -275,10 +421,12 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   const goUpgrade = () => {
     if (!profile?._id) return;
     const next = pathname ?? "/";
-    router.push(`/checkout/premium/${profile._id}?plan=monthly&next=${encodeURIComponent(next)}`);
+    router.push(
+      `/checkout/premium/${profile._id}?plan=monthly&next=${encodeURIComponent(next)}`
+    );
   };
 
-  if (!loginEmail || status === "loading") {
+  if (!loginEmail) {
     return (
       <div className="container mx-auto px-4 py-16">
         <p className="text-slate-300">Redirigiendo o cargando sesión…</p>
@@ -291,16 +439,40 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   return (
     <div className="container mx-auto px-4 py-10">
+      {/* DEBUG banner */}
+      {showDebug && (
+        <div className="mb-4 rounded-lg border border-fuchsia-400/40 bg-fuchsia-400/10 p-3 text-fuchsia-200 text-sm">
+          <div>
+            <b>DEBUG:</b> role=<b>{userRole}</b> · isGamePremium=
+            <b>{String(isGamePremium)}</b> ({premiumReason})
+          </div>
+          <div>keys: {game ? Object.keys(game as any).join(", ") : "sin game"}</div>
+          <div>
+            Tip: <code>?forcePremium=1</code> para forzar modal.
+          </div>
+        </div>
+      )}
+
       <CheckoutTitle>Extender alquiler</CheckoutTitle>
       <p className="text-slate-300 text-center mb-8">Seleccione semanas adicionales:</p>
 
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Izquierda */}
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">
+            {title}
+          </h2>
           <div className="mx-auto max-w-[380px] md:max-w-[420px]">
-            <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60" style={{ aspectRatio: "3 / 4" }}>
-              <img src={cover} alt={title} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
+            <div
+              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
+              style={{ aspectRatio: "3 / 4" }}
+            >
+              <img
+                src={cover}
+                alt={title}
+                className="absolute inset-0 w-full h-full object-contain"
+                draggable={false}
+              />
             </div>
           </div>
 
@@ -324,7 +496,13 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
             <p className="text-slate-300 text-sm mb-2">
               Semanas adicionales: <span className="text-white font-semibold">{weeks}</span>
             </p>
-            <Slider value={[weeks]} min={1} max={12} step={1} onValueChange={(v) => setWeeks(v[0] ?? 1)} />
+            <Slider
+              value={[weeks]}
+              min={1}
+              max={12}
+              step={1}
+              onValueChange={(v) => setWeeks(v[0] ?? 1)}
+            />
           </div>
 
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
@@ -335,14 +513,17 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
             </div>
           </div>
 
-          {/* Pago (igual que antes) */}
+          {/* Pago */}
           {primaryPM ? (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-white font-medium">Método de pago</p>
                 <div className="flex items-center gap-2 text-sm">
                   <label className="flex items-center gap-2">
-                    <Checkbox checked={useSaved} onCheckedChange={(v) => setUseSaved(v === true)} />
+                    <Checkbox
+                      checked={useSaved}
+                      onCheckedChange={(v) => setUseSaved(v === true)}
+                    />
                     Usar tarjeta guardada
                   </label>
                 </div>
@@ -355,7 +536,8 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
                       {primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}
                     </p>
                     <p className="text-slate-400 text-xs">
-                      Expira {String(primaryPM.expMonth).padStart(2, "0")}/{String(primaryPM.expYear).slice(-2)}
+                      Expira {String(primaryPM.expMonth).padStart(2, "0")}/
+                      {String(primaryPM.expYear).slice(-2)}
                     </p>
                   </div>
                   <span className="text-xs text-emerald-300">Seleccionada</span>
@@ -364,7 +546,12 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
                 <>
                   <div>
                     <label className="text-slate-300 text-sm">Nombre del titular</label>
-                    <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+                    <Input
+                      value={holder}
+                      onChange={(e) => setHolder(e.target.value)}
+                      placeholder="Nombre en la tarjeta"
+                      className="bg-slate-700 border-slate-600 text-white mt-1"
+                    />
                   </div>
                   <div>
                     <label className="text-slate-300 text-sm">Número de tarjeta</label>
@@ -399,7 +586,9 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
                       <label className="text-slate-300 text-sm">CVC</label>
                       <Input
                         value={cvc}
-                        onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                        onChange={(e) =>
+                          setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))
+                        }
                         placeholder="123"
                         className="bg-slate-700 border-slate-600 text-white mt-1"
                         inputMode="numeric"
@@ -408,7 +597,10 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
-                    <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                    <Checkbox
+                      checked={rememberNew}
+                      onCheckedChange={(v) => setRememberNew(v === true)}
+                    />
                     <span className="text-slate-300 text-sm">Guardar método de pago</span>
                   </div>
                 </>
@@ -418,7 +610,12 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div>
                 <label className="text-slate-300 text-sm">Nombre del titular</label>
-                <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+                <Input
+                  value={holder}
+                  onChange={(e) => setHolder(e.target.value)}
+                  placeholder="Nombre en la tarjeta"
+                  className="bg-slate-700 border-slate-600 text-white mt-1"
+                />
               </div>
               <div>
                 <label className="text-slate-300 text-sm">Número de tarjeta</label>
@@ -462,13 +659,19 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-1">
-                <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                <Checkbox
+                  checked={rememberNew}
+                  onCheckedChange={(v) => setRememberNew(v === true)}
+                />
                 <span className="text-slate-300 text-sm">Guardar método de pago</span>
               </div>
             </div>
           )}
 
-          <Button onClick={onExtend} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold">
+          <Button
+            onClick={onExtend}
+            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold"
+          >
             Pagar {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
           </Button>
         </div>
@@ -479,6 +682,50 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         onClose={() => setShowUpgrade(false)}
         onUpgrade={goUpgrade}
       />
+      <TraceViewer show={showDebug === true} />
+    </div>
+  );
+}
+
+/* === MODAL Upgrade Premium === */
+function UpgradeModal({
+  open,
+  onClose,
+  onUpgrade,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onUpgrade: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="absolute inset-0 grid place-items-center p-4">
+        <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-400/30 p-6 shadow-2xl">
+          <h3 className="text-xl font-bold text-amber-300">Solo para usuarios Premium</h3>
+          <p className="text-slate-300 mt-2">
+            Este juego es de categoría{" "}
+            <span className="text-amber-300 font-semibold">Premium</span>. Para{" "}
+            <span className="font-semibold">extender el alquiler</span> necesitás ser Premium.
+          </p>
+          <div className="flex gap-3 justify-end mt-6">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="border-slate-600 text-slate-200"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={onUpgrade}
+              className="bg-orange-400 hover:bg-orange-500 text-slate-900"
+            >
+              Mejorar a Premium
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

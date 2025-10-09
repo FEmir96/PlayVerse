@@ -468,7 +468,7 @@ export default function GameDetailPage() {
       return;
     }
 
-    // no embebible
+    // no embebible: permitimos "Jugar" solo si puede (p.ej., tiene alquiler activo o compra)
     if (!isLogged) {
       setPendingAction("play");
       setShowAuthAction(true);
@@ -612,6 +612,10 @@ export default function GameDetailPage() {
     } catch {}
   }, [isLogged, profile, game?._id, router]);
 
+  // --- NUEVO: flag para UI reducida si hay alquiler activo
+  const showRentalOnlyActions = hasActiveRental === true;
+  const showShareButton = !showRentalOnlyActions;
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-8">
@@ -744,10 +748,30 @@ export default function GameDetailPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {isEmbeddable ? (
+                  {showRentalOnlyActions ? (
+                    // ===== Solo JUGAR + EXTENDER si hay alquiler activo =====
                     <>
-                      {/* Freeware embebible → SOLO Jugar */}
+                      <Button
+                        onClick={handlePlay}
+                        className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                      >
+                        Jugar
+                      </Button>
+                      {canExtend && (
+                        <Button
+                          onClick={handleExtend}
+                          variant="outline"
+                          className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                        >
+                          Extender
+                        </Button>
+                      )}
+                    </>
+                  ) : isEmbeddable ? (
+                    <>
+                      {/* Embebibles */}
                       {isFreePlan ? (
+                        // Freeware embebible → SOLO Jugar
                         <Button
                           onClick={handlePlay}
                           className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
@@ -755,15 +779,29 @@ export default function GameDetailPage() {
                           Jugar gratis
                         </Button>
                       ) : (
+                        // Premium embebible
                         <>
-                          {/* Premium embebible → Jugar + (Comprar/Alquilar si no puede) */}
-                          <Button
-                            onClick={handlePlay}
-                            className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                          >
-                            Jugar
-                          </Button>
-                          {!canPlayEffective && (
+                          {canPlayEffective ? (
+                            // Si puede jugar por premium/compra/alquiler/admin → Jugar (+ Extender si aplica)
+                            <>
+                              <Button
+                                onClick={handlePlay}
+                                className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                              >
+                                Jugar
+                              </Button>
+                              {canExtend && (
+                                <Button
+                                  onClick={handleExtend}
+                                  variant="outline"
+                                  className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                                >
+                                  Extender
+                                </Button>
+                              )}
+                            </>
+                          ) : (
+                            // Usuario FREE (o no cumple) → Comprar / Alquilar (sin mostrar Jugar)
                             <>
                               <Button
                                 onClick={handlePurchase}
@@ -780,22 +818,14 @@ export default function GameDetailPage() {
                               </Button>
                             </>
                           )}
-                          {canExtend && (
-                            <Button
-                              onClick={handleExtend}
-                              variant="outline"
-                              className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                            >
-                              Extender
-                            </Button>
-                          )}
                         </>
                       )}
                     </>
                   ) : (
-                    // NO embebible
+                    // NO embebibles (AAA)
                     <>
-                      {canPlayEffective ? (
+                      {hasActiveRental || hasPurchased ? (
+                        // Si tiene alquiler (o compra) permitimos mostrar Jugar
                         <>
                           <Button
                             onClick={handlePlay}
@@ -814,6 +844,7 @@ export default function GameDetailPage() {
                           )}
                         </>
                       ) : (
+                        // Sin alquiler/compra → SOLO Comprar / Alquilar
                         <>
                           <Button
                             onClick={handlePurchase}
@@ -833,6 +864,7 @@ export default function GameDetailPage() {
                     </>
                   )}
 
+                  {/* Favoritos + (Share solo si no estamos en modo alquiler-activo) */}
                   <div className="flex gap-2">
                     <Button
                       onClick={onToggleFavorite}
@@ -842,16 +874,19 @@ export default function GameDetailPage() {
                       <Heart className="w-4 h-4 mr-2" fill={isFav ? "currentColor" : "none"} />
                       {isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
                     </Button>
-                    <Button
-                      onClick={() => setShowShareModal(true)}
-                      variant="outline"
-                      size="icon"
-                      className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
-                      </svg>
-                    </Button>
+
+                    {showShareButton && (
+                      <Button
+                        onClick={() => setShowShareModal(true)}
+                        variant="outline"
+                        size="icon"
+                        className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                      >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                        </svg>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
