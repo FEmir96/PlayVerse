@@ -2,13 +2,24 @@
 import { cronJobs } from "convex/server";
 import { api } from "./_generated/api";
 
-// Usar la API builder (sin argumentos)
 const crons = cronJobs();
 
-// Ejecuta todos los días a las 09:00 UTC
+/**
+ * Barrido rápido cada 10 minutos para expirar planes vencidos
+ * y bajar el rol si corresponde.
+ */
 crons.cron(
-  "sweepPremiumExpirations",
-  "0 9 * * *",
+  "sweep-expirations-every-10-min",
+  "*/10 * * * *",
+  api.mutations.sweepExpirations.sweepExpirations
+);
+
+/**
+ * Barrido de seguridad diario a medianoche (UTC) por si algo quedó pendiente.
+ */
+crons.cron(
+  "sweep-expirations-midnight",
+  "0 0 * * *",
   api.mutations.sweepExpirations.sweepExpirations
 );
 

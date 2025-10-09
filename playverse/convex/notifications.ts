@@ -12,7 +12,10 @@ const NotificationTypeV = v.union(
   v.literal("discount"),
   v.literal("achievement"),
   v.literal("purchase"),
-  v.literal("game-update")
+  v.literal("game-update"),
+  // ⬇️ añadimos tipos de plan para que notificaciones de suscripción funcionen
+  v.literal("plan-expired"),
+  v.literal("plan-renewed")
 );
 export type NotificationType =
   | "rental"
@@ -20,7 +23,9 @@ export type NotificationType =
   | "discount"
   | "achievement"
   | "purchase"
-  | "game-update";
+  | "game-update"
+  | "plan-expired"
+  | "plan-renewed";
 
 /* ─────────────────────────────────────────────
    Helpers internos (índices y límites)
@@ -28,15 +33,65 @@ export type NotificationType =
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 /**
+ * Inserta una notificación evitando duplicados del mismo tipo
+ * en una ventana temporal (por defecto 10 min).
+ * Exportada para poder usarse desde otras mutaciones (import directo).
+ */
+export async function notifyOnceServer(
+  ctx: { db: any },
+  args: {
+    userId: Id<"profiles">;
+    type: NotificationType;
+    title: string;
+    message: string;
+    meta?: unknown;
+    dedupeWindowMs?: number; // 10 minutos por defecto
+  }
+) {
+  const { userId, type, title, message, meta, dedupeWindowMs = 10 * 60 * 1000 } = args;
+  const since = Date.now() - dedupeWindowMs;
+
+  let recent: any | null = null;
+  try {
+    recent = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_createdAt", (q: any) => q.eq("userId", userId).gte("createdAt", since))
+      .filter((q: any) => q.eq(q.field("type"), type))
+      .first();
+  } catch {
+    const scan = await ctx.db.query("notifications").collect();
+    recent = scan
+      .filter(
+        (n: any) => String(n.userId) === String(userId) && n.createdAt >= since && n.type === type
+      )
+      .sort((a: any, b: any) => b.createdAt - a.createdAt)[0];
+  }
+
+  if (recent) {
+    return { ok: true as const, skipped: true as const, id: recent._id };
+  }
+
+  const id = await ctx.db.insert("notifications", {
+    userId,
+    type,
+    title,
+    message,
+    gameId: undefined,
+    transactionId: undefined,
+    isRead: false,
+    readAt: undefined,
+    createdAt: Date.now(),
+    meta,
+  });
+
+  return { ok: true as const, skipped: false as const, id };
+}
+
+/**
  * Usa el índice tipado `by_user_createdAt` (["userId","createdAt"]).
  * Si no existe ese índice, hace fallback a escaneo en memoria.
- * NOTA: quitamos el uso de "by_user_time" para evitar error de tipos TS(2345).
  */
-async function getRowsForUser(
-  db: any,
-  userId: Id<"profiles">,
-  limit: number
-) {
+async function getRowsForUser(db: any, userId: Id<"profiles">, limit: number) {
   try {
     return await db
       .query("notifications")
@@ -128,6 +183,22 @@ export const add = mutation({
 
 // Alias por compatibilidad
 export { add as create };
+
+/** Igual que add pero con deduplicación por ventana temporal. */
+export const addOnce = mutation({
+  args: {
+    userId: v.id("profiles"),
+    type: NotificationTypeV,
+    title: v.string(),
+    message: v.string(),
+    meta: v.optional(v.any()),
+    dedupeWindowMs: v.optional(v.number()),
+  },
+  handler: async (ctx, a) => {
+    const res = await notifyOnceServer(ctx, a);
+    return res;
+  },
+});
 
 /** Marcar una notificación como leída (solo dueño) */
 export const markAsRead = mutation({

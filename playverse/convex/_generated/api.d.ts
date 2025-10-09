@@ -60,6 +60,7 @@ import type * as mutations_deleteGame from "../mutations/deleteGame.js";
 import type * as mutations_deletePaymentMethod from "../mutations/deletePaymentMethod.js";
 import type * as mutations_deleteUser from "../mutations/deleteUser.js";
 import type * as mutations_devSetSubscriptionEndNow from "../mutations/devSetSubscriptionEndNow.js";
+import type * as mutations_ensurePlanConsistency from "../mutations/ensurePlanConsistency.js";
 import type * as mutations_makePayment from "../mutations/makePayment.js";
 import type * as mutations_promoteToAdmin from "../mutations/promoteToAdmin.js";
 import type * as mutations_removeFavorite from "../mutations/removeFavorite.js";
@@ -172,6 +173,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/deletePaymentMethod": typeof mutations_deletePaymentMethod;
   "mutations/deleteUser": typeof mutations_deleteUser;
   "mutations/devSetSubscriptionEndNow": typeof mutations_devSetSubscriptionEndNow;
+  "mutations/ensurePlanConsistency": typeof mutations_ensurePlanConsistency;
   "mutations/makePayment": typeof mutations_makePayment;
   "mutations/promoteToAdmin": typeof mutations_promoteToAdmin;
   "mutations/removeFavorite": typeof mutations_removeFavorite;

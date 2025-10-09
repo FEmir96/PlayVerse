@@ -2,6 +2,14 @@
 import type { Id } from "../_generated/dataModel";
 import type { DatabaseWriter } from "../_generated/server";
 
+/* ============ Config de notificaciones ============ */
+// Si no hay watchers (favoritos/transacciones), avisar igual:
+//  - juegos premium -> sólo premium (y opc. admins)
+//  - juegos free    -> todos (free/premium/admin)
+const NOTIFY_ALL_WHEN_NO_WATCHERS = true;
+const INCLUDE_ADMINS_FOR_PREMIUM = false;
+/* ================================================ */
+
 /* ───────────────── helpers ───────────────── */
 function cleanStr(input: string | null | undefined): string | undefined {
   if (input === null) return undefined;
@@ -37,6 +45,33 @@ async function ensureAdminIfProvided(
     throw new Error("No autorizado. Se requiere rol admin.");
   }
 }
+
+/** Inserta en "notifications" omitiendo claves undefined para cumplir el schema */
+async function safeInsertNotification(
+  db: DatabaseWriter,
+  doc: {
+    userId: Id<"profiles">;
+    type: "rental" | "new-game" | "discount" | "achievement" | "purchase" | "game-update" | "plan-expired" | "plan-renewed";
+    title: string;
+    message: string;
+    gameId?: Id<"games"> | undefined;
+    transactionId?: Id<"transactions"> | undefined;
+    isRead?: boolean | undefined;
+    readAt?: number | undefined;
+    createdAt?: number | undefined;
+    meta?: unknown;
+  }
+) {
+  const toInsert: any = {};
+  for (const [k, v] of Object.entries(doc)) {
+    if (v !== undefined) toInsert[k] = v;
+  }
+  // defaults
+  if (toInsert.isRead === undefined) toInsert.isRead = false;
+  if (toInsert.createdAt === undefined) toInsert.createdAt = Date.now();
+  return db.insert("notifications", toInsert);
+}
+
 function buildUpdateMsg(
   changes: {
     title?: boolean;
@@ -109,7 +144,6 @@ export async function createGameCore(db: DatabaseWriter, args: CreateGameInput) 
   await ensureAdminIfProvided(db, args.requesterId);
   const now = Date.now();
 
-  // Doc sin nulls (solo seteamos campos con valor)
   const doc: any = {
     title: args.title,
     plan: args.plan,
@@ -145,23 +179,15 @@ export async function createGameCore(db: DatabaseWriter, args: CreateGameInput) 
 
   const gameId = await db.insert("games", doc);
 
-  // ───────── Targeting de notificaciones según plan ─────────
-  // Admins para juegos premium: incluílos si querés activando este flag
-  const INCLUDE_ADMINS_FOR_PREMIUM = false;
-
   const allProfiles = await db.query("profiles").collect();
   const recipients = allProfiles.filter((p: any) => {
-    // excluir al requester si vino
     if (args.requesterId && String(p._id) === String(args.requesterId)) return false;
-
     const role = p.role as "free" | "premium" | "admin" | undefined;
     if (args.plan === "premium") {
-      // solo premium, y admins opcionales
       if (role === "premium") return true;
       if (INCLUDE_ADMINS_FOR_PREMIUM && role === "admin") return true;
       return false;
     }
-    // plan free → todos: free + premium + admins
     return role === "free" || role === "premium" || role === "admin";
   });
 
@@ -171,20 +197,15 @@ export async function createGameCore(db: DatabaseWriter, args: CreateGameInput) 
       : "Se agregó un nuevo juego al catálogo.";
 
   for (const p of recipients) {
-    await db.insert("notifications", {
+    await safeInsertNotification(db, {
       userId: p._id as Id<"profiles">,
       type: "new-game",
       title: `Nuevo juego: ${args.title}`,
       message,
       gameId,
-      transactionId: undefined,
-      isRead: false,
-      readAt: undefined,
-      createdAt: now,
       meta: { href: `/juego/${String(gameId)}` },
     });
   }
-  // ───────────────────────────────────────────────────────────
 
   await db.insert("audits", {
     action: "add_game",
@@ -201,7 +222,7 @@ export async function createGameCore(db: DatabaseWriter, args: CreateGameInput) 
 /* ─────────────── UPDATE ─────────────── */
 export type UpdateGameInput = {
   gameId: Id<"games">;
-  requesterId: Id<"profiles">;
+  requesterId?: Id<"profiles"> | null;
 
   title?: string | null;
   description?: string | null;
@@ -218,7 +239,7 @@ export type UpdateGameInput = {
   embed_allow?: string | null;
   embed_sandbox?: string | null;
 
-  plan: "free" | "premium";
+  plan?: "free" | "premium";
 };
 
 export async function updateGameCore(db: DatabaseWriter, args: UpdateGameInput) {
@@ -260,7 +281,7 @@ export async function updateGameCore(db: DatabaseWriter, args: UpdateGameInput) 
   setField("embed_allow", args.embed_allow, cleanStr);
   setField("embed_sandbox", args.embed_sandbox, cleanStr);
 
-  if (args.plan !== (existing as any).plan) {
+  if (args.plan !== undefined && args.plan !== (existing as any).plan) {
     updates.plan = args.plan;
     before.plan = (existing as any).plan;
   }
@@ -272,16 +293,22 @@ export async function updateGameCore(db: DatabaseWriter, args: UpdateGameInput) 
   updates.updatedAt = Date.now();
   await db.patch(args.gameId, updates);
 
+  // Auditoría con fallback de requesterId si no vino
+  let requesterId: Id<"profiles"> | undefined = args.requesterId ?? undefined;
+  if (!requesterId) {
+    const some = await db.query("profiles").collect();
+    requesterId = some[0]?._id as Id<"profiles"> | undefined;
+  }
   await db.insert("audits", {
     action: "update_game",
     entity: "game",
     entityId: args.gameId,
-    requesterId: args.requesterId,
+    requesterId: requesterId!,
     timestamp: Date.now(),
     details: { before, after: updates },
   });
 
-  // Notificaciones a interesados (favoritos del juego + transacciones del juego)
+  // Notificaciones
   try {
     const changes = {
       title: "title" in updates,
@@ -307,37 +334,69 @@ export async function updateGameCore(db: DatabaseWriter, args: UpdateGameInput) 
 
     const msg = buildUpdateMsg(changes as any, (existing as any).title ?? "Juego");
 
+    // 1) WATCHERS: favoritos + transacciones
     const targets = new Set<Id<"profiles">>();
 
-    // Favoritos (si no tenés índice por juego: filtramos todo)
-    const favs = await db.query("favorites").collect();
-    for (const f of favs) {
-      if (String((f as any).gameId) === String(args.gameId)) targets.add((f as any).userId);
+    // favoritos (usar índice si existe)
+    try {
+      const favs = await (db as any)
+        .query("favorites")
+        .withIndex?.("by_game", (q: any) => q.eq("gameId", args.gameId))
+        .collect();
+      for (const f of favs ?? []) targets.add((f as any).userId);
+    } catch {
+      const favs = await db.query("favorites").collect();
+      for (const f of favs) {
+        if (String((f as any).gameId) === String(args.gameId)) targets.add((f as any).userId);
+      }
     }
 
-    // Transacciones (si tenés índice by_game, descomentá)
-    const txs = await db
-      .query("transactions")
-      // .withIndex("by_game", q => q.eq("gameId", args.gameId))
-      .collect();
-    for (const t of txs) {
-      if (String((t as any).gameId) === String(args.gameId)) targets.add((t as any).userId);
+    // transacciones (usar índice si existe)
+    try {
+      const txs = await (db as any)
+        .query("transactions")
+        .withIndex?.("by_game", (q: any) => q.eq("gameId", args.gameId))
+        .collect();
+      for (const t of txs ?? []) targets.add((t as any).userId);
+    } catch {
+      const txs = await db.query("transactions").collect();
+      for (const t of txs) {
+        if (String((t as any).gameId) === String(args.gameId)) targets.add((t as any).userId);
+      }
     }
 
     // No notificar al admin que hizo el cambio
-    targets.delete(args.requesterId);
+    if (args.requesterId) targets.delete(args.requesterId);
 
+    // 2) Fallback opcional si no hay watchers
+    if (NOTIFY_ALL_WHEN_NO_WATCHERS && targets.size === 0) {
+      const everyone = await db.query("profiles").collect();
+      const plan = (updates.plan ?? (existing as any).plan) as "free" | "premium";
+
+      for (const p of everyone as any[]) {
+        const role = p.role as "free" | "premium" | "admin" | undefined;
+        if (plan === "premium") {
+          if (role === "premium" || (INCLUDE_ADMINS_FOR_PREMIUM && role === "admin")) {
+            targets.add(p._id);
+          }
+        } else {
+          if (role === "free" || role === "premium" || role === "admin") {
+            targets.add(p._id);
+          }
+        }
+      }
+      if (args.requesterId) targets.delete(args.requesterId);
+    }
+
+    // 3) Insertar notificaciones (sin undefined)
     const now = Date.now();
     for (const userId of targets) {
-      await db.insert("notifications", {
+      await safeInsertNotification(db, {
         userId,
         type: "game-update",
         title: (existing as any).title ?? "Juego actualizado",
         message: msg,
         gameId: args.gameId,
-        transactionId: undefined,
-        isRead: false,
-        readAt: undefined,
         createdAt: now,
         meta: { href: `/juego/${String(args.gameId)}`, fields: Object.keys(updates) },
       });
@@ -374,17 +433,12 @@ export async function deleteGameCore(
     : profiles;
 
   for (const p of recipients) {
-    await db.insert("notifications", {
+    await safeInsertNotification(db, {
       userId: p._id,
       type: "game-update",
       title: `Juego retirado: ${(game as any).title}`,
       message: "Un juego fue retirado del catálogo.",
-      gameId: undefined,
-      transactionId: undefined,
-      isRead: false,
-      readAt: undefined,
       createdAt: now,
-      meta: undefined,
     });
   }
 
