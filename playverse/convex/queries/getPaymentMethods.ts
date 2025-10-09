@@ -1,4 +1,4 @@
-// playverse/convex/queries/getPaymentMethods.ts
+// convex/queries/getPaymentMethods.ts
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 

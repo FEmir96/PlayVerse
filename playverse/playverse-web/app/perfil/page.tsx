@@ -141,7 +141,7 @@ export default function ProfilePage() {
   const convexProfile = useQuery(
     getUserByEmailRef,
     loginEmail ? { email: loginEmail } : "skip"
-  );
+  ) as any;
 
   // 3) Edición local
   const [isEditing, setIsEditing] = useState(false);
@@ -388,6 +388,33 @@ export default function ProfilePage() {
   // ⬇️ NUEVO: cancelación
   const cancelPremium = useMutation(cancelPremiumRef);
 
+  // ⬇️ NUEVO: aviso por toast cuando está por vencer o ya venció (solo UI)
+  useEffect(() => {
+    const exp = (convexProfile as any)?.premiumExpiresAt as number | undefined;
+    if (!exp) return;
+
+    const showSoonToast = () => {
+      const msLeft = exp - Date.now();
+      if (msLeft <= 0) {
+        toast({
+          title: "Tu Premium venció",
+          description: "Tu cuenta puede volver a Free en breve.",
+          variant: "destructive",
+        });
+      } else if (msLeft <= 3 * 24 * 60 * 60 * 1000) {
+        toast({
+          title: "Tu Premium vence pronto",
+          description: `Vence el ${new Date(exp).toLocaleDateString()}`,
+        });
+      }
+    };
+
+    showSoonToast();
+    const id = setInterval(showSoonToast, 60 * 60 * 1000); // re-chequea cada hora
+    return () => clearInterval(id);
+  }, [convexProfile?._id, (convexProfile as any)?.premiumExpiresAt, toast]);
+
+  // === UI ===
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="container mx-auto px-4 py-8">
@@ -448,6 +475,12 @@ export default function ProfilePage() {
                   {roleIcon}
                   {roleLabel}
                 </span>
+                {/* ⬇️ NUEVO: badge de vencimiento si existe */}
+                {role === "premium" && (convexProfile as any)?.premiumExpiresAt && (convexProfile as any)?.premiumPlan !== "lifetime" ? (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-slate-700 text-slate-200">
+                    Vence el {new Date((convexProfile as any).premiumExpiresAt).toLocaleDateString()}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -538,7 +571,15 @@ export default function ProfilePage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-white font-medium">Plan Premium</p>
-                        <p className="text-slate-400 text-sm">Renovación automática activa</p>
+                        <p className="text-slate-400 text-sm">
+                          Renovación automática {(convexProfile as any)?.premiumPlan === "lifetime" ? "no aplica (lifetime)" :
+                            ((convexProfile as any)?.premiumAutoRenew ? "activa" : "desactivada")}
+                        </p>
+                        {(convexProfile as any)?.premiumExpiresAt && (convexProfile as any)?.premiumPlan !== "lifetime" ? (
+                          <p className="text-slate-400 text-xs mt-1">
+                            Vence el {new Date((convexProfile as any).premiumExpiresAt).toLocaleDateString()}
+                          </p>
+                        ) : null}
                       </div>
                       <Badge className="bg-orange-400 text-slate-900">Activo</Badge>
                     </div>
@@ -548,7 +589,7 @@ export default function ProfilePage() {
                       onClick={async () => {
                         if (!convexProfile?._id) return;
                         try {
-                          await cancelPremium({ userId: convexProfile._id, reason: "user_click" } as any);
+                          await (cancelPremium as any)({ userId: convexProfile._id, reason: "user_click" });
                           toast({
                             title: "Suscripción cancelada",
                             description: "Tu cuenta volvió a Free. Podés suscribirte otra vez cuando quieras.",
@@ -791,7 +832,7 @@ export default function ProfilePage() {
       {/* === MODAL: Agregar método de pago === */}
       {payOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setPayOpen(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={handlePaymentSubmit} className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-lg">
+          <form onClick={(e) => e.stopPropagation()} onSubmit={handlePaymentSubmit} className="bg-slate-900 border border-slate-700 rounded-xl p-5 w/full max-w-lg">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-orange-400 font-semibold">Agregar método de pago</h3>
               <Button type="button" variant="ghost" size="icon" className="text-slate-300" onClick={() => setPayOpen(false)}>

@@ -19,6 +19,7 @@ import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetail
 import type * as actions_cleanupNotRated from "../actions/cleanupNotRated.js";
 import type * as actions_debugRawgSearch from "../actions/debugRawgSearch.js";
 import type * as actions_debugSearchIgdb from "../actions/debugSearchIgdb.js";
+import type * as actions_devSweepNow from "../actions/devSweepNow.js";
 import type * as actions_email from "../actions/email.js";
 import type * as actions_fillUpcomingCoversFromIGDB from "../actions/fillUpcomingCoversFromIGDB.js";
 import type * as actions_getIGDBScreenshots from "../actions/getIGDBScreenshots.js";
@@ -30,6 +31,7 @@ import type * as actions_refreshRAWGBatch from "../actions/refreshRAWGBatch.js";
 import type * as actions_refreshRAWGRatingForGame from "../actions/refreshRAWGRatingForGame.js";
 import type * as actions_translateExistingDescriptions from "../actions/translateExistingDescriptions.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as games from "../games.js";
 import type * as lib_diffGame from "../lib/diffGame.js";
 import type * as lib_emailTemplates from "../lib/emailTemplates.js";
@@ -57,6 +59,7 @@ import type * as mutations_createUser from "../mutations/createUser.js";
 import type * as mutations_deleteGame from "../mutations/deleteGame.js";
 import type * as mutations_deletePaymentMethod from "../mutations/deletePaymentMethod.js";
 import type * as mutations_deleteUser from "../mutations/deleteUser.js";
+import type * as mutations_devSetSubscriptionEndNow from "../mutations/devSetSubscriptionEndNow.js";
 import type * as mutations_makePayment from "../mutations/makePayment.js";
 import type * as mutations_promoteToAdmin from "../mutations/promoteToAdmin.js";
 import type * as mutations_removeFavorite from "../mutations/removeFavorite.js";
@@ -69,6 +72,7 @@ import type * as mutations_setGameCoverUrl from "../mutations/setGameCoverUrl.js
 import type * as mutations_setGameDetails from "../mutations/setGameDetails.js";
 import type * as mutations_setGameTrailerUrl from "../mutations/setGameTrailerUrl.js";
 import type * as mutations_simulateRental from "../mutations/simulateRental.js";
+import type * as mutations_sweepExpirations from "../mutations/sweepExpirations.js";
 import type * as mutations_toggleFavorite from "../mutations/toggleFavorite.js";
 import type * as mutations_updateGame from "../mutations/updateGame.js";
 import type * as mutations_updateUser from "../mutations/updateUser.js";
@@ -127,6 +131,7 @@ declare const fullApi: ApiFromModules<{
   "actions/cleanupNotRated": typeof actions_cleanupNotRated;
   "actions/debugRawgSearch": typeof actions_debugRawgSearch;
   "actions/debugSearchIgdb": typeof actions_debugSearchIgdb;
+  "actions/devSweepNow": typeof actions_devSweepNow;
   "actions/email": typeof actions_email;
   "actions/fillUpcomingCoversFromIGDB": typeof actions_fillUpcomingCoversFromIGDB;
   "actions/getIGDBScreenshots": typeof actions_getIGDBScreenshots;
@@ -138,6 +143,7 @@ declare const fullApi: ApiFromModules<{
   "actions/refreshRAWGRatingForGame": typeof actions_refreshRAWGRatingForGame;
   "actions/translateExistingDescriptions": typeof actions_translateExistingDescriptions;
   auth: typeof auth;
+  crons: typeof crons;
   games: typeof games;
   "lib/diffGame": typeof lib_diffGame;
   "lib/emailTemplates": typeof lib_emailTemplates;
@@ -165,6 +171,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/deleteGame": typeof mutations_deleteGame;
   "mutations/deletePaymentMethod": typeof mutations_deletePaymentMethod;
   "mutations/deleteUser": typeof mutations_deleteUser;
+  "mutations/devSetSubscriptionEndNow": typeof mutations_devSetSubscriptionEndNow;
   "mutations/makePayment": typeof mutations_makePayment;
   "mutations/promoteToAdmin": typeof mutations_promoteToAdmin;
   "mutations/removeFavorite": typeof mutations_removeFavorite;
@@ -177,6 +184,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/setGameDetails": typeof mutations_setGameDetails;
   "mutations/setGameTrailerUrl": typeof mutations_setGameTrailerUrl;
   "mutations/simulateRental": typeof mutations_simulateRental;
+  "mutations/sweepExpirations": typeof mutations_sweepExpirations;
   "mutations/toggleFavorite": typeof mutations_toggleFavorite;
   "mutations/updateGame": typeof mutations_updateGame;
   "mutations/updateUser": typeof mutations_updateUser;

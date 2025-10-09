@@ -1,4 +1,4 @@
-// convex/functions/mutations/makePayment.ts
+// convex/mutations/makePayment.ts
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 

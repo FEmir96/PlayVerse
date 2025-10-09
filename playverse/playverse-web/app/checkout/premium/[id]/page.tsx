@@ -1,3 +1,4 @@
+// app/checkout/premium/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -117,7 +118,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     getUserByIdRef,
     params?.id ? ({ id: params.id as Id<"profiles"> } as any) : "skip"
   ) as
-    | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string })
+    | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string; email?: string })
     | null
     | undefined;
 
@@ -218,7 +219,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         provider: "manual",
       });
 
-      // 2) Subir a premium
+      // 2) Subir a premium + seteo de expiración / suscripción
       await upgradePlan({
         userId: profile._id,
         toRole: "premium",
@@ -321,9 +322,15 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                   {plan.priceLabel}
                   <span className="text-lg text-slate-400">{plan.period}</span>
                 </div>
-                <p className="text-slate-400 mb-4">{plan.description}</p>
+                <p className="text-slate-400 mb-1">{plan.description}</p>
 
-                <div className="space-y-2">
+                {/* ⬇️ NUEVO: Mostrar quién compra */}
+                <p className="text-slate-400 text-sm">
+                  Comprador: <span className="text-slate-200">{profile?.name ?? "Usuario"}</span>
+                  {profile?.email ? <> &nbsp;(<span className="text-slate-300">{profile.email}</span>)</> : null}
+                </p>
+
+                <div className="space-y-2 mt-4">
                   {["Acceso a toda la biblioteca", "Descuentos del 27%", "Cero publicidad"].map((feature, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <svg className="w-5 h-5 text-teal-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">

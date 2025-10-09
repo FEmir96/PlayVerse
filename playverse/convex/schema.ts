@@ -10,6 +10,19 @@ export default defineSchema({
     createdAt: v.number(),
     passwordHash: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
+    premiumSince: v.optional(v.number()),
+
+    // ⬇️ NUEVO: gestión de suscripciones (opcionales, no rompen nada)
+    premiumPlan: v.optional(
+      v.union(
+        v.literal("monthly"),
+        v.literal("quarterly"),
+        v.literal("annual"),
+        v.literal("lifetime")
+      )
+    ),
+    premiumExpiresAt: v.optional(v.number()),   // epoch ms (no se setea para lifetime)
+    premiumAutoRenew: v.optional(v.boolean()),  // true por defecto excepto lifetime
   }).index("by_email", ["email"]),
 
   games: defineTable({
@@ -104,8 +117,24 @@ export default defineSchema({
     userId: v.id("profiles"),
     fromRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
     toRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
-    effectiveAt: v.number(),
+    effectiveAt: v.optional(v.number()),
     paymentId: v.optional(v.id("payments")),
+
+    // ⬇️ NUEVO: compat con tu cancelPremium existente
+    status: v.optional(v.string()),      // "canceled" | "expired" | etc.
+    reason: v.optional(v.string()),
+    createdAt: v.optional(v.number()),
+
+    // 👇 Compatibilidad con docs existentes
+    expiresAt: v.optional(v.number()),
+    plan: v.optional(
+      v.union(
+        v.literal("monthly"),
+        v.literal("quarterly"),
+        v.literal("annual"),
+        v.literal("lifetime")
+      )
+    ),
   }).index("by_user", ["userId"]),
 
   audits: defineTable({
@@ -134,7 +163,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_game", ["userId", "gameId"])
-    .index("by_game", ["gameId"]), // 👈 para recolectar interesados por juego
+    .index("by_game", ["gameId"]),
 
   upcomingGames: defineTable({
     title: v.string(),
@@ -158,7 +187,11 @@ export default defineSchema({
       v.literal("discount"),
       v.literal("achievement"),
       v.literal("purchase"),
-      v.literal("game-update")
+      v.literal("game-update"),
+
+      // ⬇️ NUEVO: avisos de plan
+      v.literal("plan-expired"),
+      v.literal("plan-renewed")
     ),
     title: v.string(),
     message: v.string(),
@@ -169,8 +202,31 @@ export default defineSchema({
     createdAt: v.number(),
     meta: v.optional(v.any()),
   })
-    // feed ordenado por fecha de creación para un usuario:
     .index("by_user_createdAt", ["userId", "createdAt"])
-    // conteo rápido de no leídas por usuario:
     .index("by_user_isRead", ["userId", "isRead"]),
+
+  // ⬇️ NUEVO: historial de suscripciones
+  subscriptions: defineTable({
+    userId: v.id("profiles"),
+    plan: v.union(
+      v.literal("monthly"),
+      v.literal("quarterly"),
+      v.literal("annual"),
+      v.literal("lifetime")
+    ),
+    startAt: v.number(),                 // fecha de inicio (ms)
+    expiresAt: v.optional(v.number()),   // fecha de vencimiento (ms)
+    status: v.union(
+      v.literal("active"),
+      v.literal("canceled"),
+      v.literal("expired")
+    ),
+    autoRenew: v.boolean(),              // renovación automática S/N
+    paymentId: v.optional(v.id("payments")),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),   // 👈 para tus patches
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_status", ["userId", "status"])
+    .index("by_expiresAt", ["expiresAt"]),
 });
