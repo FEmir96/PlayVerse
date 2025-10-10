@@ -181,25 +181,7 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                         </button>
                       </div>
 
-                      {/* Acciones */}
-                      <div className="flex items-center justify-between mt-2">
-                        <Link
-                          href={`/checkout/alquiler/${g.id}`}
-                          onClick={onClose}
-                          className="text-cyan-300 hover:text-cyan-200 text-sm inline-flex items-center gap-1 transition-colors"
-                        >
-                          <PlaySquare className="w-4 h-4" />
-                          Alquiler
-                        </Link>
-                        <Link
-                          href={`/checkout/compra/${g.id}`}
-                          onClick={onClose}
-                          className="text-emerald-300 hover:text-emerald-200 text-sm inline-flex items-center gap-1 transition-colors"
-                        >
-                          <ShoppingCart className="w-4 h-4" />
-                          Compra
-                        </Link>
-                      </div>
+                      
                     </div>
                   </div>
                 </div>

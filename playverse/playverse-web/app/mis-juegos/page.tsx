@@ -1,22 +1,18 @@
 // playverse-web/app/mis-juegos/page.tsx
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useQuery } from "convex/react";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-
-// Import RELATIVO para evitar el error del alias en esta ruta
-import FavoritesGrid from "../../components/FavoritesGrid";
-
-import { useAuthStore } from "@/lib/useAuthStore";
+import { Search, ShoppingBag, Clock, Filter, ArrowUpDown } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Doc, Id } from "@convex/_generated/dataModel";
+import GameCard from "@/components/game-card";
 
 type PurchaseRow = {
   _id: string;
@@ -40,64 +36,19 @@ type MinimalGame = {
   ageRatingLabel?: string | null;
 };
 
-function GameCard({
-  title,
-  cover,
-  badge,
-  href,
-}: {
-  title: string;
-  cover?: string | null;
-  badge?: string | null;
-  href?: string;
-}) {
-  const content = (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden transition-transform duration-150 group-hover:-translate-y-0.5">
-      <div className="relative aspect-[3/4]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={cover || "/placeholder.svg"}
-          alt={title}
-          className="w-full h-full object-cover"
-        />
-      </div>
-      <div className="p-3 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-white line-clamp-2">
-            {title}
-          </h3>
-          {badge && (
-            <Badge className="bg-orange-400 text-slate-900">{badge}</Badge>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  return href ? (
-    <Link
-      href={href}
-      className="group block focus:outline-none focus:ring-2 focus:ring-orange-400 rounded-xl"
-    >
-      {content}
-    </Link>
-  ) : (
-    <div className="group">{content}</div>
-  );
-}
+const genres = ["Todos", "Acción", "RPG", "Carreras", "Shooter", "Sandbox", "Estrategia", "Deportes"];
 
 export default function MisJuegosPage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"purchases" | "rentals">("purchases");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedGenre, setSelectedGenre] = useState("Todos");
 
   // ===== Sesión (mismo patrón que en juego/[id]) =====
   const { data: session, status } = useSession();
-  const localUser = useAuthStore((s) => s.user);
   const email = useMemo(
-    () =>
-      session?.user?.email?.toLowerCase() ||
-      localUser?.email?.toLowerCase() ||
-      null,
-    [session?.user?.email, localUser?.email]
+    () => session?.user?.email?.toLowerCase() || null,
+    [session?.user?.email]
   );
   const isLogged = Boolean(email);
 
@@ -149,10 +100,32 @@ export default function MisJuegosPage() {
         )
       : [];
 
+  // Filtrar compras por búsqueda
+  const filteredPurchases = useMemo(() => {
+    if (!purchases || !searchQuery.trim()) return purchases || [];
+    const query = searchQuery.toLowerCase();
+    return purchases.filter((p) => {
+      const title = (p.game?.title || p.title || "").toLowerCase();
+      return title.includes(query);
+    });
+  }, [purchases, searchQuery]);
+
+  // Filtrar alquileres por búsqueda
+  const filteredRentals = useMemo(() => {
+    if (!activeRentals || !searchQuery.trim()) return activeRentals;
+    const query = searchQuery.toLowerCase();
+    return activeRentals.filter((r) => {
+      const title = (r.game?.title || "").toLowerCase();
+      return title.includes(query);
+    });
+  }, [activeRentals, searchQuery]);
+
   if (status === "loading") {
     return (
-      <div className="min-h-[60vh] grid place-items-center text-slate-300">
-        Cargando…
+      <div className="min-h-screen bg-slate-900">
+        <div className="min-h-[60vh] grid place-items-center text-slate-300">
+          Cargando…
+        </div>
       </div>
     );
   }
@@ -165,15 +138,18 @@ export default function MisJuegosPage() {
     };
 
     return (
-      <div className="min-h-screen bg-slate-900 text-white">
-        <div className="container mx-auto px-4 py-10">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-yellow-400 text-center mb-3">
-            MIS JUEGOS
-          </h1>
-          <p className="text-center text-slate-300 mb-8">
-            Tu biblioteca personal: títulos alquilados o comprados.
-          </p>
+      <div className="min-h-screen bg-slate-900">
+        {/* Header Section */}
+        <section className="bg-gradient-to-b from-slate-800 to-slate-900 py-16">
+          <div className="container mx-auto px-4 text-center">
+            <h1 className="text-4xl md:text-6xl font-bold text-orange-400 mb-4 tracking-wide">MIS JUEGOS</h1>
+            <p className="text-slate-300 text-lg max-w-3xl mx-auto leading-relaxed">
+              Tu biblioteca personal: títulos alquilados o comprados.
+            </p>
+          </div>
+        </section>
 
+        <div className="container mx-auto px-4 py-10">
           <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-8 max-w-3xl mx-auto text-center">
             <p className="text-slate-300 mb-6">
               Necesitás iniciar sesión para ver tus juegos.
@@ -185,193 +161,201 @@ export default function MisJuegosPage() {
               Iniciar sesión
             </Button>
           </div>
-
-          <div className="max-w-5xl mx-auto mt-10">
-            <div className="flex gap-2 items-center">
-              <Input
-                placeholder="Buscar por título..."
-                className="bg-slate-800 border-slate-700 text-slate-200"
-              />
-              <Button
-                variant="outline"
-                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500 hover:text-slate-900 bg-transparent"
-              >
-                Filtros
-              </Button>
-              <Button
-                variant="outline"
-                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500 hover:text-slate-900 bg-transparent"
-              >
-                Ordenar
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-4">
-              {[
-                "Todos",
-                "Acción",
-                "RPG",
-                "Carreras",
-                "Shooter",
-                "Sandbox",
-                "Estrategia",
-                "Deportes",
-              ].map((g) => (
-                <Badge
-                  key={g}
-                  className={`${
-                    g === "Todos"
-                      ? "bg-yellow-500 text-slate-900"
-                      : "bg-slate-800 border border-slate-700 text-slate-300"
-                  } cursor-default`}
-                >
-                  {g}
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-center text-slate-400 mt-10">
-            Iniciá sesión para ver tu biblioteca.
-          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      <div className="container mx-auto px-4 py-10">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-yellow-400 text-center mb-3">
-          MIS JUEGOS
-        </h1>
-        <p className="text-center text-slate-300 mb-8">
-          Tu biblioteca personal: títulos alquilados o comprados.
-        </p>
+    <div className="min-h-screen bg-slate-900">
+      {/* Header Section */}
+      <section className="bg-gradient-to-b from-slate-800 to-slate-900 py-16">
+        <div className="container mx-auto px-4 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold text-orange-400 mb-4 tracking-wide">MIS JUEGOS</h1>
+          <p className="text-slate-300 text-lg max-w-3xl mx-auto leading-relaxed">
+            Tu biblioteca personal: títulos alquilados o comprados.
+          </p>
+        </div>
+      </section>
 
-        <div className="max-w-5xl mx-auto">
-          <div className="flex gap-2 items-center">
-            <Input
-              placeholder="Buscar por título..."
-              className="bg-slate-800 border-slate-700 text-slate-200"
-            />
+      {/* Tabs */}
+      <section className="py-8 bg-slate-900">
+        <div className="container mx-auto px-4">
+          <div className="flex gap-2 justify-center mb-6">
             <Button
-              variant="outline"
-              className="border-yellow-500 text-yellow-400 hover:bg-yellow-500 hover:text-slate-900 bg-transparent"
+              variant={activeTab === "purchases" ? "default" : "outline"}
+              onClick={() => setActiveTab("purchases")}
+              className={`flex items-center gap-2 ${
+                activeTab === "purchases"
+                  ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
+                  : "border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+              }`}
             >
-              Filtros
+              <ShoppingBag className="w-4 h-4" />
+              Mis compras
             </Button>
             <Button
-              variant="outline"
-              className="border-yellow-500 text-yellow-400 hover:bg-yellow-500 hover:text-slate-900 bg-transparent"
+              variant={activeTab === "rentals" ? "default" : "outline"}
+              onClick={() => setActiveTab("rentals")}
+              className={`flex items-center gap-2 ${
+                activeTab === "rentals"
+                  ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
+                  : "border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+              }`}
             >
-              Ordenar
+              <Clock className="w-4 h-4" />
+              Mis alquileres
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            {[
-              "Todos",
-              "Acción",
-              "RPG",
-              "Carreras",
-              "Shooter",
-              "Sandbox",
-              "Estrategia",
-              "Deportes",
-            ].map((g) => (
-              <Badge
-                key={g}
-                className={`${
-                  g === "Todos"
-                    ? "bg-yellow-500 text-slate-900"
-                    : "bg-slate-800 border border-slate-700 text-slate-300"
-                } cursor-default`}
+        </div>
+      </section>
+
+      {/* Search and Filters */}
+      <section className="py-8 bg-slate-900 border-b border-slate-700">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row gap-4 justify-center items-center mb-6">
+            <div className="relative flex-1 max-w-2xl">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Input
+                placeholder="Buscar por título..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent">
+                <Filter className="w-4 h-4 mr-2" />
+                Filtros
+              </Button>
+              <Button variant="outline" className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent">
+                <ArrowUpDown className="w-4 h-4 mr-2" />
+                Ordenar
+              </Button>
+            </div>
+          </div>
+
+          {/* Genre filters */}
+          <div className="flex flex-wrap gap-2 justify-center items-center">
+            {genres.map((genre) => (
+              <Button
+                key={genre}
+                variant={selectedGenre === genre ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedGenre(genre)}
+                className={
+                  selectedGenre === genre
+                    ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
+                    : "border-slate-600 text-slate-300 hover:bg-slate-700 bg-transparent"
+                }
               >
-                {g}
-              </Badge>
+                {genre}
+              </Button>
             ))}
           </div>
         </div>
+      </section>
 
-        {/* FAVORITOS (a /juego/[id]) */}
-        <section className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-orange-400">Favoritos</h2>
-          </div>
-          <FavoritesGrid userId={profile?._id} />
-        </section>
+      {/* Content */}
+      <section className="py-12">
+        <div className="container mx-auto px-4">
+          {activeTab === "purchases" ? (
+            <>
+              {purchases === undefined ? (
+                <div className="text-center text-slate-400">Cargando compras…</div>
+              ) : !filteredPurchases.length ? (
+                <div className="text-center text-slate-400">
+                  {searchQuery ? "No se encontraron compras con ese nombre." : "No tienes compras todavía."}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {filteredPurchases.map((p) => {
+                    const rawTitle = (p.game?.title || p.title || "Juego").toString().trim();
+                    const gid = resolveGameId(
+                      p.game?._id ?? p.gameId ?? null,
+                      rawTitle
+                    );
+                    
+                    // Crear un objeto game compatible con GameCard
+                    const gameData: Doc<"games"> = {
+                      _id: gid as Id<"games">,
+                      title: rawTitle,
+                      cover_url: p.game?.cover_url || "/placeholder.svg",
+                      plan: "premium" as any,
+                      genres: [],
+                      createdAt: p.createdAt || Date.now(),
+                      igdbId: null,
+                      ageRatingLabel: null,
+                      description: null,
+                      trailer_url: null,
+                      purchasePrice: null,
+                      weeklyPrice: null,
+                      isFree: false,
+                      tags: ["Compra"],
+                    } as any;
 
-        {/* COMPRADOS → /juego/[id] (con fallback por título) */}
-        <section className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-orange-400">Comprados</h2>
-          </div>
-
-          {purchases === undefined ? (
-            <div className="text-slate-400">Cargando compras…</div>
-          ) : !purchases.length ? (
-            <div className="text-slate-400">No hay compras todavía.</div>
+                    return (
+                      <div key={p._id} className="relative">
+                        <GameCard game={gameData} />
+                        <Badge className="absolute top-2 right-2 bg-green-500 text-white">
+                          Compra
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {purchases.map((p) => {
-                const rawTitle = (p.game?.title || p.title || "Juego").toString().trim();
-                const gid = resolveGameId(
-                  p.game?._id ?? p.gameId ?? null,
-                  rawTitle
-                );
-                const cover = p.game?.cover_url || "/placeholder.svg";
-                const href = gid ? `/juego/${gid}` : undefined;
+            <>
+              {rentals === undefined ? (
+                <div className="text-center text-slate-400">Cargando alquileres…</div>
+              ) : !filteredRentals.length ? (
+                <div className="text-center text-slate-400">
+                  {searchQuery ? "No se encontraron alquileres con ese nombre." : "No tienes alquileres activos."}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {filteredRentals.map((r) => {
+                    const rawTitle = (r.game?.title || "Juego").toString().trim();
+                    const gid = resolveGameId(
+                      r.game?._id ?? r.gameId ?? null,
+                      rawTitle
+                    );
+                    
+                    // Crear un objeto game compatible con GameCard
+                    const gameData: Doc<"games"> = {
+                      _id: gid as Id<"games">,
+                      title: rawTitle,
+                      cover_url: r.game?.cover_url || "/placeholder.svg",
+                      plan: "premium" as any,
+                      genres: [],
+                      createdAt: Date.now(),
+                      igdbId: null,
+                      ageRatingLabel: null,
+                      description: null,
+                      trailer_url: null,
+                      purchasePrice: null,
+                      weeklyPrice: null,
+                      isFree: false,
+                      tags: ["Alquiler"],
+                    } as any;
 
-                return (
-                  <GameCard
-                    key={p._id}
-                    title={rawTitle}
-                    cover={cover}
-                    badge="Compra"
-                    href={href}
-                  />
-                );
-              })}
-            </div>
+                    return (
+                      <div key={r._id} className="relative">
+                        <GameCard game={gameData} />
+                        <Badge className="absolute top-2 right-2 bg-blue-500 text-white">
+                          Alquiler
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
-        </section>
-
-        {/* ALQUILERES ACTIVOS → /juego/[id] (también con fallback por título por si acaso) */}
-        <section className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-orange-400">
-              Alquileres activos
-            </h2>
-          </div>
-
-          {rentals === undefined ? (
-            <div className="text-slate-400">Cargando alquileres…</div>
-          ) : !activeRentals.length ? (
-            <div className="text-slate-400">No tienes alquileres activos.</div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {activeRentals.map((r) => {
-                const rawTitle = (r.game?.title || "Juego").toString().trim();
-                const gid = resolveGameId(
-                  r.game?._id ?? r.gameId ?? null,
-                  rawTitle
-                );
-                const cover = r.game?.cover_url || "/placeholder.svg";
-                const href = gid ? `/juego/${gid}` : undefined;
-
-                return (
-                  <GameCard
-                    key={r._id}
-                    title={rawTitle}
-                    cover={cover}
-                    badge="Alquiler"
-                    href={href}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

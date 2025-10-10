@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ function toEmbed(url?: string | null): string | null {
 
 export default function AdminEditGamePage() {
   const params = useParams() as { id?: string | string[] } | null;
+  const router = useRouter();
   const gameId = Array.isArray(params?.id) ? params!.id![0] : (params?.id as string | undefined);
   const hasId = Boolean(gameId);
   const { toast } = useToast();
@@ -270,6 +271,11 @@ export default function AdminEditGamePage() {
       await updateGame({ gameId: game._id as Id<"games">, patch } as any);
 
       toast({ title: "Guardado", description: "El juego se actualizó correctamente." });
+      
+      // Redirect to admin panel after successful save
+      setTimeout(() => {
+        router.push("/admin");
+      }, 1000);
     } catch (e: any) {
       toast({
         title: "Error al guardar",

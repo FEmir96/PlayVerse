@@ -80,9 +80,6 @@ export default function CarouselRail({
         </div>
       </div>
 
-      {/* bordes con fade */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent rounded-l-xl" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-slate-900 via-slate-900/80 to-transparent rounded-r-xl" />
 
       {/* carrusel */}
       <div

@@ -19,5 +19,5 @@ export default function FeaturedRail() {
   }
 
   const featured = [...list].sort((a, b) => b.createdAt - a.createdAt).slice(0, 12);
-  return <CarouselRail title="Seleccionados" items={featured} autoplayMs={4500} />;
+  return <CarouselRail title="" items={featured} autoplayMs={4500} />;
 }
