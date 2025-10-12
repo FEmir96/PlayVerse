@@ -188,10 +188,12 @@ export default defineSchema({
       v.literal("achievement"),
       v.literal("purchase"),
       v.literal("game-update"),
+      
 
       // ⬇️ NUEVO: avisos de plan
       v.literal("plan-expired"),
-      v.literal("plan-renewed")
+      v.literal("plan-renewed"),
+      v.literal("plan-expiring")
     ),
     title: v.string(),
     message: v.string(),
