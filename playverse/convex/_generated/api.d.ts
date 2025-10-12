@@ -19,6 +19,7 @@ import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetail
 import type * as actions_cleanupNotRated from "../actions/cleanupNotRated.js";
 import type * as actions_debugRawgSearch from "../actions/debugRawgSearch.js";
 import type * as actions_debugSearchIgdb from "../actions/debugSearchIgdb.js";
+import type * as actions_devPlanRemindersNow from "../actions/devPlanRemindersNow.js";
 import type * as actions_devSweepNow from "../actions/devSweepNow.js";
 import type * as actions_email from "../actions/email.js";
 import type * as actions_fillUpcomingCoversFromIGDB from "../actions/fillUpcomingCoversFromIGDB.js";
@@ -60,8 +61,10 @@ import type * as mutations_deleteGame from "../mutations/deleteGame.js";
 import type * as mutations_deletePaymentMethod from "../mutations/deletePaymentMethod.js";
 import type * as mutations_deleteUser from "../mutations/deleteUser.js";
 import type * as mutations_devSetSubscriptionEndNow from "../mutations/devSetSubscriptionEndNow.js";
+import type * as mutations_emitPlanRenewed from "../mutations/emitPlanRenewed.js";
 import type * as mutations_ensurePlanConsistency from "../mutations/ensurePlanConsistency.js";
 import type * as mutations_makePayment from "../mutations/makePayment.js";
+import type * as mutations_preExpiryReminders from "../mutations/preExpiryReminders.js";
 import type * as mutations_promoteToAdmin from "../mutations/promoteToAdmin.js";
 import type * as mutations_removeFavorite from "../mutations/removeFavorite.js";
 import type * as mutations_rentGame from "../mutations/rentGame.js";
@@ -132,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   "actions/cleanupNotRated": typeof actions_cleanupNotRated;
   "actions/debugRawgSearch": typeof actions_debugRawgSearch;
   "actions/debugSearchIgdb": typeof actions_debugSearchIgdb;
+  "actions/devPlanRemindersNow": typeof actions_devPlanRemindersNow;
   "actions/devSweepNow": typeof actions_devSweepNow;
   "actions/email": typeof actions_email;
   "actions/fillUpcomingCoversFromIGDB": typeof actions_fillUpcomingCoversFromIGDB;
@@ -173,8 +177,10 @@ declare const fullApi: ApiFromModules<{
   "mutations/deletePaymentMethod": typeof mutations_deletePaymentMethod;
   "mutations/deleteUser": typeof mutations_deleteUser;
   "mutations/devSetSubscriptionEndNow": typeof mutations_devSetSubscriptionEndNow;
+  "mutations/emitPlanRenewed": typeof mutations_emitPlanRenewed;
   "mutations/ensurePlanConsistency": typeof mutations_ensurePlanConsistency;
   "mutations/makePayment": typeof mutations_makePayment;
+  "mutations/preExpiryReminders": typeof mutations_preExpiryReminders;
   "mutations/promoteToAdmin": typeof mutations_promoteToAdmin;
   "mutations/removeFavorite": typeof mutations_removeFavorite;
   "mutations/rentGame": typeof mutations_rentGame;
