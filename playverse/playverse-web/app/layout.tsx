@@ -10,11 +10,12 @@ import { ConditionalFooter } from "@/components/ConditionalFooter";
 import { Suspense } from "react";
 import OAuthToast from "@/components/OAuthToast";
 
-
-// ✅ Convex: wrapper client
+// Convex
 import ConvexProviderClient from "./providers/convex-provider";
-// ✅ NextAuth: provider de sesión
+// NextAuth
 import SessionProviderClient from "./providers/auth-provider";
+// HouseAds
+import HouseAdProvider from "./providers/HouseAdProvider";
 
 // shadcn/ui
 import { Toaster } from "@/components/ui/toaster";
@@ -33,14 +34,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <ConvexProviderClient>
           <SessionProviderClient>
-            <Suspense fallback={<div>Loading...</div>}>
-              <Header />
-              <OAuthToast />
-              <main className="min-h-screen">{children}</main>
-              <ConditionalFooter />
-            </Suspense>
-            <Analytics />
-            <Toaster />
+            <HouseAdProvider>
+              <Suspense fallback={<div>Loading...</div>}>
+                <Header />
+                <OAuthToast />
+                <main className="min-h-screen">{children}</main>
+                <ConditionalFooter />
+              </Suspense>
+              <Analytics />
+              <Toaster />
+            </HouseAdProvider>
           </SessionProviderClient>
         </ConvexProviderClient>
       </body>

@@ -188,7 +188,6 @@ export default defineSchema({
       v.literal("achievement"),
       v.literal("purchase"),
       v.literal("game-update"),
-      
 
       // ⬇️ NUEVO: avisos de plan
       v.literal("plan-expired"),
@@ -231,4 +230,48 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  // ────────────────────────────────────────────
+  // ⬇️ NUEVO: House Ads (anuncios propios)
+  // ────────────────────────────────────────────
+  houseAds: defineTable({
+    key: v.string(), // identificador lógico único por campaña
+    active: v.boolean(),
+    slots: v.array(v.union(v.literal("onLogin"), v.literal("prePlay"))),
+    title: v.string(),
+    subtitle: v.optional(v.string()),
+    body: v.optional(v.string()),
+    ctaLabel: v.optional(v.string()),
+    ctaHref: v.optional(v.string()),
+    imageUrl: v.optional(v.string()),
+    videoUrl: v.optional(v.string()),
+    theme: v.optional(v.union(v.literal("dark"), v.literal("light"))),
+    skipAfterSec: v.optional(v.number()), // default 7 en server
+    dismissible: v.optional(v.boolean()), // default true
+    weight: v.optional(v.number()),       // default 1
+    frequencyPerDay: v.optional(v.number()), // impresiones máximas por usuario/día
+    startAt: v.optional(v.number()),
+    endAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+    createdBy: v.optional(v.id("profiles")),
+  })
+    .index("by_key", ["key"])
+    .index("by_active", ["active"]),
+
+  adEvents: defineTable({
+    userId: v.id("profiles"),
+    adId: v.id("houseAds"),
+    slot: v.union(v.literal("onLogin"), v.literal("prePlay")),
+    event: v.union(
+      v.literal("impression"),
+      v.literal("click"),
+      v.literal("dismiss"),
+      v.literal("complete")
+    ),
+    gameId: v.optional(v.id("games")),
+    createdAt: v.number(),
+  })
+    .index("by_user_time", ["userId", "createdAt"])
+    .index("by_ad_time", ["adId", "createdAt"]),
 });

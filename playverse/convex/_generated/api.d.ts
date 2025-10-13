@@ -31,6 +31,7 @@ import type * as actions_refreshIGDBRatingForGame from "../actions/refreshIGDBRa
 import type * as actions_refreshRAWGBatch from "../actions/refreshRAWGBatch.js";
 import type * as actions_refreshRAWGRatingForGame from "../actions/refreshRAWGRatingForGame.js";
 import type * as actions_translateExistingDescriptions from "../actions/translateExistingDescriptions.js";
+import type * as ads from "../ads.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as games from "../games.js";
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   "actions/refreshRAWGBatch": typeof actions_refreshRAWGBatch;
   "actions/refreshRAWGRatingForGame": typeof actions_refreshRAWGRatingForGame;
   "actions/translateExistingDescriptions": typeof actions_translateExistingDescriptions;
+  ads: typeof ads;
   auth: typeof auth;
   crons: typeof crons;
   games: typeof games;

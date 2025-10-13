@@ -10,6 +10,7 @@ import { api } from "@convex";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/lib/useAuthStore";
+import { useHouseAds } from "@/app/providers/HouseAdProvider"; // ⬅️ NUEVO
 
 // ✅ nuevo: botón Ranking
 import RankingButton from "@/components/RankingButton";
@@ -124,6 +125,19 @@ export default function PlayEmbeddedPage() {
     return null;
   }, [canPlay?.reason, gameId, isAdmin, premiumOverrideAllowed]);
 
+  // ---------- NUEVO: pre-roll al entrar directo a /play/[id] (solo plan free) ----------
+  const { gateOnPlayPageMount } = useHouseAds();
+  useEffect(() => {
+    if (!gameId) return;
+    if (!game) return; // esperar a tener el juego
+    const plan = (game as any)?.plan;
+    if (plan === "free") {
+      // El provider valida role === "free" y aplica TTL para que no dispare en bucle.
+      gateOnPlayPageMount(gameId);
+    }
+  }, [gameId, game, gateOnPlayPageMount]);
+  // -------------------------------------------------------------------------------------
+
   // Loading / sin datos
   if (!gameId || game === undefined || canPlay === undefined) {
     return <div className="min-h-[60vh] grid place-items-center text-slate-300">Cargando…</div>;
@@ -186,16 +200,15 @@ export default function PlayEmbeddedPage() {
 
   const showCountdown = typeof expiresInMs === "number";
 
-  // ⬇️⬇️ ⬅️ AQUÍ EL CAMBIO CLAVE
-  // Armamos la URL final del iframe con los query params:
-  //   - email (para identificar al usuario en el juego)
-  //   - gid   (para que el juego mande gameId a Convex y no falle por embedUrl)
+  // URL final del iframe con email + gid (para que tu juego conozca el user y el gameId)
   const qp: Record<string, string> = {};
   if (email) qp.email = email;
   if (gameId) qp.gid = gameId;
-  const qs = Object.keys(qp).length ? (embedUrl.includes("?") ? "&" : "?") + new URLSearchParams(qp).toString() : "";
+  const qs =
+    Object.keys(qp).length
+      ? (embedUrl.includes("?") ? "&" : "?") + new URLSearchParams(qp).toString()
+      : "";
   const finalSrc = embedUrl + qs;
-  // ⬆️⬆️
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -249,7 +262,6 @@ export default function PlayEmbeddedPage() {
           )}
 
           <iframe
-            // ⬇️ usamos la URL con email + gid
             src={finalSrc}
             title={title}
             className="w-full h-full"
