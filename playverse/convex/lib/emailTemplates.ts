@@ -8,7 +8,7 @@ export type BaseOpts = {
   currency?: string;
   method?: string;
   orderId?: string | null;
-  appUrl?: string | null; // usado también para resolver iconos absolutos
+  appUrl?: string | null; // CTA a la app
   weeks?: number;
   expiresAt?: number;
 };
@@ -17,15 +17,16 @@ const COLORS = {
   bgOuter:   "#0b1220",
   cardBg:    "#0f172a",
   border:    "#1f2937",
-  brand:     "#fb923c",
-  accent:    "#fbbf24",
-  text:      "#fb923c",
-  textSoft:  "#f9c192",
-  textMuted: "#fb923c",
+  brand:     "#fbbf24",
+  accent:    "#fbbf24", // amarillo de referencia
+  text:      "#fbbf24",
+  textSoft:  "#fbbf24",
+  textMuted: "#fbbf24",
   footer:    "#64748b",
 };
 
-const DEFAULT_BASE = "https://playverse.com"; // fallback si no viene appUrl
+// Fallback seguro a tu mini-repo por si la env faltara
+const DEFAULT_ASSETS_BASE = "https://pv-assets.vercel.app";
 
 function esc(s: string) {
   return s.replace(/[<>&"]/g, (c) => (
@@ -35,19 +36,18 @@ function esc(s: string) {
 
 /* ========= Helpers de assets e íconos ========= */
 
-function siteBase(appUrl?: string | null): string {
+function assetsBase(): string {
   const env = (process.env.ASSETS_BASE_URL || "").trim();
-  const base = env || appUrl || DEFAULT_BASE;
-  return base.replace(/\/+$/, "");
+  return (env || DEFAULT_ASSETS_BASE).replace(/\/+$/, "");
 }
 
-function asset(appUrl: string | null | undefined, path: string): string {
-  const base = siteBase(appUrl);
+function asset(path: string): string {
+  const base = assetsBase();
   return path.startsWith("/") ? `${base}${path}` : `${base}/${path}`;
 }
 
-function iconImg(appUrl: string | null | undefined, src: string, alt: string, size = 20, extra = "") {
-  const url = asset(appUrl, src);
+function iconImg(src: string, alt: string, size = 20, extra = "") {
+  const url = asset(src);
   return `<img src="${url}" width="${size}" height="${size}" alt="${esc(alt)}" style="display:inline-block;vertical-align:middle;border:0;outline:none;${extra}" />`;
 }
 
@@ -59,16 +59,15 @@ const ICONS = {
   inv1:        "/images/rob1.png",
   inv2:        "/images/rob2.png",
   coin:        "/images/moneda.png",
-  amount:      "/images/moneda.png",      // para etiqueta Monto
-  method:      "/images/control.png",     // para etiqueta Método
-  weeks:       "/images/estrella.png",    // para Semanas
-  expires:     "/images/rob2.png",        // para Vencimiento
+  amount:      "/images/moneda.png",
+  method:      "/images/control.png",
+  weeks:       "/images/estrella.png",
+  expires:     "/images/rob2.png",
 };
 
 /* ========= Piezas visuales reutilizables ========= */
 
-function decorativeStrip(appUrl?: string | null) {
-  // Tira decorativa con íconos de PlayVerse, sutil y responsiva
+function decorativeStrip() {
   const size = 22;
   const op = "opacity:.65;filter:drop-shadow(0 1px 0 rgba(0,0,0,.25));";
   const gap = 10;
@@ -82,9 +81,9 @@ function decorativeStrip(appUrl?: string | null) {
     { s: ICONS.inv2,      a: "Alien 2" },
   ];
 
-  const imgs = icons.map(({ s, a }) => iconImg(appUrl, s, a, size, op)).join(
-    `<span style="display:inline-block;width:${gap}px"></span>`
-  );
+  const imgs = icons
+    .map(({ s, a }) => iconImg(s, a, size, op))
+    .join(`<span style="display:inline-block;width:${gap}px"></span>`);
 
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 12px 0">
@@ -96,8 +95,8 @@ function decorativeStrip(appUrl?: string | null) {
   </table>`;
 }
 
-function brandHeader(appUrl?: string | null) {
-  const logoUrl = asset(appUrl, ICONS.logo);
+function brandHeader() {
+  const logoUrl = asset(ICONS.logo);
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 8px 0">
     <tr>
@@ -108,14 +107,6 @@ function brandHeader(appUrl?: string | null) {
   </table>`;
 }
 
-function cover(url?: string | null, alt?: string) {
-  if (!url) return "";
-  return `
-    <img src="${url}" alt="${esc(alt || "Cover")}"
-      style="width:100%;max-width:560px;height:auto;border-radius:12px;display:block;outline:none;text-decoration:none;margin:10px 0 8px 0;object-fit:cover;" />
-  `;
-}
-
 /* ========= Layout base del email ========= */
 
 function layout(title: string, intro: string, inner: string, appUrl?: string | null) {
@@ -123,8 +114,8 @@ function layout(title: string, intro: string, inner: string, appUrl?: string | n
 <html>
   <body style="background:${COLORS.bgOuter};margin:0;padding:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${COLORS.text};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;">
     <div style="max-width:720px;margin:0 auto">
-      ${brandHeader(appUrl)}
-      ${decorativeStrip(appUrl)}
+      ${brandHeader()}
+      ${decorativeStrip()}
     </div>
 
     <div style="max-width:720px;margin:0 auto;background:${COLORS.cardBg};border:1px solid ${COLORS.border};border-radius:16px;padding:22px">
@@ -141,44 +132,71 @@ function layout(title: string, intro: string, inner: string, appUrl?: string | n
 </html>`;
 }
 
+/* ========= Cabecera compacta título + miniatura ========= */
+
+function titleWithThumb(title: string, coverUrl?: string | null) {
+  // Usa tabla para máxima compatibilidad con clientes
+  if (!coverUrl) {
+    return `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 8px 0">
+        <tr>
+          <td style="padding:0">
+            <div style="color:${COLORS.accent};font-size:18px;line-height:1.3;font-weight:800">${esc(title)}</div>
+          </td>
+        </tr>
+      </table>
+    `;
+  }
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 8px 0">
+      <tr>
+        <td width="56" valign="middle" style="padding:0">
+          <img src="${coverUrl}" width="56" height="56" alt="Cover ${esc(title)}" style="display:block;border-radius:10px" />
+        </td>
+        <td valign="middle" style="padding-left:10px">
+          <div style="color:${COLORS.accent};font-size:18px;line-height:1.3;font-weight:800">${esc(title)}</div>
+        </td>
+      </tr>
+    </table>
+  `;
+}
+
 /* ========= Bloque de información principal ========= */
 
 function infoBlock(opts: BaseOpts, extraRows = "") {
   const money  = opts.amount.toLocaleString("en-US", { style: "currency", currency: opts.currency ?? "USD" });
   const method = opts.method ?? "Tarjeta";
-  const order  = opts.orderId ? `<div style="margin-top:8px;color:${COLORS.textMuted};font-size:12px"><strong>ID de pedido:</strong> ${esc(opts.orderId)}</div>` : "";
+  const order  = opts.orderId ? `<div style="margin-top:8px;color:${COLORS.accent};font-size:12px"><strong>ID de pedido:</strong> ${esc(opts.orderId)}</div>` : "";
   const cta    = opts.appUrl
     ? `<div style="margin-top:16px">
          <a href="${opts.appUrl}" style="display:inline-block;background:${COLORS.brand};color:#0b0f19;text-decoration:none;padding:11px 16px;border-radius:10px;font-weight:800;letter-spacing:.2px">Ir a PlayVerse</a>
        </div>`
     : "";
 
-  const iconAmount = iconImg(opts.appUrl, ICONS.amount, "Monto", 18, "opacity:.9;margin-right:6px");
-  const iconMethod = iconImg(opts.appUrl, ICONS.method, "Método", 18, "opacity:.9;margin-right:6px");
+  const iconAmount = iconImg(ICONS.amount, "Monto", 18, "opacity:.9;margin-right:6px");
+  const iconMethod = iconImg(ICONS.method, "Método", 18, "opacity:.9;margin-right:6px");
 
   return `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:16px">
-      <h2 style="color:#fff;margin:0 0 10px 0;font-size:18px;line-height:1.35">${esc(opts.gameTitle)}</h2>
+      ${titleWithThumb(opts.gameTitle, opts.coverUrl)}
 
-      ${cover(opts.coverUrl, opts.gameTitle)}
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;color:${COLORS.textSoft};font-size:14px;margin-top:4px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;color:${COLORS.accent};font-size:14px;margin-top:6px">
         <tr>
           <td align="left"  style="width:50%;padding:7px 0">
             ${iconAmount}
-            <strong>Monto:</strong>
-            <span style="color:${COLORS.accent};font-weight:800;margin-left:6px">${money}</span>
+            <strong style="color:${COLORS.accent}">Monto:</strong>
+            <span style="color:${COLORS.accent};font-weight:900;margin-left:6px">${money}</span>
           </td>
           <td align="right" style="width:50%;padding:7px 0">
             ${iconMethod}
-            <strong>Método:</strong>
-            <span style="margin-left:6px">${esc(method)}</span>
+            <strong style="color:${COLORS.accent}">Método:</strong>
+            <span style="margin-left:6px;color:${COLORS.accent};font-weight:700">${esc(method)}</span>
           </td>
         </tr>
         ${
           extraRows
-            ? `<tr><td colspan="2" style="padding-top:8px">
-                 <div style="display:flex;gap:12px;flex-wrap:wrap;color:${COLORS.textSoft};font-size:14px">${extraRows}</div>
+            ? `<tr><td colspan="2" style="padding-top:10px">
+                 <div style="display:flex;gap:14px;flex-wrap:wrap;color:${COLORS.accent};font-size:14px">${extraRows}</div>
                </td></tr>`
             : ""
         }
@@ -202,13 +220,13 @@ export function buildRentalEmail(opts: BaseOpts) {
   const extra = (() => {
     const chips: string[] = [];
     if (typeof opts.weeks === "number") {
-      const ico = iconImg(opts.appUrl, ICONS.weeks, "Semanas", 16, "opacity:.9;margin-right:6px");
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong>Semanas:</strong>&nbsp;${opts.weeks}</span></div>`);
+      const ico = iconImg(ICONS.weeks, "Semanas", 16, "opacity:.9;margin-right:6px");
+      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Semanas:</strong>&nbsp;${opts.weeks}</span></div>`);
     }
     if (typeof opts.expiresAt === "number") {
-      const ico = iconImg(opts.appUrl, ICONS.expires, "Vence", 16, "opacity:.9;margin-right:6px");
+      const ico = iconImg(ICONS.expires, "Vence", 16, "opacity:.9;margin-right:6px");
       const expires = new Date(opts.expiresAt).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong>Vence:</strong>&nbsp;${expires}</span></div>`);
+      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Vence:</strong>&nbsp;${expires}</span></div>`);
     }
     return chips.join("");
   })();
@@ -222,13 +240,13 @@ export function buildExtendEmail(opts: BaseOpts) {
   const extra = (() => {
     const chips: string[] = [];
     if (typeof opts.weeks === "number") {
-      const ico = iconImg(opts.appUrl, ICONS.weeks, "Semanas +", 16, "opacity:.9;margin-right:6px");
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong>Semanas +:</strong>&nbsp;${opts.weeks}</span></div>`);
+      const ico = iconImg(ICONS.weeks, "Semanas +", 16, "opacity:.9;margin-right:6px");
+      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Semanas +:</strong>&nbsp;${opts.weeks}</span></div>`);
     }
     if (typeof opts.expiresAt === "number") {
-      const ico = iconImg(opts.appUrl, ICONS.expires, "Nuevo venc.", 16, "opacity:.9;margin-right:6px");
+      const ico = iconImg(ICONS.expires, "Nuevo venc.", 16, "opacity:.9;margin-right:6px");
       const expires = new Date(opts.expiresAt).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong>Nuevo venc.:</strong>&nbsp;${expires}</span></div>`);
+      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Nuevo venc.:</strong>&nbsp;${expires}</span></div>`);
     }
     return chips.join("");
   })();
@@ -256,20 +274,25 @@ export function buildCartEmail(opts: {
 
   const rows = opts.items.map((it) => {
     const money = it.amount.toLocaleString("en-US", { style: "currency", currency: cur });
+    // Tabla anidada: imagen + título en la misma línea con 10px de separación
     return `
       <tr>
         <td style="padding:10px 12px">
-          <div style="display:flex;gap:12px;align-items:center">
-            ${it.coverUrl ? `<img src="${it.coverUrl}" width="56" height="56" style="border-radius:10px;display:block" alt="Cover ${esc(it.title)}" />` : ""}
-            <div style="color:#fff;font-weight:700;line-height:1.35">${esc(it.title)}</div>
-          </div>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:separate">
+            <tr>
+              ${it.coverUrl ? `<td width="56" valign="middle"><img src="${it.coverUrl}" width="56" height="56" style="display:block;border-radius:10px" alt="Cover ${esc(it.title)}" /></td>` : ""}
+              <td valign="middle" style="padding-left:${it.coverUrl ? "10" : "0"}px">
+                <div style="color:${COLORS.accent};font-weight:800;line-height:1.35">${esc(it.title)}</div>
+              </td>
+            </tr>
+          </table>
         </td>
         <td align="right" style="padding:10px 12px;color:${COLORS.accent};font-weight:900">${money}</td>
       </tr>`;
   }).join("");
 
-  const iconAmount = iconImg(opts.appUrl, ICONS.amount, "Total", 18, "opacity:.95;margin-right:6px");
-  const iconMethod = iconImg(opts.appUrl, ICONS.method, "Método", 16, "opacity:.9;margin-right:6px");
+  const iconAmount = iconImg(ICONS.amount, "Total", 18, "opacity:.95;margin-right:6px");
+  const iconMethod = iconImg(ICONS.method, "Método", 16, "opacity:.9;margin-right:6px");
 
   const inner = `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;overflow:hidden">
@@ -277,8 +300,8 @@ export function buildCartEmail(opts: {
         ${rows}
         <tr><td colspan="2" style="height:1px;background:${COLORS.border}"></td></tr>
         <tr>
-          <td style="padding:12px;color:${COLORS.textSoft};font-weight:800">
-            ${iconMethod}<span style="vertical-align:middle"><strong>Método:</strong>&nbsp;${esc(opts.method || "Tarjeta guardada")}</span>
+          <td style="padding:12px;color:${COLORS.accent};font-weight:800">
+            ${iconMethod}<span style="vertical-align:middle"><strong style="color:${COLORS.accent}">Método:</strong>&nbsp;${esc(opts.method || "Tarjeta guardada")}</span>
           </td>
           <td align="right" style="padding:12px;color:${COLORS.accent};font-weight:900">
             ${iconAmount}<span style="vertical-align:middle">${total.toLocaleString("en-US", { style: "currency", currency: cur })}</span>
