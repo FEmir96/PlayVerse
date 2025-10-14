@@ -19,9 +19,9 @@ const COLORS = {
   border:    "#1f2937",
   brand:     "#fb923c",
   accent:    "#fbbf24",
-  text:      "#e5e7eb",
-  textSoft:  "#cbd5e1",
-  textMuted: "#94a3b8",
+  text:      "#fb923c",
+  textSoft:  "#f9c192",
+  textMuted: "#fb923c",
   footer:    "#64748b",
 };
 
