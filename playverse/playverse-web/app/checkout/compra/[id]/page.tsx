@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { useAuthStore } from "@/lib/useAuthStore";
 
 // —— Refs —— 
 const getUserByEmailRef =
@@ -75,21 +74,26 @@ function CheckoutTitle({ children }: { children: React.ReactNode }) {
 
 export default function PurchaseCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { toast } = useToast();
 
-  const { data: session } = useSession();
-  const storeUser = useAuthStore((s) => s.user);
-  const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
+  const { data: session, status } = useSession();
+
+  // ✅ Solo session
+  const loginEmail = useMemo(
+    () => (status === "authenticated" ? session?.user?.email?.toLowerCase() ?? null : null),
+    [status, session?.user?.email]
+  );
 
   useEffect(() => {
+    if (status === "loading") return;
     if (!loginEmail) {
-      router.replace(`/auth/login?next=${encodeURIComponent(pathname ?? "/")}`);
+      // ✅ Siempre al Home tras login
+      router.replace(`/auth/login?next=%2F`);
     }
-  }, [loginEmail, router, pathname]);
+  }, [status, loginEmail, router]);
 
   // Perfil + rol
-  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : undefined) as
+  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : "skip") as
     | { _id: Id<"profiles">; role?: "free" | "premium" | "admin" }
     | null
     | undefined;
@@ -140,11 +144,9 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
 
-  // Precio base (tarifa plana). No aplicamos descuento si user es FREE y juego es premium.
+  // Precio base (tarifa plana).
   const price = useMemo(() => {
     const base = typeof (game as any)?.price_buy === "number" ? (game as any).price_buy : 49.99;
-    // Si quisieras aplicar descuento a Premium (no solicitado), acá sería el lugar.
-    // Para este parche, siempre cobramos tarifa plana (base).
     return base;
   }, [game]);
 
@@ -205,8 +207,13 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     });
   }, [library, game?._id]);
 
+  // ⛔️ Evitar toast "ya lo tienes" después de una compra exitosa
+  const ownedToastShownRef = useRef(false);
+  const suppressOwnedToastRef = useRef(false);
+
   useEffect(() => {
-    if (alreadyOwned && game?.title) {
+    if (alreadyOwned && game?.title && !ownedToastShownRef.current && !suppressOwnedToastRef.current) {
+      ownedToastShownRef.current = true;
       toast({
         title: "Ya tienes este juego",
         description: `“${game.title}” ya está en tu catálogo.`,
@@ -226,6 +233,9 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     }
 
     try {
+      // 🔕 No mostrar el toast de "ya lo tienes" por cambios de librería post-compra
+      suppressOwnedToastRef.current = true;
+
       if (!useSaved && rememberNew) {
         await savePaymentMethod({
           userId: profile._id,
@@ -239,13 +249,26 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
       await purchaseGame({ userId: profile._id, gameId: game._id, amount: price });
 
       toast({ title: "Compra confirmada", description: "Te enviamos un email con los detalles." });
-      router.replace("/mis-juegos");
+
+      // ✅ Siempre al Home
+      startTransition(() => {
+        router.replace("/");
+        router.refresh();
+      });
+      setTimeout(() => {
+        if (typeof window !== "undefined" && window.location.pathname !== "/") {
+          window.location.assign("/");
+        }
+      }, 600);
     } catch (e: any) {
+      // Si falló, volvemos a permitir el toast
+      suppressOwnedToastRef.current = false;
+
       const msg = String(e?.message || "");
       if (msg.includes("ALREADY_OWNED")) {
         toast({ title: "Ya tienes este juego", description: "No es necesario volver a comprarlo." });
         return;
-      }
+        }
       toast({
         title: "No se pudo completar el pago",
         description: e?.message ?? "Intentá nuevamente.",

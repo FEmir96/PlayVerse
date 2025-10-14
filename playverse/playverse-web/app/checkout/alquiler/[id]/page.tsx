@@ -1,6 +1,7 @@
+// playverse-web/app/checkout/alquiler/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
@@ -13,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { useAuthStore } from "@/lib/useAuthStore";
+// ⚠️ No usamos el store como fallback de email en checkouts para evitar “arrastre” entre sesiones
+// import { useAuthStore } from "@/lib/useAuthStore";
 
 // —— Refs
 const getUserByEmailRef =
@@ -29,25 +31,15 @@ const getGameByIdRef = (HAS_GET_BY_ID
   ? (api as any)["queries/getGameById"].getGameById
   : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
 
+// Rentals del usuario (ya la tenés)
+const HAS_USER_RENTALS = Boolean((api as any)["queries/getUserRentals"]?.getUserRentals);
+const getUserRentalsRef = HAS_USER_RENTALS
+  ? ((api as any)["queries/getUserRentals"].getUserRentals as FunctionReference<"query">)
+  : undefined;
+
 const startRentalRef = (api as any).transactions.startRental as FunctionReference<"mutation">;
 const savePaymentMethodRef =
   (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
-
-// 🔎 Active rental feature-detection
-const getActiveByUserGameRef =
-  (api as any)["queries"]?.getActiveRentalByUserAndGame?.getActiveRentalByUserAndGame as
-    | FunctionReference<"query">
-    | undefined;
-
-const getActiveRentalRef =
-  (api as any)["queries"]?.getActiveRental?.getActiveRental as
-    | FunctionReference<"query">
-    | undefined;
-
-const getRentalsByUserRef =
-  (api as any)["queries"]?.getRentalsByUser?.getRentalsByUser as
-    | FunctionReference<"query">
-    | undefined;
 
 type PM = {
   _id: string;
@@ -57,44 +49,6 @@ type PM = {
   expYear: number;
 };
 
-function TraceViewer({ show }: { show: boolean }) {
-  const [, force] = useState(0);
-  useEffect(() => {
-    if (!show) return;
-    const id = setInterval(() => force((x) => x + 1), 600);
-    return () => clearInterval(id);
-  }, [show]);
-  if (!show) return null;
-  let items: any[] = [];
-  try {
-    items = JSON.parse(sessionStorage.getItem("pv_trace") || "[]");
-  } catch {}
-  return (
-    <div style={{ position: "fixed", bottom: 12, left: 12, zIndex: 9999, background: "rgba(15,23,42,.97)", color: "#fff", border: "1px solid #22d3ee", padding: "12px", borderRadius: 8, fontSize: 12, maxWidth: 540, maxHeight: 280, overflow: "auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-        <b>TRACE (/auth/after → alquiler)</b>
-        <button onClick={() => sessionStorage.removeItem("pv_trace")} style={{ fontSize: 11, padding: "2px 6px", border: "1px solid #555", borderRadius: 6, background: "transparent", color: "#ddd" }}>Limpiar</button>
-      </div>
-      {items.length === 0 ? (
-        <div style={{ marginTop: 6, opacity: 0.7 }}>Sin eventos</div>
-      ) : (
-        <ul style={{ marginTop: 6 }}>
-          {items.map((it, i) => (
-            <li key={i} style={{ marginBottom: 6 }}>
-              <code>{new Date(it.t).toLocaleTimeString()} · [{it.page}] {it.evt} · {JSON.stringify(it.data)}</code>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// ─── DEBUG ─────────────────────────────────────────────
-const DEBUG = true;
-const logD = (...a: any[]) => DEBUG && console.log("%c[CHECKOUT]", "color:#0bf;font-weight:bold", ...a);
-
-// ─── Premium detection ─────────────────────────────────
 function computeIsPremium(g: any): { premium: boolean; reason: string } {
   if (!g) return { premium: false, reason: "game=null" };
   const boolCandidates = [
@@ -126,20 +80,24 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
-  const showDebug = sp?.get("debug") === "1";
   const forcePremium = sp?.get("forcePremium") === "1";
   const { toast } = useToast();
 
   const { data: session, status } = useSession();
-  const storeUser = useAuthStore((s) => s.user);
-  const loginEmail = session?.user?.email?.toLowerCase() || storeUser?.email?.toLowerCase() || null;
+
+  // ✅ Solo confiamos en session (usuario actual). Si no está autenticado → null
+  const loginEmail = useMemo(
+    () => (status === "authenticated" ? session?.user?.email?.toLowerCase() ?? null : null),
+    [status, session?.user?.email]
+  );
 
   useEffect(() => {
     if (status === "loading") return;
     if (!loginEmail) {
-      router.replace(`/auth/login?next=${encodeURIComponent(pathname ?? "/")}`);
+      // ✅ Siempre al Home después del login
+      router.replace(`/auth/login?next=%2F`);
     }
-  }, [status, loginEmail, router, pathname]);
+  }, [status, loginEmail, router]);
 
   // Perfil
   const profile = useQuery(
@@ -154,58 +112,34 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   ) as any | null | undefined;
 
   // Premium detection
-  const { isGamePremium, premiumReason } = useMemo(() => {
-    if (forcePremium) return { isGamePremium: true, premiumReason: "forced-by-query" };
-    const { premium, reason } = computeIsPremium(game as any);
-    return { isGamePremium: premium, premiumReason: reason };
+  const { isGamePremium } = useMemo(() => {
+    if (forcePremium) return { isGamePremium: true };
+    const { premium } = computeIsPremium(game as any);
+    return { isGamePremium: premium };
   }, [game, forcePremium]);
 
   const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
   const payDisabled = isGamePremium && userRole === "free";
 
-  // 🔎 ¿Ya lo tiene alquilado?
-  const activeFromByUserGame = useQuery(
-    getActiveByUserGameRef as any,
-    getActiveByUserGameRef && profile?._id ? { userId: profile._id, gameId: params.id as Id<"games"> } : "skip"
-  ) as any;
-
-  const activeFromSingle = useQuery(
-    getActiveRentalRef as any,
-    getActiveRentalRef && profile?._id ? { userId: profile._id, gameId: params.id as Id<"games"> } : "skip"
-  ) as any;
-
-  const rentalsByUser = useQuery(
-    getRentalsByUserRef as any,
-    getRentalsByUserRef && profile?._id ? { userId: profile._id } : "skip"
-  ) as any[] | undefined;
+  // Rentals del usuario (para evitar doble alquiler)
+  const rentalsByUser = HAS_USER_RENTALS
+    ? ((useQuery(
+        getUserRentalsRef!,
+        profile?._id ? { userId: profile._id } : "skip"
+      ) as any[]) || undefined)
+    : undefined;
 
   const hasActiveRental = useMemo(() => {
+    if (!Array.isArray(rentalsByUser)) return false;
     const now = Date.now();
-    const pick = (r: any) => {
-      if (!r) return false;
-      if (r.gameId && String(r.gameId) !== String(params.id)) return false;
-      const end = r.endAt ?? r.endsAt ?? r.expiresAt ?? r.expires_at;
-      const returned = r.returnedAt ?? r.returned_at;
-      const statusStr = String(r.status ?? "").toLowerCase();
-      if (returned) return false;
-      if (statusStr === "active" || statusStr === "running") return true;
-      if (typeof end === "number" && end > now) return true;
-      return false;
-    };
+    return rentalsByUser.some((r: any) => {
+      if (String(r.gameId) !== String(params.id)) return false;
+      const end = r.expiresAt ?? r.endAt ?? r.endsAt ?? r.expires_at;
+      return typeof end === "number" && end > now;
+    });
+  }, [rentalsByUser, params.id]);
 
-    if (activeFromByUserGame && pick(activeFromByUserGame)) return true;
-    if (activeFromSingle && pick(activeFromSingle)) return true;
-
-    if (Array.isArray(rentalsByUser)) {
-      return rentalsByUser.some((r) => {
-        if (String(r.gameId ?? r.game_id) !== String(params.id)) return false;
-        return pick(r);
-      });
-    }
-    return false;
-  }, [activeFromByUserGame, activeFromSingle, rentalsByUser, params.id]);
-
-  // Si ya está alquilado → a Extender
+  // Redirección si ya está alquilado → extender
   const redirectedToExtend = useRef(false);
   useEffect(() => {
     if (!profile?._id) return;
@@ -213,27 +147,9 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
     if (redirectedToExtend.current) return;
     if (hasActiveRental) {
       redirectedToExtend.current = true;
-      const next = pathname ?? "/";
-      router.replace(`/checkout/extender/${params.id}?next=${encodeURIComponent(next)}`);
+      router.replace(`/checkout/extender/${params.id}?next=%2F`);
     }
-  }, [hasActiveRental, profile?._id, game, router, pathname, params.id]);
-
-  // Modal Premium una sola vez
-  const openedOnce = useRef(false);
-  useEffect(() => {
-    logD("modal-check", {
-      profileLoading: typeof profile === "undefined",
-      gameLoading: typeof game === "undefined",
-      payDisabled,
-    });
-    if (openedOnce.current) return;
-    if (typeof profile === "undefined" || typeof game === "undefined") return;
-    if (payDisabled) {
-      openedOnce.current = true;
-      logD("open-upgrade-modal");
-      setShowUpgrade(true);
-    }
-  }, [payDisabled, profile, game]);
+  }, [hasActiveRental, profile?._id, game, router, params.id]);
 
   // Métodos guardados
   const methods = useQuery(
@@ -254,7 +170,7 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
 
-  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   const weeklyPrice = useMemo(() => {
     if (typeof (game as any)?.weekly_price === "number") return (game as any).weekly_price;
@@ -303,40 +219,21 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
   const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
-  useEffect(() => {
-    const keys = game ? Object.keys(game as any) : [];
-    logD("status:", status,
-      "email:", loginEmail,
-      "profile:", profile,
-      "game.keys:", keys,
-      "isGamePremium:", isGamePremium,
-      "premiumReason:", premiumReason,
-      "userRole:", userRole,
-      "payDisabled:", payDisabled,
-      "hasActiveRental:", hasActiveRental
-    );
-    if (showDebug && game) {
-      const dump: any = { id: (game as any)?._id };
-      ["is_premium","isPremium","premium","requiresPremium","only_premium","category","categories","tier","access","plan","level","type","status","tags","labels","flags"].forEach(k => (dump[k] = (game as any)[k]));
-      console.table(dump);
-    }
-  }, [status, loginEmail, profile, game, isGamePremium, premiumReason, userRole, payDisabled, showDebug, hasActiveRental]);
-
   const onRent = async () => {
+    if (processing) return;
     if (!profile?._id || !game?._id) return;
 
     if (hasActiveRental) {
-      router.replace(`/checkout/extender/${params.id}`);
+      router.replace(`/checkout/extender/${params.id}?next=%2F`);
       return;
     }
-
     if (payDisabled) {
-      logD("blocked-by-role → open modal");
-      setShowUpgrade(true);
       return;
     }
 
     try {
+      setProcessing(true);
+
       if (!useSaved && rememberNew) {
         await savePaymentMethod({
           userId: profile._id,
@@ -346,22 +243,41 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
           brand: undefined,
         });
       }
-      await startRental({ userId: profile._id, gameId: game._id, weeks, weeklyPrice });
-      toast({ title: "Alquiler confirmado", description: "¡Que lo disfrutes!" });
-      router.replace("/mis-juegos");
+
+      await startRental({
+        userId: profile._id,
+        gameId: game._id,
+        weeks,
+        weeklyPrice,
+        currency: "USD",
+      });
+
+      toast({ title: "Alquiler confirmado", description: "¡Te enviamos el comprobante por email!" });
+
+      // ✅ Redirección SIEMPRE al Home
+      startTransition(() => {
+        router.replace("/");
+        router.refresh();
+      });
+      setTimeout(() => {
+        if (typeof window !== "undefined" && window.location.pathname !== "/") {
+          window.location.assign("/");
+        }
+      }, 600);
     } catch (e: any) {
+      const msg = String(e?.message || "");
+      if (msg.includes("ALREADY_RENTED_ACTIVE")) {
+        router.replace(`/checkout/extender/${params.id}?next=%2F`);
+        return;
+      }
       toast({
         title: "No se pudo iniciar el alquiler",
         description: e?.message ?? "Intentá nuevamente.",
         variant: "destructive",
       });
+    } finally {
+      setProcessing(false);
     }
-  };
-
-  const goUpgrade = () => {
-    if (!profile?._id) return;
-    const next = pathname ?? "/";
-    router.push(`/checkout/premium/${profile._id}?plan=monthly&next=${encodeURIComponent(next)}`);
   };
 
   if (!loginEmail) {
@@ -377,16 +293,6 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
   return (
     <div className="container mx-auto px-4 py-10">
-      {showDebug && (
-        <div className="mb-4 rounded-lg border border-cyan-400/40 bg-cyan-400/10 p-3 text-cyan-200 text-sm">
-          <div><b>DEBUG:</b> role=<b>{userRole}</b> · isGamePremium=<b>{String(isGamePremium)}</b> ({premiumReason})</div>
-          <div>keys: {(game ? Object.keys(game as any).join(", ") : "sin game")}</div>
-          <div>activeRental: <b>{String(hasActiveRental)}</b></div>
-          <div>Tip: probá <code>?forcePremium=1</code> para forzar modal.</div>
-        </div>
-      )}
-
-
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Izquierda */}
         <div>
@@ -396,12 +302,6 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
               <img src={cover} alt={title} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
             </div>
           </div>
-
-          {(payDisabled && !hasActiveRental) && (
-            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
-              Este juego es de categoría Premium. Necesitas Premium para <b>alquilarlo</b>.
-            </div>
-          )}
         </div>
 
         {/* Derecha */}
@@ -416,14 +316,14 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <div className="text-center">
               <div className="text-2xl font-extrabold text-amber-400">
-                Total: {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                Total: {(weeklyPrice * weeks).toLocaleString("en-US", { style: "currency", currency: "USD" })}
               </div>
             </div>
           </div>
 
           {/* Pago */}
           {primaryPM ? (
-            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3 opacity-100">
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-white font-medium">Método de pago</p>
                 <div className="flex items-center gap-2 text-sm">
@@ -538,49 +438,11 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
           <Button
             onClick={onRent}
-            disabled={payDisabled}
-            className={`w-full text-slate-900 text-lg py-6 font-bold ${payDisabled ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"}`}
+            disabled={payDisabled || processing}
+            className={`w-full text-slate-900 text-lg py-6 font-bold ${payDisabled || processing ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"}`}
           >
-            {hasActiveRental ? "Ya alquilado (redirigiendo…)" : payDisabled ? "Requiere Premium" : `Pagar ${total.toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
+            {processing ? "Procesando…" : `Pagar ${(weeklyPrice * weeks).toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
           </Button>
-        </div>
-      </div>
-
-      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} onUpgrade={goUpgrade} />
-      <TraceViewer show={showDebug === true} />
-    </div>
-  );
-}
-
-function UpgradeModal({
-  open,
-  onClose,
-  onUpgrade,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onUpgrade: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="absolute inset-0 grid place-items-center p-4">
-        <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-400/30 p-6 shadow-2xl">
-          <h3 className="text-xl font-bold text-amber-300">Solo para usuarios Premium</h3>
-          <p className="text-slate-300 mt-2">
-            Este juego es de categoría <span className="text-amber-300 font-semibold">Premium</span>.{" "}
-            Para poder <span className="font-semibold">alquilarlo</span> necesitás mejorar tu cuenta.
-          </p>
-          <ul className="text-slate-400 text-sm mt-3 list-disc pl-5 space-y-1">
-            <li>Acceso completo a juegos Premium</li>
-            <li>Descuentos y beneficios exclusivos</li>
-            <li>Cancelás cuando quieras</li>
-          </ul>
-          <div className="flex gap-3 justify-end mt-6">
-            <Button variant="outline" onClick={onClose} className="border-slate-600 text-slate-200">Cerrar</Button>
-            <Button onClick={onUpgrade} className="bg-orange-400 hover:bg-orange-500 text-slate-900">Mejorar a Premium</Button>
-          </div>
         </div>
       </div>
     </div>

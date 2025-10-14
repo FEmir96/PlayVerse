@@ -54,16 +54,6 @@ export default function GameCard({ game }: Props) {
           <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">
             {primaryGenre}
           </Badge>
-
-          {/* Sello premium */}
-          {isPremium && (
-            <div className="absolute top-3 right-3 z-10">
-              <div className="w-8 h-8 rounded-full bg-yellow-400/90 text-slate-900 grid place-items-center font-bold">
-                ★
-              </div>
-            </div>
-          )}
-
           {/* Portada: contenedor con ratio fijo + imagen cubriendo siempre */}
           <div className={`relative w-full ${ASPECT} bg-slate-800 overflow-hidden`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
