@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Heart, User, LogOut, Shield, ShoppingCart } from "lucide-react";
 import { FavoritesDropdown } from "./favorites-dropdown";
 import { NotificationsDropdown } from "./notifications-dropdown";
+import { CartDropdown } from "./cart-dropdown"; // ⬅️ NUEVO
 
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";
@@ -35,6 +36,7 @@ export function Header() {
   const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
   const [showFavorites, setShowFavorites] = useState(false);
+  const [showCart, setShowCart] = useState(false); // ⬅️ NUEVO
   const [loggingOut, setLoggingOut] = useState(false);
 
   const { toast } = useToast();
@@ -105,11 +107,11 @@ export function Header() {
 
   const favCount = useFavoritesStore((s) => s.items.length);
 
-  // ✅ contador del carrito desde Convex
-  const cartCount = useQuery(
-    (api as any).queries.cart?.getCartCount as any,
-    userId ? { userId } : "skip"
-  ) as number | undefined;
+  // ✅ contador del carrito (con safeguard por si aún no existe la función)
+  const cartCountRef = (api as any).queries?.cart?.getCartCount as any;
+  const cartCount = cartCountRef
+    ? (useQuery(cartCountRef, userId ? { userId } : "skip") as number | undefined)
+    : 0;
 
   // Bienvenida post login
   useEffect(() => {
@@ -138,17 +140,28 @@ export function Header() {
   if (pathname.startsWith("/static-games")) return null;
 
   const favContainerRef = useRef<HTMLDivElement>(null);
+  const cartContainerRef = useRef<HTMLDivElement>(null); // ⬅️ NUEVO
+
   useEffect(() => {
     function onDown(e: MouseEvent) {
-      if (!showFavorites) return;
       const target = e.target as Node;
-      if (favContainerRef.current && !favContainerRef.current.contains(target)) setShowFavorites(false);
+      if (showFavorites && favContainerRef.current && !favContainerRef.current.contains(target)) {
+        setShowFavorites(false);
+      }
+      if (showCart && cartContainerRef.current && !cartContainerRef.current.contains(target)) {
+        setShowCart(false);
+      }
     }
-    function onEsc(e: KeyboardEvent) { if (e.key === "Escape" && showFavorites) setShowFavorites(false); }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (showFavorites) setShowFavorites(false);
+        if (showCart) setShowCart(false);
+      }
+    }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onEsc);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
-  }, [showFavorites]);
+  }, [showFavorites, showCart]);
 
   return (
     <header className="bg-slate-900 border-b border-slate-700 relative">
@@ -169,8 +182,8 @@ export function Header() {
           <div className="flex items-center space-x-3">
             {logged && (
               <>
-                {/* 🛒 Carrito */}
-                <Link href="/checkout/carrito">
+                {/* 🛒 Carrito con dropdown (NO Link directo) */}
+                <div className="relative" ref={cartContainerRef}>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -181,8 +194,10 @@ export function Header() {
                                hover:ring-1 hover:ring-orange-400/40
                                focus-visible:outline-none
                                focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                    onClick={() => setShowCart((v) => !v)}
                     title="Carrito"
-                    aria-label="Carrito"
+                    aria-expanded={showCart}
+                    aria-controls="cart-popover"
                   >
                     <ShoppingCart className="w-5 h-5" />
                     {(cartCount ?? 0) > 0 && (
@@ -191,7 +206,15 @@ export function Header() {
                       </span>
                     )}
                   </Button>
-                </Link>
+
+                  <div id="cart-popover">
+                    <CartDropdown
+                      isOpen={showCart}
+                      onClose={() => setShowCart(false)}
+                      userId={userId}
+                    />
+                  </div>
+                </div>
 
                 <NotificationsDropdown userId={userId} />
 

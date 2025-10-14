@@ -1,50 +1,43 @@
 // convex/queries/cart.ts
 import { query } from "../_generated/server";
 import { v } from "convex/values";
-import { Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 
-/**
- * Cuenta de ítems por usuario.
- */
+/** Cantidad de ítems en el carrito (badge del header). */
 export const getCartCount = query({
   args: { userId: v.id("profiles") },
   handler: async (ctx, { userId }) => {
     const rows = await ctx.db
       .query("cartItems")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", q => q.eq("userId", userId))
       .collect();
     return rows.length;
   },
 });
 
-/**
- * ¿Está un juego en el carrito?
- */
+/** ¿Está un juego en el carrito? */
 export const hasInCart = query({
   args: { userId: v.id("profiles"), gameId: v.id("games") },
   handler: async (ctx, { userId, gameId }) => {
     const row = await ctx.db
       .query("cartItems")
-      .withIndex("by_user_game", (q) => q.eq("userId", userId).eq("gameId", gameId))
+      .withIndex("by_user_game", q => q.eq("userId", userId).eq("gameId", gameId))
       .first();
     return !!row;
   },
 });
 
-/**
- * Lista detallada (para /checkout/carrito).
- * Devuelve price_buy mapeado desde purchasePrice (o compat: price_buy/price).
- */
+/** Lista detallada para /checkout/carrito con precio normalizado. */
 export const getCartDetailed = query({
   args: { userId: v.id("profiles") },
   handler: async (ctx, { userId }) => {
     const items = await ctx.db
       .query("cartItems")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", q => q.eq("userId", userId))
       .collect();
 
     const out: Array<{
-      cartItemId: string;
+      cartItemId: Id<"cartItems">;
       gameId: Id<"games">;
       title: string;
       cover_url?: string | null;
@@ -56,15 +49,10 @@ export const getCartDetailed = query({
       const g = await ctx.db.get(row.gameId);
       if (!g) continue;
 
-      // Normalización de precio (schema usa purchasePrice)
       const price =
-        typeof (g as any).purchasePrice === "number"
-          ? (g as any).purchasePrice
-          : typeof (g as any).price_buy === "number"
-          ? (g as any).price_buy
-          : typeof (g as any).price === "number"
-          ? (g as any).price
-          : 0;
+        typeof (g as any).purchasePrice === "number" ? (g as any).purchasePrice :
+        typeof (g as any).price_buy === "number"     ? (g as any).price_buy     :
+        typeof (g as any).price === "number"         ? (g as any).price         : 0;
 
       out.push({
         cartItemId: row._id,
@@ -75,7 +63,6 @@ export const getCartDetailed = query({
         currency: "USD",
       });
     }
-
     return out;
   },
 });

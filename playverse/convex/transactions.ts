@@ -166,6 +166,15 @@ export const purchaseGame = mutation({
       userId, amount, currency: cur, status: "completed", provider: "manual", createdAt: now,
     });
 
+    // ⬇️ Limpieza: si ese juego estaba en el carrito, quitarlo
+    try {
+      const row = await db
+        .query("cartItems")
+        .withIndex("by_user_game", (q) => q.eq("userId", userId).eq("gameId", gameId))
+        .first();
+      if (row) await db.delete(row._id);
+    } catch {}
+
     const user = await db.get(userId);
     const game = await db.get(gameId);
 
@@ -192,21 +201,33 @@ export const purchaseGame = mutation({
   },
 });
 
-/** ✅ NUEVO: Compra de carrito (varios juegos) */
+/** ✅ Compra de carrito (varios juegos) — acepta paymentMethodId opcional y limpia carrito */
 export const purchaseCart = mutation({
   args: {
     userId: v.id("profiles"),
-    gameIds: v.array(v.id("games")),   // solo ids; el precio se toma del server (anti-tamper)
+    gameIds: v.array(v.id("games")),
     currency: v.optional(v.string()),
+    paymentMethodId: v.optional(v.id("paymentMethods")), // ← aceptamos lo que manda el front
   },
-  handler: async ({ db, scheduler }, { userId, gameIds, currency }) => {
+  handler: async ({ db, scheduler }, { userId, gameIds, currency, paymentMethodId }) => {
     const cur = currency || "USD";
     const now = Date.now();
 
-    // Unicos
+    // Método de pago sólo para mostrar en el email
+    const pm = paymentMethodId ? await db.get(paymentMethodId) : null;
+    const brand = String((pm as any)?.brand || "").toLowerCase();
+    const last4 = String((pm as any)?.last4 || "").slice(-4);
+    const brandLabel =
+      brand.includes("visa") ? "VISA" :
+      brand.includes("master") ? "MASTERCARD" :
+      brand.includes("amex") ? "AMEX" :
+      brand ? brand.toUpperCase() : "Tarjeta";
+    const methodLabel = pm ? `${brandLabel} •••• ${last4}` : "Tarjeta guardada";
+
+    // Únicos
     const ids = Array.from(new Set(gameIds.map((g) => g as Id<"games">)));
 
-    // Filtrar los ya comprados
+    // Filtrar ya comprados
     const already = await db
       .query("transactions")
       .withIndex("by_user_type", (q) => q.eq("userId", userId).eq("type", "purchase"))
@@ -216,6 +237,14 @@ export const purchaseCart = mutation({
     const toBuyIds = ids.filter((id) => !alreadyIds.has(String(id)));
 
     if (toBuyIds.length === 0) {
+      // Igual limpiamos del carrito los ids intentados
+      for (const gid of ids) {
+        const row = await db
+          .query("cartItems")
+          .withIndex("by_user_game", (q) => q.eq("userId", userId).eq("gameId", gid))
+          .first();
+        if (row) await db.delete(row._id);
+      }
       return { ok: true as const, purchased: 0, skipped: ids.length, total: 0 };
     }
 
@@ -242,6 +271,15 @@ export const purchaseCart = mutation({
       userId, amount: total, currency: cur, status: "completed", provider: "manual", createdAt: now,
     });
 
+    // ⬇️ Limpieza: quitar del carrito TODOS los ids intentados (comprados o ya poseídos)
+    for (const gid of ids) {
+      const row = await db
+        .query("cartItems")
+        .withIndex("by_user_game", (q) => q.eq("userId", userId).eq("gameId", gid))
+        .first();
+      if (row) await db.delete(row._id);
+    }
+
     // Email de carrito
     const user = await db.get(userId);
     if (user?.email) {
@@ -252,7 +290,7 @@ export const purchaseCart = mutation({
           userName: user.name ?? "",
           items: lines.map((l) => ({ title: l.title, coverUrl: l.cover, amount: l.price })),
           currency: cur,
-          method: "Tarjeta guardada",
+          method: methodLabel,
           appUrl: APP_URL,
         }),
         replyTo: user.email,
