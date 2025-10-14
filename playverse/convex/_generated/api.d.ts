@@ -56,6 +56,7 @@ import type * as mutations_applyAgeRating from "../mutations/applyAgeRating.js";
 import type * as mutations_applyIgdbRating from "../mutations/applyIgdbRating.js";
 import type * as mutations_authLogin from "../mutations/authLogin.js";
 import type * as mutations_cancelPremiumPlan from "../mutations/cancelPremiumPlan.js";
+import type * as mutations_cart from "../mutations/cart.js";
 import type * as mutations_createGame from "../mutations/createGame.js";
 import type * as mutations_createUser from "../mutations/createUser.js";
 import type * as mutations_deleteGame from "../mutations/deleteGame.js";
@@ -89,6 +90,7 @@ import type * as profiles from "../profiles.js";
 import type * as queries_admin_listGames from "../queries/admin/listGames.js";
 import type * as queries_admin_listProfiles from "../queries/admin/listProfiles.js";
 import type * as queries_canPlayGame from "../queries/canPlayGame.js";
+import type * as queries_cart from "../queries/cart.js";
 import type * as queries_countFavorites from "../queries/countFavorites.js";
 import type * as queries_games_getIdByEmbedUrl from "../queries/games/getIdByEmbedUrl.js";
 import type * as queries_getAdmins from "../queries/getAdmins.js";
@@ -100,6 +102,7 @@ import type * as queries_getFeaturedByTitles from "../queries/getFeaturedByTitle
 import type * as queries_getFreeGames from "../queries/getFreeGames.js";
 import type * as queries_getGameById from "../queries/getGameById.js";
 import type * as queries_getGames from "../queries/getGames.js";
+import type * as queries_getGamesByIds from "../queries/getGamesByIds.js";
 import type * as queries_getPaymentMethods from "../queries/getPaymentMethods.js";
 import type * as queries_getPremiumGames from "../queries/getPremiumGames.js";
 import type * as queries_getUpcomingGames from "../queries/getUpcomingGames.js";
@@ -173,6 +176,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/applyIgdbRating": typeof mutations_applyIgdbRating;
   "mutations/authLogin": typeof mutations_authLogin;
   "mutations/cancelPremiumPlan": typeof mutations_cancelPremiumPlan;
+  "mutations/cart": typeof mutations_cart;
   "mutations/createGame": typeof mutations_createGame;
   "mutations/createUser": typeof mutations_createUser;
   "mutations/deleteGame": typeof mutations_deleteGame;
@@ -206,6 +210,7 @@ declare const fullApi: ApiFromModules<{
   "queries/admin/listGames": typeof queries_admin_listGames;
   "queries/admin/listProfiles": typeof queries_admin_listProfiles;
   "queries/canPlayGame": typeof queries_canPlayGame;
+  "queries/cart": typeof queries_cart;
   "queries/countFavorites": typeof queries_countFavorites;
   "queries/games/getIdByEmbedUrl": typeof queries_games_getIdByEmbedUrl;
   "queries/getAdmins": typeof queries_getAdmins;
@@ -217,6 +222,7 @@ declare const fullApi: ApiFromModules<{
   "queries/getFreeGames": typeof queries_getFreeGames;
   "queries/getGameById": typeof queries_getGameById;
   "queries/getGames": typeof queries_getGames;
+  "queries/getGamesByIds": typeof queries_getGamesByIds;
   "queries/getPaymentMethods": typeof queries_getPaymentMethods;
   "queries/getPremiumGames": typeof queries_getPremiumGames;
   "queries/getUpcomingGames": typeof queries_getUpcomingGames;

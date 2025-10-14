@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Heart, User, LogOut, Shield } from "lucide-react";
+import { Heart, User, LogOut, Shield, ShoppingCart } from "lucide-react";
 import { FavoritesDropdown } from "./favorites-dropdown";
 import { NotificationsDropdown } from "./notifications-dropdown";
 
@@ -55,7 +55,6 @@ export function Header() {
     localUser?.email?.toLowerCase() ||
     null;
 
-  // perfil (ahora tipamos con name opcional para usarlo en el toast)
   const profile = useQuery(
     api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
@@ -64,31 +63,19 @@ export function Header() {
   const role = (profile?.role as any) || "free";
   const userId: Id<"profiles"> | null = profile?._id ?? null;
 
-  // nombre y email para UI (prioriza el nombre del perfil Convex)
   const displayName = profile?.name ?? session?.user?.name ?? localUser?.name ?? undefined;
   const displayEmail = session?.user?.email ?? localUser?.email ?? undefined;
 
   const shouldShowPremium = !logged || role === "free" || role === "admin";
 
-  const isActiveLink = (href: string) => {
-    if (href === "/") return pathname === "/";
-    return pathname.startsWith(href);
-  };
+  const isActiveLink = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   const getLinkClasses = (href: string) => {
-    const base =
-      "font-medium transition-all duration-200 px-3 py-2 relative rounded-md text-orange-400";
+    const base = "font-medium transition-all duration-200 px-3 py-2 relative rounded-md text-orange-400";
     if (isActiveLink(href)) {
-      return [
-        base,
-        "after:content-[''] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-0.5 after:bg-orange-400 after:rounded-full",
-      ].join(" ");
+      return [base, "after:content-[''] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-0.5 after:bg-orange-400 after:rounded-full"].join(" ");
     }
-    return [
-      base,
-      "hover:text-amber-300",
-      "hover:bg-orange-400/10 hover:shadow-[0_0_12px_rgba(251,146,60,0.25)]",
-    ].join(" ");
+    return [base, "hover:text-amber-300", "hover:bg-orange-400/10 hover:shadow-[0_0_12px_rgba(251,146,60,0.25)]"].join(" ");
   };
 
   useEffect(() => {
@@ -108,12 +95,9 @@ export function Header() {
         const { signOut } = await import("next-auth/react");
         await signOut({ redirect: false });
       }
-
       router.replace("/?logout=1");
     } catch {
-      if (typeof window !== "undefined") {
-        window.location.href = "/?logout=1";
-      }
+      if (typeof window !== "undefined") window.location.href = "/?logout=1";
     } finally {
       setLoggingOut(false);
     }
@@ -121,74 +105,49 @@ export function Header() {
 
   const favCount = useFavoritesStore((s) => s.items.length);
 
-  // ✅ Ajuste: espera a que el perfil (Convex) esté resuelto para usar el nombre correcto en el toast
+  // ✅ contador del carrito desde Convex
+  const cartCount = useQuery(
+    (api as any).queries.cart?.getCartCount as any,
+    userId ? { userId } : "skip"
+  ) as number | undefined;
+
+  // Bienvenida post login
   useEffect(() => {
     const auth = searchParams.get("auth");
     const provider = (searchParams.get("provider") || "").toLowerCase();
-
-    // sólo seguimos si venimos del callback (?auth=ok), hay sesión/logged
     if (auth !== "ok" || !logged) return;
-
-    // si el perfil aún no resolvió (undefined), esperamos al próximo render
     if (typeof profile === "undefined") return;
 
     if (!firedWelcome.current) {
       firedWelcome.current = true;
-
       const provLabel =
         provider === "xbox" ? "Xbox" :
         provider === "google" ? "Google" :
-        provider === "credentials" ? "tu cuenta" :
-        "tu cuenta";
+        provider === "credentials" ? "tu cuenta" : "tu cuenta";
+      const nameForToast = profile?.name || session?.user?.name || localUser?.name || "gamer";
+      (toast as any)({ title: `¡Bienvenido, ${nameForToast}!`, description: `Inicio de sesión con ${provLabel} exitoso.` });
 
-      // nombre para toast: prioriza Convex.name, luego NextAuth y por último store local
-      const nameForToast =
-        profile?.name ||
-        session?.user?.name ||
-        localUser?.name ||
-        "gamer";
-
-      (toast as any)({
-        title: `¡Bienvenido, ${nameForToast}!`,
-        description: `Inicio de sesión con ${provLabel} exitoso.`,
-      });
-
-      // limpiamos los flags de la URL sin "parpadeo"
       const params = new URLSearchParams(searchParams.toString());
-      params.delete("auth");
-      params.delete("provider");
+      params.delete("auth"); params.delete("provider");
       const nextUrl = pathname + (params.toString() ? `?${params.toString()}` : "");
-
       const tid = setTimeout(() => router.replace(nextUrl), 120);
       return () => clearTimeout(tid);
     }
   }, [searchParams, logged, pathname, router, toast, profile, session, localUser]);
 
-  if (pathname.startsWith("/static-games")) {
-    return null;
-  }
+  if (pathname.startsWith("/static-games")) return null;
 
-  // ⬇️ refs para manejo de click-afuera
   const favContainerRef = useRef<HTMLDivElement>(null);
-
-  // cerrar favoritos con click afuera + Escape (controlado desde Header)
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (!showFavorites) return;
       const target = e.target as Node;
-      if (favContainerRef.current && !favContainerRef.current.contains(target)) {
-        setShowFavorites(false);
-      }
+      if (favContainerRef.current && !favContainerRef.current.contains(target)) setShowFavorites(false);
     }
-    function onEsc(e: KeyboardEvent) {
-      if (e.key === "Escape" && showFavorites) setShowFavorites(false);
-    }
+    function onEsc(e: KeyboardEvent) { if (e.key === "Escape" && showFavorites) setShowFavorites(false); }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onEsc);
-    };
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
   }, [showFavorites]);
 
   return (
@@ -196,33 +155,46 @@ export function Header() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center">
-            <Image
-              src="/images/playverse-logo.png"
-              alt="PlayVerse"
-              width={80}
-              height={40}
-              className="h-10 w-auto"
-              priority
-            />
+            <Image src="/images/playverse-logo.png" alt="PlayVerse" width={80} height={40} className="h-10 w-auto" priority />
           </Link>
 
           <nav className="hidden md:flex items-center space-x-1">
             <Link href="/" className={getLinkClasses("/")}>Inicio</Link>
             <Link href="/catalogo" className={getLinkClasses("/catalogo")}>Catálogo</Link>
             <Link href="/mis-juegos" className={getLinkClasses("/mis-juegos")}>Mis juegos</Link>
-            {shouldShowPremium && (
-              <Link href="/premium" className={getLinkClasses("/premium")}>Premium</Link>
-            )}
+            {shouldShowPremium && <Link href="/premium" className={getLinkClasses("/premium")}>Premium</Link>}
             <Link href="/contacto" className={getLinkClasses("/contacto")}>Contacto</Link>
           </nav>
 
           <div className="flex items-center space-x-3">
             {logged && (
               <>
-                {/* 🔔 100% server & por usuario */}
+                {/* 🛒 Carrito */}
+                <Link href="/checkout/carrito">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    type="button"
+                    className="relative text-orange-400 rounded-xl transition-all duration-200
+                               hover:text-amber-300 hover:bg-orange-400/10
+                               hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
+                               hover:ring-1 hover:ring-orange-400/40
+                               focus-visible:outline-none
+                               focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                    title="Carrito"
+                    aria-label="Carrito"
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    {(cartCount ?? 0) > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-400 text-slate-900 text-[11px] font-extrabold grid place-items-center leading-[18px]">
+                        {(cartCount ?? 0) > 99 ? "99+" : cartCount}
+                      </span>
+                    )}
+                  </Button>
+                </Link>
+
                 <NotificationsDropdown userId={userId} />
 
-                {/* ❤️ Toggle real y cierre al click afuera (controlado acá) */}
                 <div className="relative" ref={favContainerRef}>
                   <Button
                     size="icon"
@@ -247,10 +219,7 @@ export function Header() {
                     )}
                   </Button>
                   <div id="favorites-popover">
-                    <FavoritesDropdown
-                      isOpen={showFavorites}
-                      onClose={() => setShowFavorites(false)}
-                    />
+                    <FavoritesDropdown isOpen={showFavorites} onClose={() => setShowFavorites(false)} />
                   </div>
                 </div>
               </>
@@ -259,10 +228,7 @@ export function Header() {
             {!logged ? (
               <>
                 <Link href="/auth/login">
-                  <Button
-                    variant="outline"
-                    className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent hidden md:inline-flex"
-                  >
+                  <Button variant="outline" className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent hidden md:inline-flex">
                     Iniciar sesión
                   </Button>
                 </Link>
@@ -293,32 +259,17 @@ export function Header() {
                     </div>
                   </DropdownMenuTrigger>
 
-                  {/* wrapper con borde degradado tipo Favorites */}
-                  <DropdownMenuContent
-                    align="end"
-                    sideOffset={8}
-                    className="z-50 bg-transparent border-0 p-0"
-                  >
+                  <DropdownMenuContent align="end" sideOffset={8} className="z-50 bg-transparent border-0 p-0">
                     <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-orange-400/40 to-purple-500/40">
                       <div className="rounded-2xl bg-slate-900 border border-slate-700 overflow-hidden">
                         <div className="px-3 py-2 text-sm">
                           {displayName && <div className="font-semibold text-orange-400">{displayName}</div>}
-                          {displayEmail && (
-                            <div className="text-xs text-slate-400">{displayEmail}</div>
-                          )}
+                          {displayEmail && <div className="text-xs text-slate-400">{displayEmail}</div>}
                         </div>
                         <DropdownMenuSeparator className="bg-slate-700" />
 
                         <DropdownMenuItem asChild>
-                          <Link
-                            href="/perfil"
-                            className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
-                                      hover:bg-orange-400/10 hover:text-amber-300
-                                      hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
-                                      hover:ring-1 hover:ring-orange-400/40
-                                      focus-visible:outline-none
-                                      focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400"
-                          >
+                          <Link href="/perfil" className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200 hover:bg-orange-400/10 hover:text-amber-300 hover:shadow-[0_0_18px_rgba(251,146,60,0.35)] hover:ring-1 hover:ring-orange-400/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400">
                             <User className="w-4 h-4" />
                             Ver perfil
                           </Link>
@@ -326,15 +277,7 @@ export function Header() {
 
                         {role === "admin" && (
                           <DropdownMenuItem asChild className="cursor-pointer">
-                            <Link
-                              href="/admin"
-                              className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200
-                                        hover:bg-orange-400/10 hover:text-amber-300
-                                        hover:shadow-[0_0_18px_rgba(251,146,60,0.35)]
-                                        hover:ring-1 hover:ring-orange-400/40
-                                        focus-visible:outline-none
-                                        focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400"
-                            >
+                            <Link href="/admin" className="cursor-pointer w-full flex items-center gap-2 rounded-md transition-all duration-200 hover:bg-orange-400/10 hover:text-amber-300 hover:shadow-[0_0_18px_rgba(251,146,60,0.35)] hover:ring-1 hover:ring-orange-400/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60 text-orange-400">
                               <Shield className="w-4 h-4" />
                               Panel Administrador
                             </Link>
@@ -344,14 +287,7 @@ export function Header() {
                         <DropdownMenuSeparator className="bg-slate-700" />
                         <DropdownMenuItem
                           onClick={handleLogout}
-                          className={`cursor-pointer rounded-md transition-all duration-200
-                                      text-red-400 focus:text-red-400
-                                      hover:bg-red-400/10
-                                      hover:shadow-[0_0_18px_rgba(248,113,113,0.35)]
-                                      hover:ring-1 hover:ring-red-400/40
-                                      focus-visible:outline-none
-                                      focus-visible:ring-2 focus-visible:ring-red-400/60
-                                      ${loggingOut ? "opacity-60 pointer-events-none" : ""}`}
+                          className={`cursor-pointer rounded-md transition-all duration-200 text-red-400 focus:text-red-400 hover:bg-red-400/10 hover:shadow-[0_0_18px_rgba(248,113,113,0.35)] hover:ring-1 hover:ring-red-400/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 ${loggingOut ? "opacity-60 pointer-events-none" : ""}`}
                         >
                           <LogOut className="w-4 h-4" />
                           {loggingOut ? "Cerrando..." : "Cerrar sesión"}

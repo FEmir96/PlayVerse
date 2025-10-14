@@ -274,4 +274,15 @@ export default defineSchema({
   })
     .index("by_user_time", ["userId", "createdAt"])
     .index("by_ad_time", ["adId", "createdAt"]),
+
+  // 🛒 Carrito
+  cartItems: defineTable({
+    userId: v.id("profiles"),
+    gameId: v.id("games"),
+    createdAt: v.number(),
+  })
+    // permite q.eq("userId", userId)
+    .index("by_user", ["userId", "createdAt"])
+    // permite q.eq("userId", userId).eq("gameId", gameId)
+    .index("by_user_game", ["userId", "gameId"]),
 });

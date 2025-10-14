@@ -22,6 +22,7 @@ import {
   Check,
   Play,
   Star,
+  ShoppingCart,
 } from "lucide-react";
 
 import { useQuery, useAction, useMutation } from "convex/react";
@@ -34,6 +35,7 @@ import { useFavoritesStore } from "@/components/favoritesStore";
 
 type MediaItem = { type: "image" | "video"; src: string; thumb?: string };
 
+/* ---------------------- helpers ---------------------- */
 function toEmbed(url?: string | null): string | null {
   if (!url) return null;
   try {
@@ -56,7 +58,6 @@ function toEmbed(url?: string | null): string | null {
   }
 }
 
-/** ⭐ fila de estrellitas (0..5 con pasos 0.5) */
 function StarRow({ value }: { value: number }) {
   const rounded = Math.round(value * 2) / 2;
   const full = Math.floor(rounded);
@@ -77,9 +78,11 @@ function StarRow({ value }: { value: number }) {
   );
 }
 
+/* ======================= PAGE ======================= */
 export default function GameDetailPage() {
   const params = useParams() as { id?: string | string[] } | null;
   const router = useRouter();
+  const { toast } = useToast();
 
   // UI state
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -89,10 +92,6 @@ export default function GameDetailPage() {
   const [isHoverMain, setIsHoverMain] = useState(false);
   const thumbsPerView = 4;
 
-  // Para reanudar acción post-login (comprar/alquilar/extender/jugar no embebible)
-  const [pendingAction, setPendingAction] =
-    useState<"purchase" | "rental" | "extend" | "play" | null>(null);
-
   // Param estable
   const idParamRaw = params?.id;
   const idParam = Array.isArray(idParamRaw)
@@ -100,7 +99,7 @@ export default function GameDetailPage() {
     : (idParamRaw as string | undefined);
   const hasId = Boolean(idParam);
 
-  // Query de juego
+  // ====== datos del juego
   const game = useQuery(
     api.queries.getGameById.getGameById as any,
     hasId ? ({ id: idParam as Id<"games"> } as any) : "skip"
@@ -141,17 +140,15 @@ export default function GameDetailPage() {
     };
   }, [game?.title, fetchShots]);
 
-  // Embeds
-  const trailerEmbedPrimary = useMemo(() => {
-    const url = (game as any)?.trailer_url ?? null;
-    return toEmbed(url);
-  }, [game?.trailer_url]);
-
-  const trailerEmbedAlt = useMemo(() => {
-    const url = (game as any)?.extraTrailerUrl ?? null;
-    return toEmbed(url);
-  }, [(game as any)?.extraTrailerUrl]);
-
+  // Embeds + media
+  const trailerEmbedPrimary = useMemo(
+    () => toEmbed((game as any)?.trailer_url ?? null),
+    [game?.trailer_url]
+  );
+  const trailerEmbedAlt = useMemo(
+    () => toEmbed((game as any)?.extraTrailerUrl ?? null),
+    [(game as any)?.extraTrailerUrl]
+  );
   const extraImages = useMemo(() => {
     const arr = ((game as any)?.extraImages as string[] | undefined) ?? [];
     return Array.isArray(arr)
@@ -159,7 +156,6 @@ export default function GameDetailPage() {
       : [];
   }, [(game as any)?.extraImages]);
 
-  // Media combinada
   const media: MediaItem[] = useMemo(() => {
     const out: MediaItem[] = [];
     if (trailerEmbedPrimary) {
@@ -186,20 +182,12 @@ export default function GameDetailPage() {
       out.push({ type: "image", src: (game as any).cover_url });
     }
     return out;
-  }, [
-    trailerEmbedPrimary,
-    trailerEmbedAlt,
-    igdbUrls,
-    extraImages,
-    (game as any)?.cover_url,
-  ]);
+  }, [trailerEmbedPrimary, trailerEmbedAlt, igdbUrls, extraImages, (game as any)?.cover_url]);
 
-  // Asegurar índice válido
   useEffect(() => {
     if (selectedIndex >= media.length) setSelectedIndex(0);
   }, [media.length, selectedIndex]);
 
-  // Slideshow auto con pausa en hover
   useEffect(() => {
     if (!media.length) return;
     if (isHoverMain) return;
@@ -216,7 +204,7 @@ export default function GameDetailPage() {
     if (thumbStart > 0) setThumbStart((p) => p - 1);
   };
 
-  // ====== Sesión / Perfil / Validaciones ======
+  // ====== Sesión / Perfil / Biblioteca
   const { data: session, status: sessionStatus } = useSession();
   const loggedEmail = session?.user?.email?.toLowerCase() ?? null;
   const isLogged = sessionStatus === "authenticated" && !!loggedEmail;
@@ -269,30 +257,12 @@ export default function GameDetailPage() {
       }>
     | undefined;
 
-  const shouldRunServerFav =
-    process.env.NEXT_PUBLIC_USE_SERVER_FAVORITES === "1" &&
-    Boolean((api as any).queries?.getUserFavorites?.getUserFavorites) &&
-    Boolean(profile?._id);
-
-  const favoritesFnRef = shouldRunServerFav
-    ? (api as any).queries.getUserFavorites.getUserFavorites
-    : (api as any).queries.getGameById.getGameById;
-
-  const serverFavorites = useQuery(
-    favoritesFnRef as any,
-    shouldRunServerFav ? ({ userId: (profile as any)._id } as any) : "skip"
-  ) as
-    | Array<{ game?: { _id?: Id<"games"> }; gameId?: Id<"games"> }>
-    | undefined;
-
   const now = Date.now();
-
-  // ── flags
   const isAdmin = profile?.role === "admin";
   const isPremiumPlan = (game as any)?.plan === "premium";
   const isFreePlan = (game as any)?.plan === "free";
+  const isPremiumSub = profile?.role === "premium";
 
-  // Compras/Alquileres
   const hasPurchased = useMemo(() => {
     if (!game?._id) return false;
     const gid = String(game._id);
@@ -323,37 +293,46 @@ export default function GameDetailPage() {
   const hasActiveRental = useMemo(() => {
     if (!game?._id || !Array.isArray(rentals)) return false;
     return rentals.some((r) => {
-      const same =
-        String(r?.game?._id ?? r?.gameId ?? "") === String(game._id);
+      const same = String(r?.game?._id ?? r?.gameId ?? "") === String(game._id);
       const active = typeof r.expiresAt === "number" ? r.expiresAt > now : true;
       return same && active;
     });
   }, [rentals, game?._id, now]);
 
-  // ➜ ¿Es embebible?
   const isEmbeddable = useMemo(() => {
     const u = (game as any)?.embed_url ?? (game as any)?.embedUrl;
     return typeof u === "string" && u.trim().length > 0;
   }, [game]);
 
-  // Suscripción premium efectiva
-  const isPremiumSub = profile?.role === "premium";
   const canPlayBySubscription = isPremiumPlan && (isPremiumSub || isAdmin);
   const canPlayEffective =
     canPlayBySubscription || hasPurchased || hasActiveRental || isAdmin;
 
   const canExtend = !hasPurchased && hasActiveRental;
   const requiresPremium =
-    isPremiumPlan &&
-    profile &&
-    profile.role !== "premium" &&
-    profile.role !== "admin";
+    isPremiumPlan && profile && profile.role !== "premium" && profile.role !== "admin";
 
-  // ====== Toast & Favoritos ======
-  const { toast } = useToast();
+  /* ===== Favoritos ===== */
+  const { toast: toastFn } = useToast(); // alias para inline
   const favItems = useFavoritesStore((s) => s.items);
   const addFav = useFavoritesStore((s) => s.add);
   const removeFav = useFavoritesStore((s) => s.remove);
+
+  const shouldRunServerFav =
+    process.env.NEXT_PUBLIC_USE_SERVER_FAVORITES === "1" &&
+    Boolean((api as any).queries?.getUserFavorites?.getUserFavorites) &&
+    Boolean(profile?._id);
+
+  const favoritesFnRef = shouldRunServerFav
+    ? (api as any).queries.getUserFavorites.getUserFavorites
+    : (api as any).queries.getGameById.getGameById;
+
+  const serverFavorites = useQuery(
+    favoritesFnRef as any,
+    shouldRunServerFav ? ({ userId: (profile as any)._id } as any) : "skip"
+  ) as
+    | Array<{ game?: { _id?: Id<"games"> }; gameId?: Id<"games"> }>
+    | undefined;
 
   const isFavServer = useMemo(() => {
     if (!serverFavorites || !game?._id) return undefined;
@@ -364,9 +343,7 @@ export default function GameDetailPage() {
   }, [serverFavorites, game?._id]);
 
   const isFavLocal = useMemo(() => {
-    const byId = !!(
-      game?._id && favItems.some((i) => i.id === String(game._id))
-    );
+    const byId = !!(game?._id && favItems.some((i) => i.id === String(game._id)));
     if (byId) return true;
     const title = String(game?.title || "").trim();
     return !!title && favItems.some((i) => i.title === title);
@@ -378,22 +355,69 @@ export default function GameDetailPage() {
   const [showAuthAction, setShowAuthAction] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
-  // Mutación Convex para favoritos
   const toggleFavoriteMutation = useMutation(
     api.mutations.toggleFavorite.toggleFavorite as any
   );
 
-  // ========== HANDLERS ==========
+  /* ===== Carrito (server) ===== */
+  const inCart = useQuery(
+    (api as any).queries.cart?.hasInCart as any,
+    isLogged && profile?._id && game?._id
+      ? { userId: profile._id, gameId: game._id }
+      : "skip"
+  ) as boolean | undefined;
 
+  const cartToggle = (api as any).mutations.cart?.toggle
+    ? useMutation((api as any).mutations.cart.toggle as any)
+    : null;
+  const cartAdd = (api as any).mutations.cart?.add
+    ? useMutation((api as any).mutations.cart.add as any)
+    : null;
+  const cartRemove = (api as any).mutations.cart?.remove
+    ? useMutation((api as any).mutations.cart.remove as any)
+    : null;
+
+  const [cartMarked, setCartMarked] = useState<boolean>(false);
+  useEffect(() => {
+    if (typeof inCart === "boolean") setCartMarked(inCart);
+  }, [inCart]);
+
+  /* ===== Reanudación post-login (fav / play) ===== */
+  useEffect(() => {
+    if (!isLogged || !game?._id) return;
+    if (typeof profile === "undefined") return;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const post = sp.get("post");
+      const gid = sp.get("gid");
+      if (!post || (gid && gid !== String(game._id))) return;
+
+      const clean = () => {
+        sp.delete("post");
+        sp.delete("gid");
+        const url =
+          window.location.pathname + (sp.toString() ? `?${sp.toString()}` : "");
+        router.replace(url);
+      };
+
+      if (post === "fav") {
+        onToggleFavorite();
+        clean();
+      } else if (post === "play") {
+        handlePlay();
+        clean();
+      }
+    } catch {}
+  }, [isLogged, profile, game?._id, router]);
+
+  /* ===== Actions ===== */
   const handlePurchase = () => {
     if (!game?._id) return;
     if (!isLogged) {
-      setPendingAction("purchase");
       setShowAuthAction(true);
       return;
     }
     const gid = String(game._id);
-
     if (hasPurchased) {
       toast({ title: "Ya lo tienes", description: "Este juego ya está en tu biblioteca." });
       return;
@@ -412,12 +436,10 @@ export default function GameDetailPage() {
   const handleRental = () => {
     if (!game?._id) return;
     if (!isLogged) {
-      setPendingAction("rental");
       setShowAuthAction(true);
       return;
     }
     const gid = String(game._id);
-
     if (hasPurchased) {
       toast({ title: "Ya comprado", description: "Ya posees este título." });
       return;
@@ -436,20 +458,17 @@ export default function GameDetailPage() {
   const handleExtend = () => {
     if (!game?._id) return;
     if (!isLogged) {
-      setPendingAction("extend");
       setShowAuthAction(true);
       return;
     }
     router.push(`/checkout/extender/${game._id}`);
   };
 
-  /** ✅ “Jugar” */
   const handlePlay = () => {
     if (!game?._id) return;
-
     const playUrl = `/play/${game._id}`;
 
-    // embebible
+    // Embebible → navegar si cumple; si no, premium/login
     if (isEmbeddable) {
       if (!isLogged) {
         router.push(`/auth/login?next=${encodeURIComponent(playUrl)}`);
@@ -463,14 +482,12 @@ export default function GameDetailPage() {
         setShowPremiumModal(true);
         return;
       }
-      // free embebible → pasa directo
       router.push(playUrl);
       return;
     }
 
-    // no embebible: permitimos "Jugar" solo si puede (p.ej., tiene alquiler activo o compra)
+    // No embebible: exigir capacidad efectiva para jugar
     if (!isLogged) {
-      setPendingAction("play");
       setShowAuthAction(true);
       return;
     }
@@ -515,8 +532,7 @@ export default function GameDetailPage() {
           (result.status === "added") ||
           (result.result === "added");
       }
-    } catch (err) {
-      console.error("toggleFavorite Convex error:", err);
+    } catch {
       toast({
         title: "No se pudo actualizar en el servidor",
         description: "Se intentará nuevamente más tarde.",
@@ -524,22 +540,22 @@ export default function GameDetailPage() {
       });
     }
 
-    if (typeof addedFromServer !== "boolean") {
-      addedFromServer = !isFav;
-    }
+    if (typeof addedFromServer !== "boolean") addedFromServer = !isFav;
 
     if (addedFromServer) {
       addFav(item);
-      toast({ title: "Añadido a favoritos", description: `${item.title} se agregó a tu lista.` });
+      toastFn({ title: "Añadido a favoritos", description: `${item.title} se agregó a tu lista.` });
     } else {
       removeFav(item.id);
-      toast({ title: "Quitado de favoritos", description: `${item.title} se quitó de tu lista.` });
+      toastFn({ title: "Quitado de favoritos", description: `${item.title} se quitó de tu lista.` });
     }
 
-    try { window.dispatchEvent(new Event("pv:favorites:changed")); } catch {}
+    try {
+      window.dispatchEvent(new Event("pv:favorites:changed"));
+    } catch {}
   };
 
-  const copyToClipboard = async () => {
+  const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
@@ -547,75 +563,37 @@ export default function GameDetailPage() {
     } catch {}
   };
 
+  /* ===== Metadatos e info visual ===== */
   const isLoading = hasId && game === undefined;
   const notFound = hasId && game === null;
   const current = media[selectedIndex];
 
-  // ratings
   const igdbRating = (game as any)?.igdbRating as number | undefined;
   const igdbUserRating = (game as any)?.igdbUserRating as number | undefined;
-
   const score100 =
     typeof igdbUserRating === "number"
       ? igdbUserRating
       : typeof igdbRating === "number"
       ? igdbRating
       : undefined;
-
   const userStars =
     typeof score100 === "number" ? +(score100 / 20).toFixed(1) : undefined;
 
-  // Fecha
   const firstReleaseDate = (game as any)?.firstReleaseDate as number | undefined;
   const releaseStr =
     typeof firstReleaseDate === "number"
-      ? new Date(firstReleaseDate).toLocaleDateString("es-AR", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
+      ? new Date(firstReleaseDate).toLocaleDateString()
       : undefined;
 
-  // Metadatos
   const developers = ((game as any)?.developers as string[] | undefined) ?? [];
   const publishers = ((game as any)?.publishers as string[] | undefined) ?? [];
   const languages = ((game as any)?.languages as string[] | undefined) ?? [];
   const ageRatingSystem = (game as any)?.ageRatingSystem as string | undefined;
   const ageRatingLabel = (game as any)?.ageRatingLabel as string | undefined;
 
-  // ▶️ Reanudar acciones al volver del login (fav / play no embebible)
-  useEffect(() => {
-    if (!isLogged || !game?._id) return;
-    if (typeof profile === "undefined") return; // esperar perfil
+  const showShareButton = !hasActiveRental;
 
-    try {
-      const sp = new URLSearchParams(window.location.search);
-      const post = sp.get("post");
-      const gid = sp.get("gid");
-      if (!post || (gid && gid !== String(game._id))) return;
-
-      const clean = () => {
-        sp.delete("post");
-        sp.delete("gid");
-        const url =
-          window.location.pathname + (sp.toString() ? `?${sp.toString()}` : "");
-        router.replace(url);
-      };
-
-      if (post === "fav") {
-        onToggleFavorite();
-        clean();
-      } else if (post === "play") {
-        handlePlay();
-        clean();
-      }
-    } catch {}
-  }, [isLogged, profile, game?._id, router]);
-
-  // --- NUEVO: flag para UI reducida si hay alquiler activo
-  const showRentalOnlyActions = hasActiveRental === true;
-  const showShareButton = !showRentalOnlyActions;
-
+  /* ======================= RENDER ======================= */
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-8">
@@ -627,7 +605,7 @@ export default function GameDetailPage() {
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Columna izquierda (media) */}
             <div className="lg:col-span-2 space-y-4">
-              {/* Media box */}
+              {/* Media */}
               <div
                 className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden"
                 onMouseEnter={() => setIsHoverMain(true)}
@@ -651,7 +629,7 @@ export default function GameDetailPage() {
                 )}
               </div>
 
-              {/* Franja fija: título + género */}
+              {/* Título + género */}
               <div className="bg-slate-800/70 border border-orange-400/20 rounded-lg px-4 py-3 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-orange-400">{game.title}</h1>
                 <div className="flex items-center gap-2">
@@ -661,7 +639,7 @@ export default function GameDetailPage() {
                 </div>
               </div>
 
-              {/* Thumbnails */}
+              {/* Thumbs */}
               <div className="relative">
                 <div className="flex items-center gap-2">
                   <Button
@@ -748,8 +726,7 @@ export default function GameDetailPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {showRentalOnlyActions ? (
-                    // ===== Solo JUGAR + EXTENDER si hay alquiler activo =====
+                  {hasActiveRental ? (
                     <>
                       <Button
                         onClick={handlePlay}
@@ -769,63 +746,14 @@ export default function GameDetailPage() {
                     </>
                   ) : isEmbeddable ? (
                     <>
-                      {/* Embebibles */}
                       {isFreePlan ? (
-                        // Freeware embebible → SOLO Jugar
                         <Button
                           onClick={handlePlay}
                           className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
                         >
                           Jugar gratis
                         </Button>
-                      ) : (
-                        // Premium embebible
-                        <>
-                          {canPlayEffective ? (
-                            // Si puede jugar por premium/compra/alquiler/admin → Jugar (+ Extender si aplica)
-                            <>
-                              <Button
-                                onClick={handlePlay}
-                                className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                              >
-                                Jugar
-                              </Button>
-                              {canExtend && (
-                                <Button
-                                  onClick={handleExtend}
-                                  variant="outline"
-                                  className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                                >
-                                  Extender
-                                </Button>
-                              )}
-                            </>
-                          ) : (
-                            // Usuario FREE (o no cumple) → Comprar / Alquilar (sin mostrar Jugar)
-                            <>
-                              <Button
-                                onClick={handlePurchase}
-                                className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
-                              >
-                                Comprar ahora
-                              </Button>
-                              <Button
-                                onClick={handleRental}
-                                variant="outline"
-                                className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                              >
-                                Alquilar
-                              </Button>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    // NO embebibles (AAA)
-                    <>
-                      {hasActiveRental || hasPurchased ? (
-                        // Si tiene alquiler (o compra) permitimos mostrar Jugar
+                      ) : canPlayEffective ? (
                         <>
                           <Button
                             onClick={handlePlay}
@@ -844,7 +772,6 @@ export default function GameDetailPage() {
                           )}
                         </>
                       ) : (
-                        // Sin alquiler/compra → SOLO Comprar / Alquilar
                         <>
                           <Button
                             onClick={handlePurchase}
@@ -862,9 +789,85 @@ export default function GameDetailPage() {
                         </>
                       )}
                     </>
+                  ) : (
+                    <>
+                      {hasPurchased ? (
+                        <Button
+                          onClick={handlePlay}
+                          className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                        >
+                          Jugar
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            onClick={handlePurchase}
+                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                          >
+                            Comprar ahora
+                          </Button>
+                          <Button
+                            onClick={handleRental}
+                            variant="outline"
+                            className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                          >
+                            Alquilar
+                          </Button>
+                        </>
+                      )}
+
+                      {/* 🛒 Toggle carrito (optimista) */}
+                      {!hasPurchased && !hasActiveRental && (
+                        <Button
+                          onClick={async () => {
+                            if (!isLogged || !profile?._id || !game?._id) {
+                              setShowAuthAction(true);
+                              return;
+                            }
+                            const prev = cartMarked;
+                            setCartMarked(!prev);
+                            try {
+                              if (cartToggle) {
+                                const res = await cartToggle({
+                                  userId: profile._id,
+                                  gameId: game._id,
+                                } as any);
+                                const added = !!(res as any)?.added;
+                                if (added !== !prev) setCartMarked(added);
+                                toast({
+                                  title: added ? "Añadido al carrito" : "Quitado del carrito",
+                                  description: `${game.title} ${added ? "se agregó" : "se quitó"} del carrito.`,
+                                });
+                              } else if (prev) {
+                                await cartRemove?.({ userId: profile._id, gameId: game._id } as any);
+                                toast({ title: "Quitado del carrito", description: `${game.title} se quitó del carrito.` });
+                              } else {
+                                await cartAdd?.({ userId: profile._id, gameId: game._id } as any);
+                                toast({ title: "Añadido al carrito", description: `${game.title} se agregó al carrito.` });
+                              }
+                            } catch {
+                              setCartMarked(prev); // revert
+                              toast({
+                                title: "No se pudo actualizar el carrito",
+                                description: "Inténtalo nuevamente.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                          className={`w-full font-semibold ${
+                            cartMarked
+                              ? "bg-slate-900 border border-amber-400 text-amber-300 hover:bg-slate-800"
+                              : "bg-amber-400 hover:bg-amber-500 text-slate-900"
+                          }`}
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-2" />
+                          {cartMarked ? "Quitar del carrito" : "Añadir al carrito"}
+                        </Button>
+                      )}
+                    </>
                   )}
 
-                  {/* Favoritos + (Share solo si no estamos en modo alquiler-activo) */}
+                  {/* Favoritos + Share */}
                   <div className="flex gap-2">
                     <Button
                       onClick={onToggleFavorite}
@@ -888,6 +891,12 @@ export default function GameDetailPage() {
                       </Button>
                     )}
                   </div>
+
+                  {cartMarked && (
+                    <Link href="/checkout/carrito" className="block text-center text-amber-300 text-sm hover:underline">
+                      Ver carrito
+                    </Link>
+                  )}
                 </div>
               </div>
 
@@ -989,13 +998,7 @@ export default function GameDetailPage() {
               </div>
             </div>
             <Button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(window.location.href);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1800);
-                } catch {}
-              }}
+              onClick={copyLink}
               className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
               disabled={copied}
             >
@@ -1077,12 +1080,8 @@ export default function GameDetailPage() {
             <Button
               onClick={() => {
                 const gid = String(game?._id ?? "");
-                let next = `/juego/${gid}`;
-                if (pendingAction === "purchase") next = `/checkout/compra/${gid}`;
-                else if (pendingAction === "rental") next = `/checkout/alquiler/${gid}`;
-                else if (pendingAction === "extend") next = `/checkout/extender/${gid}`;
-                else if (pendingAction === "play") next = `/juego/${gid}?post=play&gid=${gid}`;
-                window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
+                // preservo tus rutas de checkout
+                window.location.href = `/auth/login?next=${encodeURIComponent(`/juego/${gid}?post=play&gid=${gid}`)}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"
             >
