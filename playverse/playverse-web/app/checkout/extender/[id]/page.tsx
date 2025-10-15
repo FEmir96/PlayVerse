@@ -1,11 +1,11 @@
+// playverse-web/app/checkout/extender/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
-import type { FunctionReference } from "convex/server";
-import { api } from "@convex";
+import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
 import { Button } from "@/components/ui/button";
@@ -13,25 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-
-const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
-
-const HAS_PM_QUERY = Boolean((api as any)["queries/getPaymentMethods"]?.getPaymentMethods);
-const getPaymentMethodsRef = (HAS_PM_QUERY
-  ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
-  : (api as any)["queries/getUserByEmail"].getUserByEmail) as FunctionReference<"query">;
-
-const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
-const getGameByIdRef = (HAS_GET_BY_ID
-  ? (api as any)["queries/getGameById"].getGameById
-  : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
-
-const extendRentalRef = (api as any).transactions.extendRental as FunctionReference<"mutation">;
-const savePaymentMethodRef =
-  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
-const makePaymentRef =
-  (api as any)["mutations/makePayment"].makePayment as FunctionReference<"mutation">;
 
 type PM = {
   _id: string;
@@ -101,13 +82,11 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   // Identidad
   const { data: session, status } = useSession();
 
-  // ✅ Solo session
   const loginEmail = useMemo(
     () => (status === "authenticated" ? session?.user?.email?.toLowerCase() ?? null : null),
     [status, session?.user?.email]
   );
 
-  // Guard de sesión
   useEffect(() => {
     if (status === "loading") return;
     if (!loginEmail) {
@@ -117,7 +96,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   // Perfil
   const profile = useQuery(
-    getUserByEmailRef,
+    api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
   ) as { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
 
@@ -125,8 +104,8 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   // Juego
   const game = useQuery(
-    getGameByIdRef as any,
-    HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
+    api.queries.getGameById?.getGameById as any,
+    api.queries.getGameById?.getGameById ? ({ id: params.id as Id<"games"> } as any) : "skip"
   ) as any | null | undefined;
 
   const { isGamePremium, premiumReason } = useMemo(() => {
@@ -136,14 +115,15 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   }, [game, forcePremium]);
 
   // Métodos guardados
+  const pmSupported = Boolean(api.queries.getPaymentMethods?.getPaymentMethods);
   const methods = useQuery(
-    getPaymentMethodsRef as any,
-    HAS_PM_QUERY && profile?._id ? { userId: profile._id } : undefined
+    (api.queries.getPaymentMethods?.getPaymentMethods as any) || (null as any),
+    pmSupported && profile?._id ? { userId: profile._id } : "skip"
   ) as PM[] | undefined;
 
-  const savePaymentMethod = useMutation(savePaymentMethodRef);
-  const extendRental = useMutation(extendRentalRef);
-  const makePayment = useMutation(makePaymentRef);
+  const savePaymentMethod = useMutation(api.mutations.savePaymentMethod?.savePaymentMethod as any);
+  const extendRental = useMutation(api.transactions.extendRental as any);
+  const makePayment = useMutation(api.mutations.makePayment?.makePayment as any);
 
   // UI
   const [weeks, setWeeks] = useState(2);
@@ -157,7 +137,6 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   const [showUpgrade, setShowUpgrade] = useState(false);
 
-  // Abrir modal automáticamente si corresponde
   const openedOnce = useRef(false);
   useEffect(() => {
     logE("modal-check", {
@@ -225,8 +204,14 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   useEffect(() => {
     const keys = game ? Object.keys(game as any) : [];
-    logE("status:", status, "email:", loginEmail, "role:", userRole, "game.keys:", keys, "isGamePremium:", isGamePremium, "premiumReason:", premiumReason, "gameId:", (game as any)?._id);
-  }, [status, loginEmail, userRole, isGamePremium, premiumReason, game]);
+    if (showDebug) {
+      logE(
+        "status:", status, "email:", loginEmail, "role:", userRole,
+        "game.keys:", keys, "isGamePremium:", isGamePremium,
+        "premiumReason:", premiumReason, "gameId:", (game as any)?._id
+      );
+    }
+  }, [status, loginEmail, userRole, isGamePremium, premiumReason, game, showDebug]);
 
   const onExtend = async () => {
     if (!profile?._id || !game?._id) return;
@@ -237,36 +222,37 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
     }
 
     try {
-      if (!useSaved && rememberNew) {
+      if (!useSaved && rememberNew && api.mutations.savePaymentMethod?.savePaymentMethod) {
         await savePaymentMethod({
           userId: profile._id,
           fullNumber: number,
           exp,
           cvv: cvc,
           brand: undefined,
-        });
+        } as any);
       }
 
-      await makePayment({
-        userId: profile._id,
-        amount: total,
-        currency: "USD",
-        provider: "manual",
-      });
+      if (api.mutations.makePayment?.makePayment) {
+        await makePayment({
+          userId: profile._id,
+          amount: total,
+          currency: "USD",
+          provider: "manual",
+        } as any);
+      }
 
       await extendRental({
         userId: profile._id,
         gameId: game._id,
         weeks,
         weeklyPrice,
-      });
+      } as any);
 
       toast({
         title: "Alquiler extendido",
         description: "Actualizamos la fecha de vencimiento correctamente.",
       });
 
-      // ✅ Siempre al Home
       startTransition(() => {
         router.replace("/");
         router.refresh();

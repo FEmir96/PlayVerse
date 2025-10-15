@@ -1,11 +1,11 @@
+// playverse-web/app/checkout/compra/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
-import type { FunctionReference } from "convex/server";
-import { api } from "@convex";
+import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
 import { Button } from "@/components/ui/button";
@@ -13,37 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
-// —— Refs —— 
-const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
-
-const HAS_PM_QUERY = Boolean((api as any)["queries/getPaymentMethods"]?.getPaymentMethods);
-const getPaymentMethodsRef = (HAS_PM_QUERY
-  ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
-  : (api as any)["queries/getUserByEmail"].getUserByEmail) as FunctionReference<"query">;
-
-const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
-const getGameByIdRef = (HAS_GET_BY_ID
-  ? (api as any)["queries/getGameById"].getGameById
-  : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
-
-// ✅ biblioteca para chequear propiedad
-const getUserLibraryRef =
-  (api as any)["queries/getUserLibrary"].getUserLibrary as FunctionReference<"query">;
-
-const purchaseGameRef = (api as any).transactions.purchaseGame as FunctionReference<"mutation">;
-const savePaymentMethodRef =
-  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
-
-type PM = {
-  _id: string;
-  brand: "visa" | "mastercard" | "amex" | "otro";
-  last4: string;
-  expMonth: number;
-  expYear: number;
-};
-
-/* === Detectar premium === */
+// Detectar premium
 function isPremiumFromGame(g: any): boolean {
   if (!g) return false;
   if (typeof g.is_premium === "boolean") return g.is_premium;
@@ -53,7 +23,6 @@ function isPremiumFromGame(g: any): boolean {
   return /premium/.test(guess);
 }
 
-/* === TÍTULO “Boca naranja” reutilizable === */
 function CheckoutTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-center mb-6">
@@ -72,13 +41,20 @@ function CheckoutTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+type PM = {
+  _id: string;
+  brand: "visa" | "mastercard" | "amex" | "otro";
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
 export default function PurchaseCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
 
   const { data: session, status } = useSession();
 
-  // ✅ Solo session
   const loginEmail = useMemo(
     () => (status === "authenticated" ? session?.user?.email?.toLowerCase() ?? null : null),
     [status, session?.user?.email]
@@ -87,13 +63,12 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   useEffect(() => {
     if (status === "loading") return;
     if (!loginEmail) {
-      // ✅ Siempre al Home tras login
       router.replace(`/auth/login?next=%2F`);
     }
   }, [status, loginEmail, router]);
 
   // Perfil + rol
-  const profile = useQuery(getUserByEmailRef, loginEmail ? { email: loginEmail } : "skip") as
+  const profile = useQuery(api.queries.getUserByEmail.getUserByEmail as any, loginEmail ? { email: loginEmail } : "skip") as
     | { _id: Id<"profiles">; role?: "free" | "premium" | "admin" }
     | null
     | undefined;
@@ -101,8 +76,8 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   // Juego
   const game = useQuery(
-    getGameByIdRef as any,
-    HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
+    api.queries.getGameById?.getGameById as any,
+    api.queries.getGameById?.getGameById ? ({ id: params.id as Id<"games"> } as any) : "skip"
   ) as
     | {
         _id: Id<"games">;
@@ -120,20 +95,21 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   const isGamePremium = useMemo(() => isPremiumFromGame(game), [game]);
 
-  // Métodos guardados
+  // Métodos guardados (si hay query)
+  const pmSupported = Boolean(api.queries.getPaymentMethods?.getPaymentMethods);
   const methods = useQuery(
-    getPaymentMethodsRef as any,
-    HAS_PM_QUERY && profile?._id ? { userId: profile._id } : undefined
+    (api.queries.getPaymentMethods?.getPaymentMethods as any) || (null as any),
+    pmSupported && profile?._id ? { userId: profile._id } : "skip"
   ) as PM[] | undefined;
 
-  // ✅ Biblioteca del usuario para validar propiedad
+  // Biblioteca
   const library = useQuery(
-    getUserLibraryRef as any,
-    profile?._id ? { userId: profile._id } : undefined
+    api.queries.getUserLibrary?.getUserLibrary as any,
+    profile?._id && api.queries.getUserLibrary?.getUserLibrary ? { userId: profile._id } : "skip"
   ) as any[] | undefined;
 
-  const savePaymentMethod = useMutation(savePaymentMethodRef);
-  const purchaseGame = useMutation(purchaseGameRef);
+  const savePaymentMethod = useMutation(api.mutations.savePaymentMethod?.savePaymentMethod as any);
+  const purchaseGame = useMutation(api.transactions.purchaseGame as any);
 
   // UI
   const [useSaved, setUseSaved] = useState(true);
@@ -144,7 +120,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
 
-  // Precio base (tarifa plana).
   const price = useMemo(() => {
     const base = typeof (game as any)?.price_buy === "number" ? (game as any).price_buy : 49.99;
     return base;
@@ -160,7 +135,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     return "otro";
   };
 
-  // fallback: si no hay métodos en la tabla, uso uno del perfil
   const pmFromProfile: PM | null = useMemo(() => {
     const p: any = profile;
     if (!p) return null;
@@ -195,7 +169,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
-  /** ✅ ¿Ya es dueño del juego? */
+  /** ¿Ya es dueño del juego? */
   const alreadyOwned = useMemo(() => {
     if (!library || !game?._id) return false;
     const gid = String(game._id);
@@ -207,7 +181,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     });
   }, [library, game?._id]);
 
-  // ⛔️ Evitar toast "ya lo tienes" después de una compra exitosa
   const ownedToastShownRef = useRef(false);
   const suppressOwnedToastRef = useRef(false);
 
@@ -233,24 +206,22 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     }
 
     try {
-      // 🔕 No mostrar el toast de "ya lo tienes" por cambios de librería post-compra
       suppressOwnedToastRef.current = true;
 
-      if (!useSaved && rememberNew) {
+      if (!useSaved && rememberNew && api.mutations.savePaymentMethod?.savePaymentMethod) {
         await savePaymentMethod({
           userId: profile._id,
           fullNumber: number,
           exp,
           cvv: cvc,
           brand: undefined,
-        });
+        } as any);
       }
 
-      await purchaseGame({ userId: profile._id, gameId: game._id, amount: price });
+      await purchaseGame({ userId: profile._id, gameId: game._id, amount: price } as any);
 
       toast({ title: "Compra confirmada", description: "Te enviamos un email con los detalles." });
 
-      // ✅ Siempre al Home
       startTransition(() => {
         router.replace("/");
         router.refresh();
@@ -261,14 +232,13 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
         }
       }, 600);
     } catch (e: any) {
-      // Si falló, volvemos a permitir el toast
       suppressOwnedToastRef.current = false;
 
       const msg = String(e?.message || "");
       if (msg.includes("ALREADY_OWNED")) {
         toast({ title: "Ya tienes este juego", description: "No es necesario volver a comprarlo." });
         return;
-        }
+      }
       toast({
         title: "No se pudo completar el pago",
         description: e?.message ?? "Intentá nuevamente.",
@@ -290,12 +260,11 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   return (
     <div className="container mx-auto px-4 py-10">
-      {/* === Título bonito === */}
       <CheckoutTitle>Confirmar compra</CheckoutTitle>
       <p className="text-slate-300 text-center mb-8">Estás comprando:</p>
 
       <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Izquierda — COVER escalado y con buen encuadre */}
+        {/* Izquierda */}
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
 
@@ -313,7 +282,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
             </div>
           </div>
 
-          {/* Aviso según categoría/rol: compra permitida para free sin descuento */}
           {isGamePremium && userRole === "free" && (
             <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
               Este título es <b>Premium</b>. Como usuario <b>Free</b> podés <u>comprarlo</u> a <b>tarifa plana</b> (sin descuentos).
@@ -338,129 +306,121 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
             )}
           </div>
 
-          {(() => {
-            const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
-            if (primaryPM) {
-              return (
-                <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-white font-medium">Método de pago</p>
-                    <div className="flex items-center gap-2 text-sm">
-                      <label className="flex items-center gap-2">
-                        <Checkbox checked={useSaved} onCheckedChange={(v) => setUseSaved(v === true)} />
-                        Usar tarjeta guardada
-                      </label>
-                    </div>
-                  </div>
-
-                  {useSaved ? (
-                    <div className="flex items-center justify-between rounded-lg bg-slate-800 p-3">
-                      <div>
-                        <p className="text-slate-200 text-sm">{primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}</p>
-                        <p className="text-slate-400 text-xs">
-                          Expira {String(primaryPM.expMonth).padStart(2, "0")}/{String(primaryPM.expYear).slice(-2)}
-                        </p>
-                      </div>
-                      <span className="text-xs text-emerald-300">Seleccionada</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="text-slate-300 text-sm">Nombre del titular</label>
-                        <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
-                      </div>
-                      <div>
-                        <label className="text-slate-300 text-sm">Número de tarjeta</label>
-                        <Input
-                          value={number}
-                          onChange={(e) => {
-                            const d = e.target.value.replace(/\D/g, "").slice(0, 19);
-                            setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
-                          }}
-                          placeholder="4111 1111 1111 1111"
-                          className="bg-slate-700 border-slate-600 text-white mt-1"
-                          inputMode="numeric"
-                          autoComplete="cc-number"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-slate-300 text-sm">Fecha de expiración</label>
-                          <Input
-                            value={exp}
-                            onChange={(e) => {
-                              const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                              setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
-                            }}
-                            placeholder="MM/YY"
-                            className="bg-slate-700 border-slate-600 text-white mt-1"
-                            inputMode="numeric"
-                            autoComplete="cc-exp"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-slate-300 text-sm">CVC</label>
-                          <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 pt-1">
-                        <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
-                        <span className="text-slate-300 text-sm">Guardar método de pago</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            }
-
-            // Sin método guardado → formulario
-            return (
-              <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
-                <div>
-                  <label className="text-slate-300 text-sm">Nombre del titular</label>
-                  <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
-                </div>
-                <div>
-                  <label className="text-slate-300 text-sm">Número de tarjeta</label>
-                  <Input
-                    value={number}
-                    onChange={(e) => {
-                      const d = e.target.value.replace(/\D/g, "").slice(0, 19);
-                      setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
-                    }}
-                    placeholder="4111 1111 1111 1111"
-                    className="bg-slate-700 border-slate-600 text-white mt-1"
-                    inputMode="numeric"
-                    autoComplete="cc-number"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-slate-300 text-sm">Fecha de expiración</label>
-                    <Input
-                      value={exp}
-                      onChange={(e) => {
-                        const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                        setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
-                      }}
-                      placeholder="MM/YY"
-                      className="bg-slate-700 border-slate-600 text-white mt-1"
-                      inputMode="numeric"
-                      autoComplete="cc-exp"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-300 text-sm">CVC</label>
-                    <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
-                  <span className="text-slate-300 text-sm">Guardar método de pago</span>
+          {primaryPM ? (
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-white font-medium">Método de pago</p>
+                <div className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={useSaved} onCheckedChange={(v) => setUseSaved(v === true)} />
+                    Usar tarjeta guardada
+                  </label>
                 </div>
               </div>
-            );
-          })()}
+
+              {useSaved ? (
+                <div className="flex items-center justify-between rounded-lg bg-slate-800 p-3">
+                  <div>
+                    <p className="text-slate-200 text-sm">{primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}</p>
+                    <p className="text-slate-400 text-xs">
+                      Expira {String(primaryPM.expMonth).padStart(2, "0")}/{String(primaryPM.expYear).slice(-2)}
+                    </p>
+                  </div>
+                  <span className="text-xs text-emerald-300">Seleccionada</span>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-slate-300 text-sm">Nombre del titular</label>
+                    <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-slate-300 text-sm">Número de tarjeta</label>
+                    <Input
+                      value={number}
+                      onChange={(e) => {
+                        const d = e.target.value.replace(/\D/g, "").slice(0, 19);
+                        setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                      }}
+                      placeholder="4111 1111 1111 1111"
+                      className="bg-slate-700 border-slate-600 text-white mt-1"
+                      inputMode="numeric"
+                      autoComplete="cc-number"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-300 text-sm">Fecha de expiración</label>
+                      <Input
+                        value={exp}
+                        onChange={(e) => {
+                          const d = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                        }}
+                        placeholder="MM/YY"
+                        className="bg-slate-700 border-slate-600 text-white mt-1"
+                        inputMode="numeric"
+                        autoComplete="cc-exp"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-300 text-sm">CVC</label>
+                      <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                    <span className="text-slate-300 text-sm">Guardar método de pago</span>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
+              <div>
+                <label className="text-slate-300 text-sm">Nombre del titular</label>
+                <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+              </div>
+              <div>
+                <label className="text-slate-300 text-sm">Número de tarjeta</label>
+                <Input
+                  value={number}
+                  onChange={(e) => {
+                    const d = e.target.value.replace(/\D/g, "").slice(0, 19);
+                    setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                  }}
+                  placeholder="4111 1111 1111 1111"
+                  className="bg-slate-700 border-slate-600 text-white mt-1"
+                  inputMode="numeric"
+                  autoComplete="cc-number"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 text-sm">Fecha de expiración</label>
+                  <Input
+                    value={exp}
+                    onChange={(e) => {
+                      const d = e.target.value.replace(/\D/g, "").slice(0, 4);
+                      setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                    }}
+                    placeholder="MM/YY"
+                    className="bg-slate-700 border-slate-600 text-white mt-1"
+                    inputMode="numeric"
+                    autoComplete="cc-exp"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 text-sm">CVC</label>
+                  <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
+                <span className="text-slate-300 text-sm">Guardar método de pago</span>
+              </div>
+            </div>
+          )}
 
           <Button
             onClick={onPay}

@@ -36,6 +36,7 @@ import { useFavoritesStore } from "@/components/favoritesStore";
 type MediaItem = { type: "image" | "video"; src: string; thumb?: string };
 
 /* ---------------------- helpers ---------------------- */
+
 function toEmbed(url?: string | null): string | null {
   if (!url) return null;
   try {
@@ -76,6 +77,163 @@ function StarRow({ value }: { value: number }) {
       </span>
     </div>
   );
+}
+
+/* ======== helpers precios (robustos, no rompen nada existente) ======== */
+const num = (v: unknown): number | undefined => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string") {
+    // Normaliza "$ 2.499,00", "7,49", "2499.00", etc.
+    const s0 = v.trim().replace(/\s+/g, "");
+    const s1 = s0.replace(/[^\d.,-]/g, ""); // deja solo dígitos, coma, punto, signo
+    const hasComma = s1.includes(",");
+    const hasDot = s1.includes(".");
+    let s = s1;
+    if (hasComma && hasDot) {
+      // asume formato 1.234,56
+      s = s1.replace(/\./g, "").replace(",", ".");
+    } else if (hasComma) {
+      // asume coma como decimal
+      s = s1.replace(",", ".");
+    }
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+};
+
+type BestPriceHit = { path: string; val: number };
+
+/** 🔎 Fallback profundo: encuentra precio de COMPRA en cualquier parte del objeto (evita alquiler/semana) */
+function deepFindBuyPrice(game: any): number | undefined {
+  if (!game || typeof game !== "object") return undefined;
+
+  const EXCLUDE = /(rent|alquiler|rental|weekly|week|semana|suscrip|subscription|sub)/i;
+  const INCLUDE = /(buy|purchase|compra|permanent|perma|flat|price|precio)/i;
+
+  let best: BestPriceHit | null = null;
+
+  const walk = (val: any, path: string, depth: number) => {
+    if (depth > 6 || val == null) return;
+
+    if (typeof val === "object") {
+      for (const k of Object.keys(val)) {
+        walk((val as any)[k], path ? `${path}.${k}` : k, depth + 1);
+      }
+      return;
+    }
+
+    const n =
+      typeof val === "number"
+        ? (Number.isFinite(val) ? val : undefined)
+        : typeof val === "string"
+        ? (() => {
+            const s0 = val.trim().replace(/\s+/g, "");
+            const s1 = s0.replace(/[^\d.,-]/g, "");
+            const hasComma = s1.includes(",");
+            const hasDot = s1.includes(".");
+            let s = s1;
+            if (hasComma && hasDot) s = s1.replace(/\./g, "").replace(",", ".");
+            else if (hasComma) s = s1.replace(",", ".");
+            const nn = Number(s);
+            return Number.isFinite(nn) ? nn : undefined;
+          })()
+        : undefined;
+
+    if (n === undefined) return;
+
+    const p = path.toLowerCase();
+    if (EXCLUDE.test(p)) return;
+    if (!INCLUDE.test(p)) return;
+
+    if (!best) best = { path, val: n };
+  };
+
+  walk(game, "", 0);
+
+  // Log seguro (evitamos el problema de narrowing con 'never')
+  if (process.env.NODE_ENV !== "production") {
+    const hit = best as BestPriceHit | null;
+    if (hit) {
+      // eslint-disable-next-line no-console
+      console.info("🔎 pickBuyPrice fallback:", hit.path, "=>", hit.val);
+    }
+  }
+
+  return best != null ? (best as BestPriceHit).val : undefined;
+}
+
+function pickBuyPrice(game: any): number | undefined {
+  const direct =
+    num(game?.price_buy) ??
+    num(game?.priceBuy) ??
+    num(game?.buy_price) ??
+    num(game?.purchase_price) ??
+    num(game?.permanent_price) ??
+    num(game?.price_permanent) ??
+    num(game?.permanentPrice) ??
+    // español
+    num(game?.precio_compra) ??
+    num(game?.precioCompra) ??
+    num(game?.precio_permanente) ??
+    num(game?.precio) ?? // a veces guardan el precio de compra como "precio"
+    // genéricos
+    num(game?.price) ?? // si "price" es compra
+    num(game?.basePrice) ??
+    num(game?.flat_price) ??
+    num(game?.price_flat) ??
+    num(game?.flatPrice) ??
+    // anidados
+    num(game?.pricing?.buy) ??
+    num(game?.pricing?.purchase) ??
+    num(game?.prices?.buy) ??
+    num(game?.prices?.purchase) ??
+    // variantes en centavos
+    (typeof game?.priceBuyCents === "number" ? game.priceBuyCents / 100 : undefined) ??
+    (typeof game?.buyPriceCents === "number" ? game.buyPriceCents / 100 : undefined) ??
+    (typeof game?.prices?.buyCents === "number" ? game.prices.buyCents / 100 : undefined);
+
+  return direct ?? deepFindBuyPrice(game); // ⬅️ fallback inteligente
+}
+
+function pickRentPrice(game: any): number | undefined {
+  return (
+    num(game?.weekly_price) ??
+    num(game?.weeklyPrice) ??
+    num(game?.rent_price) ??
+    num(game?.rental_price) ??
+    num(game?.rentPrice) ??
+    num(game?.price_weekly) ??
+    num(game?.weekly) ??
+    // anidados
+    num(game?.pricing?.rent) ??
+    num(game?.prices?.rentWeekly) ??
+    // centavos
+    (typeof game?.rentalPriceCents === "number"
+      ? game.rentalPriceCents / 100
+      : undefined)
+  );
+}
+
+function pickCurrency(game: any): string {
+  return (
+    game?.currency ||
+    game?.prices?.currency ||
+    game?.pricing?.currency ||
+    "ARS"
+  );
+}
+
+function formatMoney(value: number, currency = "ARS", locale = "es-AR") {
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `$${value.toFixed(2)} ${currency}`;
+  }
 }
 
 /* ======================= PAGE ======================= */
@@ -313,7 +471,7 @@ export default function GameDetailPage() {
     isPremiumPlan && profile && profile.role !== "premium" && profile.role !== "admin";
 
   /* ===== Favoritos ===== */
-  const { toast: toastFn } = useToast(); // alias para inline
+  const { toast: toastFn } = useToast();
   const favItems = useFavoritesStore((s) => s.items);
   const addFav = useFavoritesStore((s) => s.add);
   const removeFav = useFavoritesStore((s) => s.remove);
@@ -410,6 +568,17 @@ export default function GameDetailPage() {
     } catch {}
   }, [isLogged, profile, game?._id, router]);
 
+  /* ====== Precios calculados (solo UI) ====== */
+  const currency = pickCurrency(game);
+  const baseBuy = pickBuyPrice(game);
+  const baseRent = pickRentPrice(game);
+  const isPremiumViewer = isPremiumSub || isAdmin;
+  const discountRate = isPremiumViewer ? 0.10 : 0;
+  const buyFinal =
+    typeof baseBuy === "number" ? baseBuy * (1 - discountRate) : undefined;
+  const rentFinal =
+    typeof baseRent === "number" ? baseRent * (1 - discountRate) : undefined;
+
   /* ===== Actions ===== */
   const handlePurchase = () => {
     if (!game?._id) return;
@@ -468,7 +637,6 @@ export default function GameDetailPage() {
     if (!game?._id) return;
     const playUrl = `/play/${game._id}`;
 
-    // Embebible → navegar si cumple; si no, premium/login
     if (isEmbeddable) {
       if (!isLogged) {
         router.push(`/auth/login?next=${encodeURIComponent(playUrl)}`);
@@ -486,7 +654,6 @@ export default function GameDetailPage() {
       return;
     }
 
-    // No embebible: exigir capacidad efectiva para jugar
     if (!isLogged) {
       setShowAuthAction(true);
       return;
@@ -724,6 +891,66 @@ export default function GameDetailPage() {
                 <div className="text-center mb-4">
                   <p className="text-orange-400 text-sm">¡Suscribite a premium para más ventajas!</p>
                 </div>
+
+                {/* ====== Precios (nuevo bloque, no mueve botones) ====== */}
+                {(typeof baseBuy === "number" || typeof baseRent === "number") && (
+                  <div className="mb-4 rounded-lg border border-orange-400/30 bg-slate-900/40 p-4">
+                    <h4 className="text-sm font-semibold text-orange-400 mb-3">
+                      Precios
+                    </h4>
+
+                    {typeof baseBuy === "number" && (
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-slate-300">Comprar</span>
+                        <div className="flex items-center gap-2">
+                          {isPremiumViewer ? (
+                            <>
+                              <span className="text-slate-400 line-through text-sm">
+                                {formatMoney(baseBuy, currency)}
+                              </span>
+                              <span className="text-white font-semibold">
+                                {formatMoney(buyFinal!, currency)}
+                              </span>
+                              <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                -10% Premium
+                              </Badge>
+                            </>
+                          ) : (
+                            <span className="text-white font-semibold">
+                              {formatMoney(baseBuy, currency)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {typeof baseRent === "number" && (
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-slate-300">Alquiler (semana)</span>
+                        <div className="flex items-center gap-2">
+                          {isPremiumViewer ? (
+                            <>
+                              <span className="text-slate-400 line-through text-sm">
+                                {formatMoney(baseRent, currency)}
+                              </span>
+                              <span className="text-white font-semibold">
+                                {formatMoney(rentFinal!, currency)}
+                              </span>
+                              <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                -10% Premium
+                              </Badge>
+                            </>
+                          ) : (
+                            <span className="text-white font-semibold">
+                              {formatMoney(baseRent, currency)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* ====== fin precios ====== */}
 
                 <div className="space-y-3">
                   {hasActiveRental ? (
@@ -1080,7 +1307,6 @@ export default function GameDetailPage() {
             <Button
               onClick={() => {
                 const gid = String(game?._id ?? "");
-                // preservo tus rutas de checkout
                 window.location.href = `/auth/login?next=${encodeURIComponent(`/juego/${gid}?post=play&gid=${gid}`)}`;
               }}
               className="bg-orange-400 hover:bg-orange-500 text-slate-900"

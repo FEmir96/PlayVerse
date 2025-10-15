@@ -2,11 +2,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, startTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
-import type { FunctionReference } from "convex/server";
-import { api } from "@convex";
+import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
 import { Button } from "@/components/ui/button";
@@ -14,32 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-// ⚠️ No usamos el store como fallback de email en checkouts para evitar “arrastre” entre sesiones
-// import { useAuthStore } from "@/lib/useAuthStore";
-
-// —— Refs
-const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
-
-const HAS_PM_QUERY = Boolean((api as any)["queries/getPaymentMethods"]?.getPaymentMethods);
-const getPaymentMethodsRef = (HAS_PM_QUERY
-  ? (api as any)["queries/getPaymentMethods"].getPaymentMethods
-  : (api as any)["queries/getUserByEmail"].getUserByEmail) as FunctionReference<"query">;
-
-const HAS_GET_BY_ID = Boolean((api as any)["queries/getGameById"]?.getGameById);
-const getGameByIdRef = (HAS_GET_BY_ID
-  ? (api as any)["queries/getGameById"].getGameById
-  : (api as any)["queries/getGames"]?.getGames) as FunctionReference<"query">;
-
-// Rentals del usuario (ya la tenés)
-const HAS_USER_RENTALS = Boolean((api as any)["queries/getUserRentals"]?.getUserRentals);
-const getUserRentalsRef = HAS_USER_RENTALS
-  ? ((api as any)["queries/getUserRentals"].getUserRentals as FunctionReference<"query">)
-  : undefined;
-
-const startRentalRef = (api as any).transactions.startRental as FunctionReference<"mutation">;
-const savePaymentMethodRef =
-  (api as any)["mutations/savePaymentMethod"].savePaymentMethod as FunctionReference<"mutation">;
 
 type PM = {
   _id: string;
@@ -78,14 +51,12 @@ function computeIsPremium(g: any): { premium: boolean; reason: string } {
 
 export default function RentCheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const pathname = usePathname();
   const sp = useSearchParams();
   const forcePremium = sp?.get("forcePremium") === "1";
   const { toast } = useToast();
 
   const { data: session, status } = useSession();
 
-  // ✅ Solo confiamos en session (usuario actual). Si no está autenticado → null
   const loginEmail = useMemo(
     () => (status === "authenticated" ? session?.user?.email?.toLowerCase() ?? null : null),
     [status, session?.user?.email]
@@ -94,21 +65,20 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   useEffect(() => {
     if (status === "loading") return;
     if (!loginEmail) {
-      // ✅ Siempre al Home después del login
       router.replace(`/auth/login?next=%2F`);
     }
   }, [status, loginEmail, router]);
 
   // Perfil
   const profile = useQuery(
-    getUserByEmailRef,
+    api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
   ) as | { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
 
   // Juego
   const game = useQuery(
-    getGameByIdRef as any,
-    HAS_GET_BY_ID ? ({ id: params.id as Id<"games"> } as any) : (undefined as any)
+    api.queries.getGameById?.getGameById as any,
+    api.queries.getGameById?.getGameById ? ({ id: params.id as Id<"games"> } as any) : "skip"
   ) as any | null | undefined;
 
   // Premium detection
@@ -121,13 +91,11 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
   const payDisabled = isGamePremium && userRole === "free";
 
-  // Rentals del usuario (para evitar doble alquiler)
-  const rentalsByUser = HAS_USER_RENTALS
-    ? ((useQuery(
-        getUserRentalsRef!,
-        profile?._id ? { userId: profile._id } : "skip"
-      ) as any[]) || undefined)
-    : undefined;
+  // Rentals del usuario
+  const rentalsByUser = useQuery(
+    api.queries.getUserRentals?.getUserRentals as any,
+    profile?._id && api.queries.getUserRentals?.getUserRentals ? { userId: profile._id } : "skip"
+  ) as any[] | undefined;
 
   const hasActiveRental = useMemo(() => {
     if (!Array.isArray(rentalsByUser)) return false;
@@ -139,7 +107,7 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
     });
   }, [rentalsByUser, params.id]);
 
-  // Redirección si ya está alquilado → extender
+  // Redirigir si ya alquilado
   const redirectedToExtend = useRef(false);
   useEffect(() => {
     if (!profile?._id) return;
@@ -152,13 +120,14 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
   }, [hasActiveRental, profile?._id, game, router, params.id]);
 
   // Métodos guardados
+  const pmSupported = Boolean(api.queries.getPaymentMethods?.getPaymentMethods);
   const methods = useQuery(
-    getPaymentMethodsRef as any,
-    HAS_PM_QUERY && profile?._id ? { userId: profile._id } : undefined
+    (api.queries.getPaymentMethods?.getPaymentMethods as any) || (null as any),
+    pmSupported && profile?._id ? { userId: profile._id } : "skip"
   ) as PM[] | undefined;
 
-  const savePaymentMethod = useMutation(savePaymentMethodRef);
-  const startRental = useMutation(startRentalRef);
+  const savePaymentMethod = useMutation(api.mutations.savePaymentMethod?.savePaymentMethod as any);
+  const startRental = useMutation(api.transactions.startRental as any);
 
   // UI
   const [weeks, setWeeks] = useState(2);
@@ -227,21 +196,19 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
       router.replace(`/checkout/extender/${params.id}?next=%2F`);
       return;
     }
-    if (payDisabled) {
-      return;
-    }
+    if (payDisabled) return;
 
     try {
       setProcessing(true);
 
-      if (!useSaved && rememberNew) {
+      if (!useSaved && rememberNew && api.mutations.savePaymentMethod?.savePaymentMethod) {
         await savePaymentMethod({
           userId: profile._id,
           fullNumber: number,
           exp,
           cvv: cvc,
           brand: undefined,
-        });
+        } as any);
       }
 
       await startRental({
@@ -250,11 +217,10 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
         weeks,
         weeklyPrice,
         currency: "USD",
-      });
+      } as any);
 
       toast({ title: "Alquiler confirmado", description: "¡Te enviamos el comprobante por email!" });
 
-      // ✅ Redirección SIEMPRE al Home
       startTransition(() => {
         router.replace("/");
         router.refresh();

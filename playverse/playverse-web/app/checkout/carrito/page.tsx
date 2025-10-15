@@ -7,49 +7,13 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation } from "convex/react";
-import type { FunctionReference } from "convex/server";
-import { api } from "@convex";
+import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-
-/* ========================= Convex Refs ========================= */
-// Perfil
-const getUserByEmailRef =
-  (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
-
-// Carrito (server-driven)
-const cartGetDetailedRef =
-  (api as any).queries.cart.getCartDetailed as FunctionReference<"query">;
-
-const cartRemoveRef =
-  (api as any).mutations.cart.remove as FunctionReference<"mutation">;
-
-const cartClearRef =
-  (api as any).mutations.cart.clear as FunctionReference<"mutation">;
-
-// Pago de carrito
-const purchaseCartRef =
-  (api as any).transactions.purchaseCart as FunctionReference<"mutation">;
-
-// Métodos de pago guardados (ajustá si tu query se llama distinto)
-const getPaymentMethodsRef =
-  ((api as any).queries?.getPaymentMethods?.getPaymentMethods ??
-    (api as any).queries?.paymentMethods?.getByUser) as
-    | FunctionReference<"query">
-    | undefined;
-
-// (Opcional) Guardar método nuevo si existe tu mutation
-const savePaymentMethodRef =
-  ((api as any)["mutations"]?.savePaymentMethod?.savePaymentMethod ??
-    (api as any)["mutations"]?.paymentMethods?.create) as
-    | FunctionReference<"mutation">
-    | undefined;
-
-/* ========================= Page ========================= */
 
 export default function CartCheckoutPage() {
   const router = useRouter();
@@ -68,15 +32,15 @@ export default function CartCheckoutPage() {
 
   // Perfil
   const profile = useQuery(
-    getUserByEmailRef,
+    api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
   ) as { _id: Id<"profiles">; name?: string } | null | undefined;
 
   const userId = profile?._id ?? null;
 
-  // Items del carrito desde servidor (con price/title/cover)
+  // Items del carrito (server)
   const serverItems = useQuery(
-    cartGetDetailedRef as any,
+    api.queries.cart?.getCartDetailed as any,
     userId ? { userId } : "skip"
   ) as
     | Array<{
@@ -92,10 +56,16 @@ export default function CartCheckoutPage() {
   const items = serverItems ?? [];
   const hasItems = items.length > 0;
 
-  // Métodos de pago guardados del usuario (si la query existe)
+  // Métodos de pago guardados (solo si existe la query)
+  const getPaymentMethods = api.queries.getPaymentMethods?.getPaymentMethods;
+  const pmSupported = Boolean(getPaymentMethods);
+
   const paymentMethods =
-    (getPaymentMethodsRef
-      ? (useQuery(getPaymentMethodsRef as any, userId ? { userId } : "skip") as
+    (pmSupported
+      ? (useQuery(
+          getPaymentMethods as any,
+          userId ? { userId } : "skip"
+        ) as
           | Array<{
               _id: Id<"paymentMethods">;
               brand: "visa" | "mastercard" | "amex" | "otro";
@@ -106,14 +76,13 @@ export default function CartCheckoutPage() {
           | undefined)
       : undefined) || [];
 
-  // === UI Estado: usar guardadas vs tarjeta nueva ===
+  // UI: usar guardadas vs nueva
   const [useSaved, setUseSaved] = useState<boolean>(true);
   useEffect(() => {
-    // Si no hay guardadas, pasamos automáticamente a tarjeta nueva
     setUseSaved((paymentMethods?.length ?? 0) > 0);
   }, [paymentMethods]);
 
-  // método seleccionado (default primero)
+  // método seleccionado
   const [methodId, setMethodId] = useState<string | null>(null);
   useEffect(() => {
     if (useSaved && !methodId && Array.isArray(paymentMethods) && paymentMethods.length > 0) {
@@ -135,14 +104,16 @@ export default function CartCheckoutPage() {
     [items]
   );
 
-  // Mutations
-  const cartRemove = useMutation(cartRemoveRef);
-  const cartClear = useMutation(cartClearRef);
-  const purchaseCart = useMutation(purchaseCartRef);
-  // Para guardar método nuevo solo si hay ref disponible (si no, no se usa)
-  const savePaymentMethod = savePaymentMethodRef
-    ? useMutation(savePaymentMethodRef)
-    : null;
+  // Mutations (solo instanciar si existen)
+  const cartRemoveFn = api.mutations.cart?.remove;
+  const cartClearFn = api.mutations.cart?.clear;
+  const cartRemove = cartRemoveFn ? useMutation(cartRemoveFn) : null;
+  const cartClear = cartClearFn ? useMutation(cartClearFn) : null;
+
+  const purchaseCart = useMutation(api.transactions.purchaseCart as any);
+
+  const savePaymentMethodFn = api.mutations.savePaymentMethod?.savePaymentMethod;
+  const savePaymentMethod = savePaymentMethodFn ? useMutation(savePaymentMethodFn) : null;
 
   const [processing, setProcessing] = useState(false);
 
@@ -150,7 +121,7 @@ export default function CartCheckoutPage() {
     if (processing) return;
     if (!userId || items.length === 0) return;
 
-    // Validación: si usás guardadas, tenés que elegir una
+    // Validación: si usás guardadas, elegí una
     if (useSaved && Array.isArray(paymentMethods) && paymentMethods.length > 0 && !methodId) {
       toast({
         title: "Selecciona un método de pago",
@@ -160,12 +131,11 @@ export default function CartCheckoutPage() {
       return;
     }
 
-    // Validación simple para tarjeta nueva
+    // Validación tarjeta nueva
     if (!useSaved) {
       const numDigits = number.replace(/\D/g, "");
       const expDigits = exp.replace(/\D/g, "");
       const cvcDigits = cvc.replace(/\D/g, "");
-
       if (!holder || numDigits.length < 12 || expDigits.length < 4 || cvcDigits.length < 3) {
         toast({
           title: "Datos incompletos",
@@ -179,7 +149,7 @@ export default function CartCheckoutPage() {
     try {
       setProcessing(true);
 
-      // Guardar método nuevo si corresponde y si tu backend lo soporta
+      // Guardar método nuevo si corresponde y existe la mutation
       if (!useSaved && rememberNew && savePaymentMethod) {
         try {
           await savePaymentMethod({
@@ -190,7 +160,7 @@ export default function CartCheckoutPage() {
             brand: undefined,
           } as any);
         } catch {
-          // Si falla guardar, no detenemos la compra
+          // ignorar fallo al guardar; no bloquea compra
         }
       }
 
@@ -198,13 +168,11 @@ export default function CartCheckoutPage() {
         userId,
         gameIds: items.map((m) => m.gameId),
         currency: "USD",
-        // Si usás guardada: enviamos ID; si tarjeta nueva: lo omitimos
         paymentMethodId: useSaved ? (methodId ?? undefined) : undefined,
       } as any);
 
       toast({ title: "Compra confirmada", description: "Te enviamos el comprobante por email." });
 
-      // Redirección robusta al Home
       startTransition(() => {
         router.replace("/");
         router.refresh();
@@ -225,7 +193,6 @@ export default function CartCheckoutPage() {
     }
   };
 
-  // Helpers UI
   const brandLabel = (b: string) =>
     b === "visa" ? "Visa" : b === "mastercard" ? "Mastercard" : b === "amex" ? "Amex" : "Tarjeta";
 
@@ -274,12 +241,11 @@ export default function CartCheckoutPage() {
                   </div>
                 </div>
 
-                {/* Botón QUITAR — estilo ámbar */}
                 <Button
                   type="button"
                   onClick={async () => {
-                    if (!userId) return;
-                    await cartRemove({ userId, gameId: it.gameId });
+                    if (!userId || !cartRemove) return;
+                    await cartRemove({ userId, gameId: it.gameId } as any);
                   }}
                   className="!bg-transparent border border-amber-400/40 text-amber-300 hover:!bg-amber-400/20 hover:text-amber-100 hover:border-amber-400 rounded-lg px-4 py-2 transition-colors"
                 >
@@ -289,12 +255,11 @@ export default function CartCheckoutPage() {
             ))}
 
             <div className="flex items-center justify-between pt-2">
-              {/* Botón VACIAR — estilo ámbar */}
               <Button
                 type="button"
                 onClick={async () => {
-                  if (!userId) return;
-                  await cartClear({ userId });
+                  if (!userId || !cartClear) return;
+                  await cartClear({ userId } as any);
                 }}
                 className="!bg-transparent border border-amber-400/40 text-amber-300 hover:!bg-amber-400/20 hover:text-amber-100 hover:border-amber-400 rounded-lg px-4 py-2 transition-colors"
               >
@@ -315,13 +280,11 @@ export default function CartCheckoutPage() {
             <div className="sticky top-6 bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
               <h3 className="text-lg font-bold text-amber-400 mb-3">Resumen</h3>
 
-              {/* Toggle: usar guardadas */}
               <label className="flex items-center gap-2 mb-2">
                 <Checkbox checked={useSaved} onCheckedChange={(v) => setUseSaved(v === true)} />
                 <span className="text-slate-300 text-sm">Usar tarjeta guardada</span>
               </label>
 
-              {/* Métodos de pago o formulario */}
               <div className="mb-4">
                 {useSaved ? (
                   Array.isArray(paymentMethods) && paymentMethods.length > 0 ? (
