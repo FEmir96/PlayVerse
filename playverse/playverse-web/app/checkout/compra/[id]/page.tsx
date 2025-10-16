@@ -13,27 +13,116 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
-// Detectar premium
-function isPremiumFromGame(g: any): boolean {
-  if (!g) return false;
-  if (typeof g.is_premium === "boolean") return g.is_premium;
-  const s = (v: any) => String(v ?? "").toLowerCase();
-  if (Array.isArray(g.categories) && g.categories.some((c: any) => s(c).includes("premium"))) return true;
-  const guess = [g.category, g.tier, g.access].map(s).join("|");
-  return /premium/.test(guess);
+/* ---------- Helpers de precios: mismos criterios que /juego/[id] ---------- */
+const num = (v: unknown): number | undefined => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string") {
+    const s0 = v.trim().replace(/\s+/g, "");
+    const s1 = s0.replace(/[^\d.,-]/g, "");
+    const hasComma = s1.includes(",");
+    const hasDot = s1.includes(".");
+    let s = s1;
+    if (hasComma && hasDot) s = s1.replace(/\./g, "").replace(",", ".");
+    else if (hasComma) s = s1.replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+};
+
+type BestPriceHit = { path: string; val: number };
+
+function deepFindBuyPrice(game: any): number | undefined {
+  if (!game || typeof game !== "object") return undefined;
+
+  const EXCLUDE = /(rent|alquiler|rental|weekly|week|semana|suscrip|subscription|sub)/i;
+  const INCLUDE = /(buy|purchase|compra|permanent|perma|flat|price|precio)/i;
+
+  // <- clave: usar undefined en vez de null y retornar con optional chaining
+  let best: { path: string; val: number } | undefined;
+
+  const walk = (val: unknown, path: string, depth: number) => {
+    if (depth > 6 || val == null) return;
+
+    if (typeof val === "object") {
+      for (const k of Object.keys(val as Record<string, unknown>)) {
+        walk((val as any)[k], path ? `${path}.${k}` : k, depth + 1);
+      }
+      return;
+    }
+
+    // normalización numérica
+    let n: number | undefined;
+    if (typeof val === "number" && Number.isFinite(val)) n = val;
+    else if (typeof val === "string") {
+      const s1 = val.trim().replace(/\s+/g, "").replace(/[^\d.,-]/g, "");
+      const s =
+        s1.includes(",") && s1.includes(".")
+          ? s1.replace(/\./g, "").replace(",", ".")
+          : s1.includes(",")
+          ? s1.replace(",", ".")
+          : s1;
+      const parsed = Number(s);
+      if (Number.isFinite(parsed)) n = parsed;
+    }
+    if (n === undefined) return;
+
+    const p = path.toLowerCase();
+    if (EXCLUDE.test(p) || !INCLUDE.test(p)) return;
+
+    if (!best) best = { path, val: n };
+  };
+
+  walk(game, "", 0);
+  return best?.val;
 }
 
+function pickBuyPrice(game: any): number | undefined {
+  const direct =
+    num(game?.price_buy) ??
+    num(game?.priceBuy) ??
+    num(game?.buy_price) ??
+    num(game?.purchase_price) ??
+    num(game?.permanent_price) ??
+    num(game?.price_permanent) ??
+    num(game?.permanentPrice) ??
+    num(game?.precio_compra) ??
+    num(game?.precioCompra) ??
+    num(game?.precio_permanente) ??
+    num(game?.precio) ??
+    num(game?.price) ??
+    num(game?.basePrice) ??
+    num(game?.flat_price) ??
+    num(game?.price_flat) ??
+    num(game?.flatPrice) ??
+    num(game?.pricing?.buy) ??
+    num(game?.pricing?.purchase) ??
+    num(game?.prices?.buy) ??
+    num(game?.prices?.purchase) ??
+    (typeof game?.priceBuyCents === "number" ? game.priceBuyCents / 100 : undefined) ??
+    (typeof game?.buyPriceCents === "number" ? game.buyPriceCents / 100 : undefined) ??
+    (typeof game?.prices?.buyCents === "number" ? game.prices.buyCents / 100 : undefined);
+
+  return direct ?? deepFindBuyPrice(game);
+}
+
+function pickCurrency(game: any): string {
+  return game?.currency || game?.prices?.currency || game?.pricing?.currency || "USD";
+}
+
+function formatMoney(value: number, currency = "USD", locale = "en-US") {
+  try {
+    return new Intl.NumberFormat(locale, { style: "currency", currency }).format(value);
+  } catch {
+    return `$${value.toFixed(2)} ${currency}`;
+  }
+}
+
+/* ---------------- UI ---------------- */
 function CheckoutTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-center mb-6">
-      <h1
-        className="
-          text-3xl md:text-4xl font-black tracking-tight
-          bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300
-          bg-clip-text text-transparent
-          drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]
-        "
-      >
+      <h1 className="text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">
         {children}
       </h1>
       <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
@@ -54,7 +143,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const { toast } = useToast();
 
   const { data: session, status } = useSession();
-
   const loginEmail = useMemo(
     () => (status === "authenticated" ? session?.user?.email?.toLowerCase() ?? null : null),
     [status, session?.user?.email]
@@ -62,38 +150,29 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!loginEmail) {
-      router.replace(`/auth/login?next=%2F`);
-    }
+    if (!loginEmail) router.replace(`/auth/login?next=%2F`);
   }, [status, loginEmail, router]);
 
   // Perfil + rol
-  const profile = useQuery(api.queries.getUserByEmail.getUserByEmail as any, loginEmail ? { email: loginEmail } : "skip") as
-    | { _id: Id<"profiles">; role?: "free" | "premium" | "admin" }
-    | null
-    | undefined;
+  const profile = useQuery(
+    api.queries.getUserByEmail.getUserByEmail as any,
+    loginEmail ? { email: loginEmail } : "skip"
+  ) as { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
+
   const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
+  const isPremiumViewer = userRole === "premium" || userRole === "admin";
+  const discountRate = isPremiumViewer ? 0.1 : 0;
 
   // Juego
   const game = useQuery(
     api.queries.getGameById?.getGameById as any,
     api.queries.getGameById?.getGameById ? ({ id: params.id as Id<"games"> } as any) : "skip"
-  ) as
-    | {
-        _id: Id<"games">;
-        title?: string;
-        cover_url?: string;
-        price_buy?: number;
-        is_premium?: boolean;
-        category?: string;
-        categories?: string[];
-        tier?: string;
-        access?: string;
-      }
-    | null
-    | undefined;
+  ) as any | null | undefined;
 
-  const isGamePremium = useMemo(() => isPremiumFromGame(game), [game]);
+  // Currency + precio real + precio con descuento
+  const currency = useMemo(() => pickCurrency(game), [game]);
+  const basePrice = useMemo(() => pickBuyPrice(game) ?? 0, [game]);
+  const finalPrice = useMemo(() => (typeof basePrice === "number" ? +(basePrice * (1 - discountRate)).toFixed(2) : 0), [basePrice, discountRate]);
 
   // Métodos guardados (si hay query)
   const pmSupported = Boolean(api.queries.getPaymentMethods?.getPaymentMethods);
@@ -102,7 +181,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     pmSupported && profile?._id ? { userId: profile._id } : "skip"
   ) as PM[] | undefined;
 
-  // Biblioteca
+  // Biblioteca (para evitar recompras)
   const library = useQuery(
     api.queries.getUserLibrary?.getUserLibrary as any,
     profile?._id && api.queries.getUserLibrary?.getUserLibrary ? { userId: profile._id } : "skip"
@@ -119,13 +198,6 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const [number, setNumber] = useState("");
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
-
-  const price = useMemo(() => {
-    const base = typeof (game as any)?.price_buy === "number" ? (game as any).price_buy : 49.99;
-    return base;
-  }, [game]);
-
-  const formatMoney = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
   const normalizeBrand = (b?: string): PM["brand"] => {
     const s = (b || "").toLowerCase();
@@ -187,10 +259,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   useEffect(() => {
     if (alreadyOwned && game?.title && !ownedToastShownRef.current && !suppressOwnedToastRef.current) {
       ownedToastShownRef.current = true;
-      toast({
-        title: "Ya tienes este juego",
-        description: `“${game.title}” ya está en tu catálogo.`,
-      });
+      toast({ title: "Ya tienes este juego", description: `“${game.title}” ya está en tu catálogo.` });
     }
   }, [alreadyOwned, game?.title, toast]);
 
@@ -198,10 +267,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
     if (!profile?._id || !game?._id) return;
 
     if (alreadyOwned) {
-      toast({
-        title: "Compra no necesaria",
-        description: "Ya tienes este producto en tu catálogo.",
-      });
+      toast({ title: "Compra no necesaria", description: "Ya tienes este producto en tu catálogo." });
       return;
     }
 
@@ -218,7 +284,13 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
         } as any);
       }
 
-      await purchaseGame({ userId: profile._id, gameId: game._id, amount: price } as any);
+      // Enviamos el precio FINAL (con descuento si corresponde)
+      await purchaseGame({
+        userId: profile._id,
+        gameId: game._id,
+        amount: finalPrice,
+        currency,
+      } as any);
 
       toast({ title: "Compra confirmada", description: "Te enviamos un email con los detalles." });
 
@@ -227,13 +299,10 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
         router.refresh();
       });
       setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/") {
-          window.location.assign("/");
-        }
+        if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/");
       }, 600);
     } catch (e: any) {
       suppressOwnedToastRef.current = false;
-
       const msg = String(e?.message || "");
       if (msg.includes("ALREADY_OWNED")) {
         toast({ title: "Ya tienes este juego", description: "No es necesario volver a comprarlo." });
@@ -269,40 +338,26 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
           <h2 className="text-xl md:text-2xl font-bold text-amber-300 drop-shadow-sm mb-4">{title}</h2>
 
           <div className="mx-auto max-w-[380px] md:max-w-[420px]">
-            <div
-              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
-              style={{ aspectRatio: "3 / 4" }}
-            >
-              <img
-                src={cover}
-                alt={title}
-                className="absolute inset-0 w-full h-full object-contain"
-                draggable={false}
-              />
+            <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60" style={{ aspectRatio: "3 / 4" }}>
+              <img src={cover} alt={title} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
             </div>
           </div>
-
-          {isGamePremium && userRole === "free" && (
-            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
-              Este título es <b>Premium</b>. Como usuario <b>Free</b> podés <u>comprarlo</u> a <b>tarifa plana</b> (sin descuentos).
-            </div>
-          )}
-
-          {alreadyOwned && (
-            <div className="mt-4 bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 rounded-xl p-3 text-sm">
-              Ya tienes este juego en tu biblioteca. No es necesario volver a comprarlo.
-            </div>
-          )}
         </div>
 
         {/* Derecha */}
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-            <div className="text-3xl font-black text-emerald-300">{formatMoney(price)}</div>
-            {userRole !== "premium" && (
-              <p className="text-sm text-amber-400 mt-2">
-                ¿Querés descuentos? Suscríbete a Premium y aprovecha beneficios en próximas compras.
-              </p>
+            {discountRate > 0 && (
+              <div className="flex items-baseline gap-3">
+                <span className="text-slate-400 line-through text-lg">{formatMoney(basePrice, currency)}</span>
+                <span className="text-3xl font-black text-emerald-300">{formatMoney(finalPrice, currency)}</span>
+                <span className="text-xs text-amber-300 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded">
+                  -10% Premium
+                </span>
+              </div>
+            )}
+            {discountRate === 0 && (
+              <div className="text-3xl font-black text-emerald-300">{formatMoney(basePrice, currency)}</div>
             )}
           </div>
 
@@ -429,7 +484,9 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
               alreadyOwned ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"
             }`}
           >
-            {alreadyOwned ? "Ya tienes este juego" : `Pagar ${formatMoney(price)}`}
+            {alreadyOwned
+              ? "Ya tienes este juego"
+              : `Pagar ${formatMoney(discountRate > 0 ? finalPrice : basePrice, currency)}`}
           </Button>
         </div>
       </div>

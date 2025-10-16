@@ -1,3 +1,4 @@
+// playverse-web/app/leaderboard/page.tsx
 "use client";
 
 import React from "react";
@@ -10,12 +11,13 @@ import type { FunctionReference } from "convex/server";
 // 👇 URL del Tetris hosteado en Vercel (de .env)
 const TETRIS_URL = process.env.NEXT_PUBLIC_TETRIS_URL || "";
 
-type GameKey = "snake" | "pulse-riders" | "tetris";
+type GameKey = "snake" | "pulse-riders" | "tetris" | "arena";
 
 const GAME_META: Record<GameKey, { title: string; embedUrl: string }> = {
   snake:          { title: "Snake (Freeware)",   embedUrl: "/static-games/snake" },
   "pulse-riders": { title: "Pulse Riders",       embedUrl: "/static-games/pulse-riders" },
   tetris:         { title: "Tetris (PlayVerse)", embedUrl: TETRIS_URL },
+  arena:          { title: "Twin-Stick Arena",   embedUrl: "/static-games/arena" },
 };
 
 // ✅ Query: top de scores
@@ -36,13 +38,10 @@ export default function LeaderboardPage() {
   const params = useSearchParams();
   const router = useRouter();
 
-  const gameParam = params.get("game");
-  const selected: GameKey =
-    gameParam === "pulse-riders"
-      ? "pulse-riders"
-      : gameParam === "tetris"
-      ? "tetris"
-      : "snake";
+  const gameParam = (params.get("game") || "") as GameKey;
+  const selected: GameKey = ["snake", "pulse-riders", "tetris", "arena"].includes(gameParam)
+    ? gameParam
+    : "snake";
 
   const meta = GAME_META[selected];
 
@@ -59,7 +58,6 @@ export default function LeaderboardPage() {
   }
 
   // ---------- TOP SCORES ----------
-  // Primaria: usa el embedUrl del tab seleccionado (tal cual ya tenías)
   const rowsPrimary = useQuery(
     topByGameRef as any,
     { embedUrl: meta.embedUrl, limit: 25 } as any
@@ -71,7 +69,6 @@ export default function LeaderboardPage() {
     updatedAt?: number;
   }> | undefined;
 
-  // Fallback (solo efectivo para Tetris): consulta también por la ruta relativa
   const rowsTetrisFallback = useQuery(
     topByGameRef as any,
     { embedUrl: tetrisRel, limit: 25 } as any
@@ -85,19 +82,15 @@ export default function LeaderboardPage() {
 
   const rows =
     selected === "tetris"
-      ? (rowsPrimary && rowsPrimary.length > 0
-          ? rowsPrimary
-          : rowsTetrisFallback)
+      ? (rowsPrimary && rowsPrimary.length > 0 ? rowsPrimary : rowsTetrisFallback)
       : rowsPrimary;
 
   // ---------- RESOLVER /play/[id] ----------
-  // Para cada juego, resolvemos id por su embedUrl “natural”
   const selectedInfoPrimary = useQuery(
     getIdByEmbedUrlRef as any,
     { embedUrl: meta.embedUrl } as any
   ) as { id: string; title: string; embedUrl: string } | null | undefined;
 
-  // Para Tetris, resolvemos también por la ruta relativa
   const tetrisInfoAbs = useQuery(
     getIdByEmbedUrlRef as any,
     { embedUrl: tetrisAbs } as any
@@ -108,13 +101,12 @@ export default function LeaderboardPage() {
     { embedUrl: tetrisRel } as any
   ) as { id: string } | null | undefined;
 
-  // Elegimos id para el botón "Jugar ..."
   const selectedInfo =
     selected === "tetris"
       ? (tetrisInfoAbs ?? tetrisInfoRel ?? selectedInfoPrimary)
       : selectedInfoPrimary;
 
-  // También resolvemos ids para los enlaces directos
+  // Enlaces directos extra
   const snakeInfo = useQuery(
     getIdByEmbedUrlRef as any,
     { embedUrl: GAME_META.snake.embedUrl } as any
@@ -125,12 +117,17 @@ export default function LeaderboardPage() {
     { embedUrl: GAME_META["pulse-riders"].embedUrl } as any
   ) as { id: string } | null | undefined;
 
+  const arenaInfo = useQuery(
+    getIdByEmbedUrlRef as any,
+    { embedUrl: GAME_META.arena.embedUrl } as any
+  ) as { id: string } | null | undefined;
+
   const playHrefSelected = selectedInfo?.id ? `/play/${selectedInfo.id}` : undefined;
   const playHrefSnake = snakeInfo?.id ? `/play/${snakeInfo.id}` : undefined;
   const playHrefPR = prInfo?.id ? `/play/${prInfo.id}` : undefined;
-  const playHrefTetris = (tetrisInfoAbs ?? tetrisInfoRel)?.id
-    ? `/play/${(tetrisInfoAbs ?? tetrisInfoRel)!.id}`
-    : undefined;
+  const playHrefArena = arenaInfo?.id ? `/play/${arenaInfo.id}` : undefined;
+  const playHrefTetris =
+    (tetrisInfoAbs ?? tetrisInfoRel)?.id ? `/play/${(tetrisInfoAbs ?? tetrisInfoRel)!.id}` : undefined;
 
   const when = (t?: number) => (t ? new Date(t).toLocaleString() : "-");
 
@@ -179,6 +176,7 @@ export default function LeaderboardPage() {
           <Tab k="snake">Snake (Freeware)</Tab>
           <Tab k="pulse-riders">Pulse Riders</Tab>
           <Tab k="tetris">Tetris</Tab>
+          <Tab k="arena">Twin-Stick Arena</Tab>
 
           {/* Muestra del destino al costado */}
           <span className="ml-2 text-xs text-slate-400 hidden sm:inline">
@@ -231,10 +229,7 @@ export default function LeaderboardPage() {
           <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-700/60">
             Enlaces directos:&nbsp;
             {playHrefSnake ? (
-              <Link
-                href={playHrefSnake}
-                className="underline decoration-slate-600 hover:text-slate-300"
-              >
+              <Link href={playHrefSnake} className="underline decoration-slate-600 hover:text-slate-300">
                 {playHrefSnake}
               </Link>
             ) : (
@@ -242,10 +237,7 @@ export default function LeaderboardPage() {
             )}
             &nbsp;·&nbsp;
             {playHrefPR ? (
-              <Link
-                href={playHrefPR}
-                className="underline decoration-slate-600 hover:text-slate-300"
-              >
+              <Link href={playHrefPR} className="underline decoration-slate-600 hover:text-slate-300">
                 {playHrefPR}
               </Link>
             ) : (
@@ -253,14 +245,19 @@ export default function LeaderboardPage() {
             )}
             &nbsp;·&nbsp;
             {playHrefTetris ? (
-              <Link
-                href={playHrefTetris}
-                className="underline decoration-slate-600 hover:text-slate-300"
-              >
+              <Link href={playHrefTetris} className="underline decoration-slate-600 hover:text-slate-300">
                 {playHrefTetris}
               </Link>
             ) : (
               <span className="opacity-60">/play/[id] (Tetris)</span>
+            )}
+            &nbsp;·&nbsp;
+            {playHrefArena ? (
+              <Link href={playHrefArena} className="underline decoration-slate-600 hover:text-slate-300">
+                {playHrefArena}
+              </Link>
+            ) : (
+              <span className="opacity-60">/play/[id] (Twin-Stick Arena)</span>
             )}
             &nbsp;· Tamaño: &amp;limit=25.
           </div>

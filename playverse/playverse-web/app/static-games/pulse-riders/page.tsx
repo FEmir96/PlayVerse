@@ -8,6 +8,7 @@ import { useMutation } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { api } from "@convex/_generated/api";
 import Link from "next/link";
+import { useGamepad } from "@/lib/useGamepad"; // 👈 soporte mando
 
 type Vec = { x: number; y: number };
 type Cell = { x: number; y: number };
@@ -144,7 +145,23 @@ export default function PulseRidersPage() {
     setScreen("playing");
   }, [reset]);
 
-  // Input
+  // 🔸 Gamepad: mapea direcciones, start/pause
+  const { rumble } = useGamepad((ev) => {
+    if (screen === "menu" && ev.start) { startGame(); return; }
+    if (screen === "over" && ev.start) { startGame(); return; }
+    if (screen === "playing" && ev.pause) { setPaused((p) => !p); return; }
+
+    const cur = pDirRef.current;
+    let nd = cur;
+    if (ev.up) nd = DIRS.up;
+    else if (ev.down) nd = DIRS.down;
+    else if (ev.left) nd = DIRS.left;
+    else if (ev.right) nd = DIRS.right;
+    if (cur.x + nd.x === 0 && cur.y + nd.y === 0) return; // no 180°
+    pDirRef.current = nd;
+  });
+
+  // Input teclado
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
@@ -210,9 +227,9 @@ export default function PulseRidersPage() {
     const pCrash = !inBounds(px, py) || grid[py][px] !== 0;
     const aCrash = !inBounds(ax, ay) || grid[ay][ax] !== 0;
 
-    if (pCrash && aCrash) { setWinner("crash"); setScreen("over"); return; }
-    if (pCrash) { setWinner("ai"); setScreen("over"); return; }
-    if (aCrash) { setWinner("player"); setScreen("over"); fxRef.current = { x: ax, y: ay, r: 0, alpha: 1 }; return; }
+    if (pCrash && aCrash) { setWinner("crash"); setScreen("over"); rumble(180, 0.6, 0.9); return; }
+    if (pCrash) { setWinner("ai"); setScreen("over"); rumble(220, 0.4, 1.0); return; }
+    if (aCrash) { setWinner("player"); setScreen("over"); fxRef.current = { x: ax, y: ay, r: 0, alpha: 1 }; rumble(160, 0.2, 0.7); return; }
 
     grid[pPosRef.current.y][pPosRef.current.x] = 1; // trail player
     grid[aPosRef.current.y][aPosRef.current.x] = 2; // trail AI
@@ -225,7 +242,7 @@ export default function PulseRidersPage() {
       if (ns > best) { setBest(ns); saveBest(ns); }
       return ns;
     });
-  }, [best, saveBest, chooseAIDir]);
+  }, [best, saveBest, chooseAIDir, rumble]);
 
   // Draw
   const draw = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -305,7 +322,7 @@ export default function PulseRidersPage() {
       ctx.stroke();
       ctx.restore();
     }
-  }, [best, difficulty, screen, score]);
+  }, [best, difficulty, screen, score, winner]);
 
   // Loop
   useEffect(() => {

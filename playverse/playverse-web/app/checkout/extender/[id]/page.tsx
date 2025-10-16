@@ -25,14 +25,7 @@ type PM = {
 function CheckoutTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-center mb-6">
-      <h1
-        className="
-          text-3xl md:text-4xl font-black tracking-tight
-          bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300
-          bg-clip-text text-transparent
-          drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]
-        "
-      >
+      <h1 className="text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">
         {children}
       </h1>
       <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
@@ -42,6 +35,42 @@ function CheckoutTitle({ children }: { children: React.ReactNode }) {
 
 const DEBUG = false;
 const logE = (...a: any[]) => DEBUG && console.log("%c[EXTENDER]", "color:#f0f;font-weight:bold", ...a);
+
+/* helpers precios */
+const num = (v: unknown): number | undefined => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string") {
+    const s0 = v.trim().replace(/\s+/g, "");
+    const s1 = s0.replace(/[^\d.,-]/g, "");
+    const hasComma = s1.includes(",");
+    const hasDot = s1.includes(".");
+    let s = s1;
+    if (hasComma && hasDot) s = s1.replace(/\./g, "").replace(",", ".");
+    else if (hasComma) s = s1.replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+};
+
+function pickRentPrice(game: any): number | undefined {
+  return (
+    num(game?.weekly_price) ??
+    num(game?.weeklyPrice) ??
+    num(game?.rent_price) ??
+    num(game?.rental_price) ??
+    num(game?.rentPrice) ??
+    num(game?.price_weekly) ??
+    num(game?.weekly) ??
+    num(game?.pricing?.rent) ??
+    num(game?.prices?.rentWeekly) ??
+    (typeof game?.rentalPriceCents === "number" ? game.rentalPriceCents / 100 : undefined)
+  );
+}
+
+function pickCurrency(game: any): string {
+  return game?.currency || game?.prices?.currency || game?.pricing?.currency || "USD";
+}
 
 function computeIsPremium(g: any): { premium: boolean; reason: string } {
   if (!g) return { premium: false, reason: "game=null" };
@@ -61,8 +90,7 @@ function computeIsPremium(g: any): { premium: boolean; reason: string } {
   const arrF = ["categories", "tags", "labels", "flags"];
   for (const f of arrF) {
     const arr = g?.[f];
-    if (Array.isArray(arr) && arr.some((x: any) => norm(x).includes("premium")))
-      return { premium: true, reason: `arr:${f} has premium` };
+    if (Array.isArray(arr) && arr.some((x: any) => norm(x).includes("premium"))) return { premium: true, reason: `arr:${f} has premium` };
   }
   try {
     const flat = Object.values(g).filter((v: any) => typeof v === "string").map((v: any) => norm(v)).join("|");
@@ -89,9 +117,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!loginEmail) {
-      router.replace(`/auth/login?next=%2F`);
-    }
+    if (!loginEmail) router.replace(`/auth/login?next=%2F`);
   }, [loginEmail, router, status]);
 
   // Perfil
@@ -101,6 +127,8 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
   ) as { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
 
   const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
+  const isPremiumViewer = userRole === "premium" || userRole === "admin";
+  const discountRate = isPremiumViewer ? 0.1 : 0;
 
   // Juego
   const game = useQuery(
@@ -155,12 +183,14 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
     }
   }, [isGamePremium, userRole, premiumReason, profile, game]);
 
-  const weeklyPrice = useMemo(() => {
-    if (typeof (game as any)?.weekly_price === "number") return (game as any).weekly_price;
-    return 14.99;
-  }, [game]);
-
-  const total = useMemo(() => weeklyPrice * weeks, [weeklyPrice, weeks]);
+  // Precio semanal real + descuento
+  const currency = useMemo(() => pickCurrency(game), [game]);
+  const weeklyPriceBase = useMemo(() => pickRentPrice(game) ?? 14.99, [game]);
+  const weeklyPrice = useMemo(
+    () => +(weeklyPriceBase * (1 - discountRate)).toFixed(2),
+    [weeklyPriceBase, discountRate]
+  );
+  const total = useMemo(() => +(weeklyPrice * weeks).toFixed(2), [weeklyPrice, weeks]);
 
   const normalizeBrand = (b?: string): PM["brand"] => {
     const s = (b || "").toLowerCase();
@@ -236,7 +266,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         await makePayment({
           userId: profile._id,
           amount: total,
-          currency: "USD",
+          currency,
           provider: "manual",
         } as any);
       }
@@ -258,9 +288,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         router.refresh();
       });
       setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/") {
-          window.location.assign("/");
-        }
+        if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/");
       }, 600);
     } catch (e: any) {
       const msg = String(e?.message ?? "");
@@ -300,33 +328,33 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
             {title}
           </h2>
           <div className="mx-auto max-w-[380px] md:max-w-[420px]">
-            <div
-              className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60"
-              style={{ aspectRatio: "3 / 4" }}
-            >
-              <img
-                src={cover}
-                alt={title}
-                className="absolute inset-0 w-full h-full object-contain"
-                draggable={false}
-              />
+            <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-800/60" style={{ aspectRatio: "3 / 4" }}>
+              <img src={cover} alt={title} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
             </div>
           </div>
-
-          {isGamePremium && userRole === "free" && (
-            <div className="mt-4 bg-amber-500/10 border border-amber-400/30 text-amber-300 rounded-xl p-3 text-sm">
-              Este juego es de categoría Premium. Necesitas Premium para <b>extender</b> el alquiler.
-            </div>
-          )}
         </div>
 
         {/* Derecha */}
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-            <div className="text-2xl font-black text-emerald-300">
-              {weeklyPrice.toLocaleString("en-US", { style: "currency", currency: "USD" })}
-              <span className="text-slate-300 text-base font-medium">/sem</span>
-            </div>
+            {discountRate > 0 ? (
+              <div className="flex items-baseline gap-3">
+                <span className="text-slate-400 line-through text-lg">
+                  {weeklyPriceBase.toLocaleString("en-US", { style: "currency", currency })}
+                </span>
+                <span className="text-2xl font-black text-emerald-300">
+                  {weeklyPrice.toLocaleString("en-US", { style: "currency", currency })}
+                </span>
+                <span className="text-xs text-amber-300 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded">
+                  -10% Premium
+                </span>
+              </div>
+            ) : (
+              <div className="text-2xl font-black text-emerald-300">
+                {weeklyPriceBase.toLocaleString("en-US", { style: "currency", currency })}
+                <span className="text-slate-300 text-base font-medium">/sem</span>
+              </div>
+            )}
           </div>
 
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
@@ -339,7 +367,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <div className="text-center">
               <div className="text-2xl font-extrabold text-amber-400">
-                Total: {(weeklyPrice * weeks).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                Total: {(total).toLocaleString("en-US", { style: "currency", currency })}
               </div>
             </div>
           </div>
@@ -487,7 +515,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
             onClick={onExtend}
             className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 text-lg py-6 font-bold"
           >
-            Pagar {total.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+            Pagar {total.toLocaleString("en-US", { style: "currency", currency })}
           </Button>
         </div>
       </div>

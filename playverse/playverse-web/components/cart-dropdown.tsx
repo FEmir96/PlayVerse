@@ -11,6 +11,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { useSession } from "next-auth/react";
+
+/* helpers */
+const fmt = (n: number, currency = "USD") =>
+  n.toLocaleString("en-US", { style: "currency", currency });
 
 type Props = {
   isOpen: boolean;
@@ -20,6 +25,16 @@ type Props = {
 
 export function CartDropdown({ isOpen, onClose, userId }: Props) {
   const { toast } = useToast();
+
+  // Rol del usuario para descuento
+  const { data: session } = useSession();
+  const loginEmail = session?.user?.email?.toLowerCase() || null;
+  const profile = useQuery(
+    api.queries.getUserByEmail.getUserByEmail as any,
+    loginEmail ? { email: loginEmail } : "skip"
+  ) as { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
+  const isPremiumViewer = profile?.role === "premium" || profile?.role === "admin";
+  const discountRate = isPremiumViewer ? 0.1 : 0;
 
   const items = useQuery(
     api.queries.cart.getCartDetailed as any,
@@ -38,10 +53,13 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
   const cartRemove = useMutation(api.mutations.cart.remove as any);
   const cartClear = useMutation(api.mutations.cart.clear as any);
 
-  const subtotal = useMemo(
-    () =>
-      (items ?? []).reduce((acc, it) => acc + (Number(it.price_buy) || 0), 0),
+  const subtotalBase = useMemo(
+    () => (items ?? []).reduce((acc, it) => acc + (Number(it.price_buy) || 0), 0),
     [items]
+  );
+  const subtotal = useMemo(
+    () => +(subtotalBase * (1 - discountRate)).toFixed(2),
+    [subtotalBase, discountRate]
   );
 
   const hasItems = (items?.length ?? 0) > 0;
@@ -82,7 +100,8 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
                          hover:text-orange-300 hover:bg-orange-400/10
                          hover:shadow-[0_0_12px_rgba(251,146,60,0.30)]
                          hover:ring-1 hover:ring-orange-400/30
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                         focus-visible:outline-none
+                         focus-visible:ring-2 focus-visible:ring-orange-400/60"
               aria-label="Cerrar"
               title="Cerrar"
               type="button"
@@ -98,57 +117,70 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
                 No agregaste juegos al carrito aún.
               </div>
             ) : (
-              items!.map((it) => (
-                <div
-                  key={String(it.cartItemId)}
-                  className="p-3 transition-all duration-200
-                             hover:bg-slate-800/50 hover:shadow-[0_0_14px_rgba(251,146,60,0.15)]
-                             hover:ring-1 hover:ring-orange-400/20"
-                >
-                  <div className="flex gap-3">
-                    <div className="shrink-0 rounded-lg overflow-hidden ring-1 ring-slate-700">
-                      <Image
-                        src={it.cover_url || "/placeholder.svg"}
-                        alt={it.title}
-                        width={56}
-                        height={56}
-                        className="object-cover w-14 h-14"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-amber-300 font-medium truncate" title={it.title}>
-                            {it.title}
-                          </p>
-                          <p className="text-amber-400 text-sm">
-                            {Number(it.price_buy).toLocaleString("en-US", {
-                              style: "currency",
-                              currency: it.currency,
-                            })}
-                          </p>
+              items!.map((it) => {
+                const base = Number(it.price_buy) || 0;
+                const finalP = discountRate > 0 ? +(base * (1 - discountRate)).toFixed(2) : base;
+                return (
+                  <div
+                    key={String(it.cartItemId)}
+                    className="p-3 transition-all duration-200
+                               hover:bg-slate-800/50 hover:shadow-[0_0_14px_rgba(251,146,60,0.15)]
+                               hover:ring-1 hover:ring-orange-400/20"
+                  >
+                    <div className="flex gap-3">
+                      <div className="shrink-0 rounded-lg overflow-hidden ring-1 ring-slate-700">
+                        <Image
+                          src={it.cover_url || "/placeholder.svg"}
+                          alt={it.title}
+                          width={56}
+                          height={56}
+                          className="object-cover w-14 h-14"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-amber-300 font-medium truncate" title={it.title}>
+                              {it.title}
+                            </p>
+                            <p className="text-amber-400 text-sm">
+                              {discountRate > 0 ? (
+                                <>
+                                  <span className="text-slate-400 line-through mr-2">
+                                    {fmt(base, it.currency)}
+                                  </span>
+                                  <span>{fmt(finalP, it.currency)}</span>
+                                </>
+                              ) : (
+                                fmt(base, it.currency)
+                              )}
+                            </p>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              if (!userId) return;
+                              await cartRemove({ userId, gameId: it.gameId });
+                              toast({
+                                title: "Quitado del carrito",
+                                description: `${it.title} se quitó del carrito.`,
+                              });
+                            }}
+                            className="text-slate-400 rounded-md transition-all duration-200
+                                       hover:text-red-400 hover:bg-red-400/10
+                                       hover:shadow-[0_0_12px_rgba(248,113,113,0.25)]
+                                       hover:ring-1 hover:ring-red-400/30
+                                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+                            title="Quitar del carrito"
+                            type="button"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button
-                          onClick={async () => {
-                            if (!userId) return;
-                            await cartRemove({ userId, gameId: it.gameId });
-                            toast({ title: "Quitado del carrito", description: `${it.title} se quitó del carrito.` });
-                          }}
-                          className="text-slate-400 rounded-md transition-all duration-200
-                                     hover:text-red-400 hover:bg-red-400/10
-                                     hover:shadow-[0_0_12px_rgba(248,113,113,0.25)]
-                                     hover:ring-1 hover:ring-red-400/30
-                                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
-                          title="Quitar del carrito"
-                          type="button"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -156,7 +188,16 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
           <div className="px-4 py-3 bg-slate-900/80 flex items-center justify-between">
             <div className="text-amber-400 font-semibold">
               Total:{" "}
-              {subtotal.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+              {discountRate > 0 ? (
+                <>
+                  <span className="text-slate-400 line-through mr-2">
+                    {fmt(subtotalBase, "USD")}
+                  </span>
+                  <span>{fmt(subtotal, "USD")}</span>
+                </>
+              ) : (
+                fmt(subtotalBase, "USD")
+              )}
             </div>
             <div className="flex items-center gap-2">
               {hasItems && userId && (

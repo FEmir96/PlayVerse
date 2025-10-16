@@ -81,6 +81,56 @@ export default function SnakePage() {
   const [paused, setPaused] = useState(false);
   const submittedRef = useRef(false);
 
+// --- HAPTICS HELPERS (Gamepad + Vibrate) ---
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+const rumble = useCallback((opts?: { duration?: number; strong?: number; weak?: number }) => {
+  const duration = Math.max(1, Math.floor(opts?.duration ?? 80));
+  const strongMagnitude = clamp01(opts?.strong ?? 1);
+  const weakMagnitude = clamp01(opts?.weak ?? 1);
+
+  try { (navigator as any).vibrate?.(duration); } catch {}
+
+  try {
+    const pads = (navigator as any).getGamepads?.() as (Gamepad | null)[];
+    if (pads && pads.length) {
+      for (const p of pads) {
+        if (!p) continue;
+        const va: any = (p as any).vibrationActuator || (p as any).hapticActuators?.[0];
+        if (!va) continue;
+
+        if (typeof va.playEffect === "function") {
+          va.playEffect("dual-rumble", {
+            duration,
+            strongMagnitude,
+            weakMagnitude,
+            startDelay: 0
+          }).catch?.(() => {});
+        } else if (typeof va.pulse === "function") {
+          va.pulse(Math.max(strongMagnitude, weakMagnitude), duration)?.catch?.(() => {});
+        }
+      }
+    }
+  } catch {}
+}, []);
+
+// ↑↑ Dejá rumble() igual. Solo cambiamos estos presets:
+
+// Comer: más marcado, pero corto
+const rumbleEat = useCallback(() => {
+  // antes: 70 ms, strong 0.25 / weak 0.9
+  rumble({ duration: 120, strong: 0.6, weak: 1.0 });
+}, [rumble]);
+
+// Choque/Game Over: golpe fuerte + eco más contundente
+const rumbleCrash = useCallback(() => {
+  // antes: 220 ms + 120 ms suaves
+  rumble({ duration: 320, strong: 1.0, weak: 1.0 });           // golpe principal
+  setTimeout(() => rumble({ duration: 180, strong: 0.85, weak: 0.6 }), 180); // eco
+  setTimeout(() => rumble({ duration: 90,  strong: 0.6,  weak: 0.3 }), 400); // cola corta
+}, [rumble]);
+// --- FIN HAPTICS ---
+
+
   // Evitar scroll
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;
@@ -158,6 +208,11 @@ export default function SnakePage() {
   const startGame = useCallback(() => { restart(true); setScreen("playing"); }, [restart]);
 
   // Teclado
+  const applyNextDir = useCallback((nd: Vec) => {
+    const cur = dirRef.current;
+    if (cur.x + nd.x === 0 && cur.y + nd.y === 0) return; // evitar 180°
+    nextDirRef.current = nd;
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
@@ -171,18 +226,67 @@ export default function SnakePage() {
       }
       if (k === " " || k === "spacebar") { setPaused((p) => !p); return; }
 
-      let nd = nextDirRef.current;
-      if (k === "arrowup" || k === "w") nd = { x: 0, y: -1 };
-      else if (k === "arrowdown" || k === "s") nd = { x: 0, y: 1 };
-      else if (k === "arrowleft" || k === "a") nd = { x: -1, y: 0 };
-      else if (k === "arrowright" || k === "d") nd = { x: 1, y: 0 };
-      const cur = dirRef.current;
-      if (cur.x + nd.x === 0 && cur.y + nd.y === 0) return;
-      nextDirRef.current = nd;
+      if (k === "arrowup" || k === "w") applyNextDir({ x: 0, y: -1 });
+      else if (k === "arrowdown" || k === "s") applyNextDir({ x: 0, y: 1 });
+      else if (k === "arrowleft" || k === "a") applyNextDir({ x: -1, y: 0 });
+      else if (k === "arrowright" || k === "d") applyNextDir({ x: 1, y: 0 });
     };
     window.addEventListener("keydown", onKey, { passive: false });
     return () => window.removeEventListener("keydown", onKey as any);
-  }, [screen, startGame, restart]);
+  }, [screen, startGame, restart, applyNextDir]);
+
+  // ---------- Integración Gamepad (Xbox/DualSense) ----------
+  const prevButtonsRef = useRef<boolean[]>([]);
+  const prevAxesRef = useRef<number[]>([]);
+  useEffect(() => {
+    let raf = 0;
+    const DEAD = 0.5;
+
+    const poll = () => {
+      const pads = (navigator as any).getGamepads?.() as (Gamepad | null)[];
+      const gp = pads?.find(p => p && (p.mapping === "standard" || p.mapping === "")) as Gamepad | undefined;
+      if (gp) {
+        const nowButtons = gp.buttons.map(b => !!b?.pressed);
+        const just = (idx: number) => nowButtons[idx] && !prevButtonsRef.current[idx];
+
+        // Start / A (Cross) para iniciar o pausar
+        if (screen === "menu") {
+          if (just(0) || just(9)) startGame();
+        } else if (screen === "over") {
+          if (just(0) || just(9)) { restart(true); setScreen("playing"); }
+        } else if (screen === "playing") {
+          if (just(9)) setPaused(p => !p); // Start toggle pausa
+
+          // D-pad
+          if (just(12)) applyNextDir({ x: 0, y: -1 });
+          if (just(13)) applyNextDir({ x: 0, y: 1 });
+          if (just(14)) applyNextDir({ x: -1, y: 0 });
+          if (just(15)) applyNextDir({ x: 1, y: 0 });
+
+          // Stick izquierdo con “edge detection”
+          const ax = gp.axes[0] ?? 0, ay = gp.axes[1] ?? 0;
+          const pax = prevAxesRef.current[0] ?? 0, pay = prevAxesRef.current[1] ?? 0;
+          const horNow = ax <= -DEAD ? -1 : ax >= DEAD ? 1 : 0;
+          const verNow = ay <= -DEAD ? -1 : ay >= DEAD ? 1 : 0;
+          const horPrev = pax <= -DEAD ? -1 : pax >= DEAD ? 1 : 0;
+          const verPrev = pay <= -DEAD ? -1 : pay >= DEAD ? 1 : 0;
+
+          if (horNow !== 0 && horPrev === 0) applyNextDir({ x: horNow, y: 0 });
+          if (verNow !== 0 && verPrev === 0) applyNextDir({ x: 0, y: verNow });
+
+          prevAxesRef.current = [ax, ay];
+        }
+
+        prevButtonsRef.current = nowButtons;
+      }
+
+      raf = requestAnimationFrame(poll);
+    };
+
+    raf = requestAnimationFrame(poll);
+    return () => cancelAnimationFrame(raf);
+  }, [screen, startGame, restart, applyNextDir]);
+  // ---------- Fin Integración Gamepad ----------
 
   // Step
   const step = useCallback(() => {
@@ -193,8 +297,8 @@ export default function SnakePage() {
     const head = snake[0];
     const next: Cell = { x: head.x + dir.x, y: head.y + dir.y };
 
-    if (next.x < 0 || next.x >= GRID_W || next.y < 0 || next.y >= GRID_H) { setScreen("over"); return; }
-    if (snake.some((s) => s.x === next.x && s.y === next.y)) { setScreen("over"); return; }
+    if (next.x < 0 || next.x >= GRID_W || next.y < 0 || next.y >= GRID_H) { rumbleCrash(); setScreen("over"); return; }
+    if (snake.some((s) => s.x === next.x && s.y === next.y)) { rumbleCrash(); setScreen("over"); return; }
 
     snake.unshift(next);
 
@@ -204,11 +308,12 @@ export default function SnakePage() {
       eatFxRef.current = { x: next.x, y: next.y, r: 0, alpha: 1 };
       foodRef.current = randomFood(snake);
       if (ns > best) { setBest(ns); saveBestLocal(ns); }
+      rumbleEat(); // vibración al comer
     } else {
       snake.pop();
     }
     snakeRef.current = snake;
-  }, [best, saveBestLocal, score]);
+  }, [best, saveBestLocal, score, rumbleCrash, rumbleEat]);
 
   // Draw
   const draw = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -313,8 +418,6 @@ export default function SnakePage() {
 
   return (
     <main className="min-h-screen bg-slate-900 overflow-hidden flex flex-col items-center justify-start">
-
-
       {/* Canvas */}
       <div
         style={{ width: CANVAS_W, height: CANVAS_H, transform: `scale(${scale})`, transformOrigin: "center", willChange: "transform" }}

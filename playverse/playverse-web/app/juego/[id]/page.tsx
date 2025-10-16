@@ -83,17 +83,14 @@ function StarRow({ value }: { value: number }) {
 const num = (v: unknown): number | undefined => {
   if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
   if (typeof v === "string") {
-    // Normaliza "$ 2.499,00", "7,49", "2499.00", etc.
     const s0 = v.trim().replace(/\s+/g, "");
-    const s1 = s0.replace(/[^\d.,-]/g, ""); // deja solo dígitos, coma, punto, signo
+    const s1 = s0.replace(/[^\d.,-]/g, "");
     const hasComma = s1.includes(",");
     const hasDot = s1.includes(".");
     let s = s1;
     if (hasComma && hasDot) {
-      // asume formato 1.234,56
       s = s1.replace(/\./g, "").replace(",", ".");
     } else if (hasComma) {
-      // asume coma como decimal
       s = s1.replace(",", ".");
     }
     const n = Number(s);
@@ -151,7 +148,6 @@ function deepFindBuyPrice(game: any): number | undefined {
 
   walk(game, "", 0);
 
-  // Log seguro (evitamos el problema de narrowing con 'never')
   if (process.env.NODE_ENV !== "production") {
     const hit = best as BestPriceHit | null;
     if (hit) {
@@ -172,28 +168,24 @@ function pickBuyPrice(game: any): number | undefined {
     num(game?.permanent_price) ??
     num(game?.price_permanent) ??
     num(game?.permanentPrice) ??
-    // español
     num(game?.precio_compra) ??
     num(game?.precioCompra) ??
     num(game?.precio_permanente) ??
-    num(game?.precio) ?? // a veces guardan el precio de compra como "precio"
-    // genéricos
-    num(game?.price) ?? // si "price" es compra
+    num(game?.precio) ??
+    num(game?.price) ??
     num(game?.basePrice) ??
     num(game?.flat_price) ??
     num(game?.price_flat) ??
     num(game?.flatPrice) ??
-    // anidados
     num(game?.pricing?.buy) ??
     num(game?.pricing?.purchase) ??
     num(game?.prices?.buy) ??
     num(game?.prices?.purchase) ??
-    // variantes en centavos
     (typeof game?.priceBuyCents === "number" ? game.priceBuyCents / 100 : undefined) ??
     (typeof game?.buyPriceCents === "number" ? game.buyPriceCents / 100 : undefined) ??
     (typeof game?.prices?.buyCents === "number" ? game.prices.buyCents / 100 : undefined);
 
-  return direct ?? deepFindBuyPrice(game); // ⬅️ fallback inteligente
+  return direct ?? deepFindBuyPrice(game);
 }
 
 function pickRentPrice(game: any): number | undefined {
@@ -205,23 +197,14 @@ function pickRentPrice(game: any): number | undefined {
     num(game?.rentPrice) ??
     num(game?.price_weekly) ??
     num(game?.weekly) ??
-    // anidados
     num(game?.pricing?.rent) ??
     num(game?.prices?.rentWeekly) ??
-    // centavos
-    (typeof game?.rentalPriceCents === "number"
-      ? game.rentalPriceCents / 100
-      : undefined)
+    (typeof game?.rentalPriceCents === "number" ? game.rentalPriceCents / 100 : undefined)
   );
 }
 
 function pickCurrency(game: any): string {
-  return (
-    game?.currency ||
-    game?.prices?.currency ||
-    game?.pricing?.currency ||
-    "ARS"
-  );
+  return game?.currency || game?.prices?.currency || game?.pricing?.currency || "ARS";
 }
 
 function formatMoney(value: number, currency = "ARS", locale = "es-AR") {
@@ -264,9 +247,7 @@ export default function GameDetailPage() {
   ) as Doc<"games"> | null | undefined;
 
   // Screenshots IGDB
-  const fetchShots = useAction(
-    api.actions.getIGDBScreenshots.getIGDBScreenshots as any
-  );
+  const fetchShots = useAction(api.actions.getIGDBScreenshots.getIGDBScreenshots as any);
   const [igdbUrls, setIgdbUrls] = useState<string[] | null>(null);
 
   useEffect(() => {
@@ -283,9 +264,7 @@ export default function GameDetailPage() {
           includeVideo: false,
         } as any);
         if (!cancelled) {
-          const urls = Array.isArray((res as any)?.urls)
-            ? (res as any).urls
-            : [];
+          const urls = Array.isArray((res as any)?.urls) ? (res as any).urls : [];
           setIgdbUrls(urls);
         }
       } catch {
@@ -309,9 +288,7 @@ export default function GameDetailPage() {
   );
   const extraImages = useMemo(() => {
     const arr = ((game as any)?.extraImages as string[] | undefined) ?? [];
-    return Array.isArray(arr)
-      ? arr.filter((s) => typeof s === "string" && s.trim())
-      : [];
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === "string" && s.trim()) : [];
   }, [(game as any)?.extraImages]);
 
   const media: MediaItem[] = useMemo(() => {
@@ -892,7 +869,7 @@ export default function GameDetailPage() {
                   <p className="text-orange-400 text-sm">¡Suscribite a premium para más ventajas!</p>
                 </div>
 
-                {/* ====== Precios (nuevo bloque, no mueve botones) ====== */}
+                {/* ====== Precios ====== */}
                 {(typeof baseBuy === "number" || typeof baseRent === "number") && (
                   <div className="mb-4 rounded-lg border border-orange-400/30 bg-slate-900/40 p-4">
                     <h4 className="text-sm font-semibold text-orange-400 mb-3">
@@ -1073,7 +1050,7 @@ export default function GameDetailPage() {
                                 toast({ title: "Añadido al carrito", description: `${game.title} se agregó al carrito.` });
                               }
                             } catch {
-                              setCartMarked(prev); // revert
+                              setCartMarked(prev);
                               toast({
                                 title: "No se pudo actualizar el carrito",
                                 description: "Inténtalo nuevamente.",

@@ -22,6 +22,42 @@ type PM = {
   expYear: number;
 };
 
+/* === helpers de precios === */
+const num = (v: unknown): number | undefined => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string") {
+    const s0 = v.trim().replace(/\s+/g, "");
+    const s1 = s0.replace(/[^\d.,-]/g, "");
+    const hasComma = s1.includes(",");
+    const hasDot = s1.includes(".");
+    let s = s1;
+    if (hasComma && hasDot) s = s1.replace(/\./g, "").replace(",", ".");
+    else if (hasComma) s = s1.replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+};
+
+function pickRentPrice(game: any): number | undefined {
+  return (
+    num(game?.weekly_price) ??
+    num(game?.weeklyPrice) ??
+    num(game?.rent_price) ??
+    num(game?.rental_price) ??
+    num(game?.rentPrice) ??
+    num(game?.price_weekly) ??
+    num(game?.weekly) ??
+    num(game?.pricing?.rent) ??
+    num(game?.prices?.rentWeekly) ??
+    (typeof game?.rentalPriceCents === "number" ? game.rentalPriceCents / 100 : undefined)
+  );
+}
+
+function pickCurrency(game: any): string {
+  return game?.currency || game?.prices?.currency || game?.pricing?.currency || "USD";
+}
+
 function computeIsPremium(g: any): { premium: boolean; reason: string } {
   if (!g) return { premium: false, reason: "game=null" };
   const boolCandidates = [
@@ -64,9 +100,7 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!loginEmail) {
-      router.replace(`/auth/login?next=%2F`);
-    }
+    if (!loginEmail) router.replace(`/auth/login?next=%2F`);
   }, [status, loginEmail, router]);
 
   // Perfil
@@ -74,6 +108,10 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
     api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
   ) as | { _id: Id<"profiles">; role?: "free" | "premium" | "admin" } | null | undefined;
+
+  const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
+  const isPremiumViewer = userRole === "premium" || userRole === "admin";
+  const discountRate = isPremiumViewer ? 0.1 : 0;
 
   // Juego
   const game = useQuery(
@@ -88,7 +126,6 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
     return { isGamePremium: premium };
   }, [game, forcePremium]);
 
-  const userRole = (profile?.role ?? "free") as "free" | "premium" | "admin";
   const payDisabled = isGamePremium && userRole === "free";
 
   // Rentals del usuario
@@ -141,12 +178,14 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
   const [processing, setProcessing] = useState(false);
 
-  const weeklyPrice = useMemo(() => {
-    if (typeof (game as any)?.weekly_price === "number") return (game as any).weekly_price;
-    return 14.99;
-  }, [game]);
-
-  const total = useMemo(() => weeklyPrice * weeks, [weeklyPrice, weeks]);
+  // Precio semanal real + descuento
+  const currency = useMemo(() => pickCurrency(game), [game]);
+  const weeklyPriceBase = useMemo(() => pickRentPrice(game) ?? 14.99, [game]);
+  const weeklyPrice = useMemo(
+    () => +(weeklyPriceBase * (1 - discountRate)).toFixed(2),
+    [weeklyPriceBase, discountRate]
+  );
+  const total = useMemo(() => +(weeklyPrice * weeks).toFixed(2), [weeklyPrice, weeks]);
 
   const normalizeBrand = (b?: string): PM["brand"] => {
     const s = (b || "").toLowerCase();
@@ -211,12 +250,13 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
         } as any);
       }
 
+      // Pasamos el weeklyPrice ya con descuento aplicado
       await startRental({
         userId: profile._id,
         gameId: game._id,
         weeks,
         weeklyPrice,
-        currency: "USD",
+        currency,
       } as any);
 
       toast({ title: "Alquiler confirmado", description: "¡Te enviamos el comprobante por email!" });
@@ -226,9 +266,7 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
         router.refresh();
       });
       setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/") {
-          window.location.assign("/");
-        }
+        if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/");
       }, 600);
     } catch (e: any) {
       const msg = String(e?.message || "");
@@ -281,9 +319,23 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
 
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <div className="text-center">
-              <div className="text-2xl font-extrabold text-amber-400">
-                Total: {(weeklyPrice * weeks).toLocaleString("en-US", { style: "currency", currency: "USD" })}
-              </div>
+              {discountRate > 0 ? (
+                <div className="flex items-baseline gap-3 justify-center">
+                  <span className="text-slate-400 line-through text-lg">
+                    {weeklyPriceBase.toLocaleString("en-US", { style: "currency", currency })}
+                  </span>
+                  <span className="text-2xl font-extrabold text-amber-400">
+                    {weeklyPrice.toLocaleString("en-US", { style: "currency", currency })}
+                  </span>
+                  <span className="text-xs text-amber-300 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded">
+                    -10% Premium
+                  </span>
+                </div>
+              ) : (
+                <div className="text-2xl font-extrabold text-amber-400">
+                  {weeklyPriceBase.toLocaleString("en-US", { style: "currency", currency })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -405,9 +457,13 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
           <Button
             onClick={onRent}
             disabled={payDisabled || processing}
-            className={`w-full text-slate-900 text-lg py-6 font-bold ${payDisabled || processing ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"}`}
+            className={`w-full text-slate-900 text-lg py-6 font-bold ${
+              payDisabled || processing ? "bg-slate-600 cursor-not-allowed" : "bg-orange-400 hover:bg-orange-500"
+            }`}
           >
-            {processing ? "Procesando…" : `Pagar ${(weeklyPrice * weeks).toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
+            {processing
+              ? "Procesando…"
+              : `Pagar ${total.toLocaleString("en-US", { style: "currency", currency })}`}
           </Button>
         </div>
       </div>

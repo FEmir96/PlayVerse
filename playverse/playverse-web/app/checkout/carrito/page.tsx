@@ -15,6 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
+/* helpers mínimos */
+const formatMoney = (n: number, currency = "USD") =>
+  n.toLocaleString("en-US", { style: "currency", currency });
+
 export default function CartCheckoutPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -34,9 +38,11 @@ export default function CartCheckoutPage() {
   const profile = useQuery(
     api.queries.getUserByEmail.getUserByEmail as any,
     loginEmail ? { email: loginEmail } : "skip"
-  ) as { _id: Id<"profiles">; name?: string } | null | undefined;
+  ) as { _id: Id<"profiles">; name?: string; role?: "free" | "premium" | "admin" } | null | undefined;
 
   const userId = profile?._id ?? null;
+  const isPremiumViewer = profile?.role === "premium" || profile?.role === "admin";
+  const discountRate = isPremiumViewer ? 0.1 : 0;
 
   // Items del carrito (server)
   const serverItems = useQuery(
@@ -99,9 +105,13 @@ export default function CartCheckoutPage() {
   const [rememberNew, setRememberNew] = useState(false);
 
   // Totales
-  const subtotal = useMemo(
+  const subtotalBase = useMemo(
     () => items.reduce((acc, it) => acc + (Number(it.price_buy) || 0), 0),
     [items]
+  );
+  const subtotal = useMemo(
+    () => +(subtotalBase * (1 - discountRate)).toFixed(2),
+    [subtotalBase, discountRate]
   );
 
   // Mutations (solo instanciar si existen)
@@ -160,10 +170,11 @@ export default function CartCheckoutPage() {
             brand: undefined,
           } as any);
         } catch {
-          // ignorar fallo al guardar; no bloquea compra
+          // ignorar fallo al guardar
         }
       }
 
+      // purchaseCart solo envía ids: el backend calcula precios/descuentos
       await purchaseCart({
         userId,
         gameIds: items.map((m) => m.gameId),
@@ -218,41 +229,51 @@ export default function CartCheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Lista */}
           <div className="lg:col-span-2 space-y-3">
-            {items.map((it) => (
-              <div
-                key={String(it.gameId)}
-                className="flex items-center gap-4 bg-slate-800/50 border border-slate-700 rounded-xl p-3"
-              >
-                <div className="relative w-20 h-24 overflow-hidden rounded-lg border border-slate-700 bg-slate-900/40">
-                  <Image
-                    src={it.cover_url || "/placeholder.svg"}
-                    alt={it.title}
-                    fill
-                    className="object-contain"
-                  />
-                </div>
-                <div className="flex-1">
-                  <div className="text-amber-400 font-semibold">{it.title}</div>
-                  <div className="text-amber-300 font-bold">
-                    {(Number(it.price_buy) || 0).toLocaleString("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                    })}
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  onClick={async () => {
-                    if (!userId || !cartRemove) return;
-                    await cartRemove({ userId, gameId: it.gameId } as any);
-                  }}
-                  className="!bg-transparent border border-amber-400/40 text-amber-300 hover:!bg-amber-400/20 hover:text-amber-100 hover:border-amber-400 rounded-lg px-4 py-2 transition-colors"
+            {items.map((it) => {
+              const base = Number(it.price_buy) || 0;
+              const finalP = discountRate > 0 ? +(base * (1 - discountRate)).toFixed(2) : base;
+              return (
+                <div
+                  key={String(it.gameId)}
+                  className="flex items-center gap-4 bg-slate-800/50 border border-slate-700 rounded-xl p-3"
                 >
-                  Quitar
-                </Button>
-              </div>
-            ))}
+                  <div className="relative w-20 h-24 overflow-hidden rounded-lg border border-slate-700 bg-slate-900/40">
+                    <Image
+                      src={it.cover_url || "/placeholder.svg"}
+                      alt={it.title}
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-amber-400 font-semibold">{it.title}</div>
+                    <div className="text-amber-300 font-bold">
+                      {discountRate > 0 ? (
+                        <>
+                          <span className="text-slate-400 line-through mr-2">
+                            {formatMoney(base, it.currency)}
+                          </span>
+                          <span>{formatMoney(finalP, it.currency)}</span>
+                        </>
+                      ) : (
+                        formatMoney(base, it.currency)
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      if (!userId || !cartRemove) return;
+                      await cartRemove({ userId, gameId: it.gameId } as any);
+                    }}
+                    className="!bg-transparent border border-amber-400/40 text-amber-300 hover:!bg-amber-400/20 hover:text-amber-100 hover:border-amber-400 rounded-lg px-4 py-2 transition-colors"
+                  >
+                    Quitar
+                  </Button>
+                </div>
+              );
+            })}
 
             <div className="flex items-center justify-between pt-2">
               <Button
@@ -386,13 +407,20 @@ export default function CartCheckoutPage() {
                 <span>Productos</span>
                 <span>{items.length}</span>
               </div>
+
               <div className="flex items-center justify-between py-1 text-amber-400 font-semibold">
                 <span>Total</span>
                 <span>
-                  {subtotal.toLocaleString("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                  })}
+                  {discountRate > 0 ? (
+                    <>
+                      <span className="text-slate-400 line-through mr-2">
+                        {formatMoney(subtotalBase, "USD")}
+                      </span>
+                      <span>{formatMoney(subtotal, "USD")}</span>
+                    </>
+                  ) : (
+                    formatMoney(subtotalBase, "USD")
+                  )}
                 </span>
               </div>
 
