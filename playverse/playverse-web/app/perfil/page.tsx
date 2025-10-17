@@ -410,7 +410,7 @@ export default function ProfilePage() {
     };
 
     showSoonToast();
-    const id = setInterval(showSoonToast, 60 * 60 * 1000); // re-chequea cada hora
+    const id = setInterval(showSoonToast, 60 * 60 * 1000);
     return () => clearInterval(id);
   }, [convexProfile?._id, (convexProfile as any)?.premiumExpiresAt, toast]);
 
@@ -475,7 +475,6 @@ export default function ProfilePage() {
                   {roleIcon}
                   {roleLabel}
                 </span>
-                {/* ⬇️ NUEVO: badge de vencimiento si existe */}
                 {role === "premium" && (convexProfile as any)?.premiumExpiresAt && (convexProfile as any)?.premiumPlan !== "lifetime" ? (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-slate-700 text-slate-200">
                     Vence el {new Date((convexProfile as any).premiumExpiresAt).toLocaleDateString()}
@@ -672,8 +671,16 @@ export default function ProfilePage() {
                   <Gamepad2 className="w-5 h-5" />
                   Juegos Comprados
                 </CardTitle>
-                <Link href="/mis-juegos">
-                  <Button size="sm" variant="ghost" className="text-orange-400 hover:text-orange-300">
+                {/* 👉 Enlaza a /mis-juegos?tab=purchases con estilo amable (sin hover blanco) */}
+                <Link href="/mis-juegos?tab=purchases" prefetch>
+                  <Button
+                    size="sm"
+                    className="
+                      rounded-full bg-transparent
+                      text-amber-300 border border-amber-300/30
+                      hover:bg-amber-400/15 hover:text-amber-200
+                    "
+                  >
                     <Settings className="w-4 h-4 mr-2" />
                     Administrar mis juegos
                   </Button>
@@ -720,8 +727,16 @@ export default function ProfilePage() {
                   <Star className="w-5 h-5" />
                   Juegos Alquilados
                 </CardTitle>
-                <Link href="/mis-juegos">
-                  <Button size="sm" variant="ghost" className="text-orange-400 hover:text-orange-300">
+                {/* 👉 Enlaza a /mis-juegos?tab=rentals con estilo amable (sin hover blanco) */}
+                <Link href="/mis-juegos?tab=rentals" prefetch>
+                  <Button
+                    size="sm"
+                    className="
+                      rounded-full bg-transparent
+                      text-sky-300 border border-sky-400/30
+                      hover:bg-sky-400/15 hover:text-white
+                    "
+                  >
                     <Settings className="w-4 h-4 mr-2" />
                     Administrar mis juegos
                   </Button>
@@ -764,7 +779,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* === MODAL: Ver foto (visor) === */}
+      {/* === MODAL: Ver foto === */}
       {avatarViewOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setAvatarViewOpen(false)}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>

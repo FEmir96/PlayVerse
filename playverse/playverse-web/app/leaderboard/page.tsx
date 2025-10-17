@@ -10,28 +10,28 @@ import type { FunctionReference } from "convex/server";
 
 // 👇 URL del Tetris hosteado en Vercel (de .env)
 const TETRIS_URL = process.env.NEXT_PUBLIC_TETRIS_URL || "";
+// 👇 URL del Arena (si lo servís fuera o querés forzar absoluta). Si no, cae a /arena
+const ARENA_URL  = process.env.NEXT_PUBLIC_ARENA_URL  || "";
 
 type GameKey = "snake" | "pulse-riders" | "tetris" | "arena";
 
 const GAME_META: Record<GameKey, { title: string; embedUrl: string }> = {
   snake:          { title: "Snake (Freeware)",   embedUrl: "/static-games/snake" },
   "pulse-riders": { title: "Pulse Riders",       embedUrl: "/static-games/pulse-riders" },
-  tetris:         { title: "Tetris (PlayVerse)", embedUrl: TETRIS_URL },
-  arena:          { title: "Twin-Stick Arena",   embedUrl: "/static-games/arena" },
+  tetris:         { title: "Tetris (PlayVerse)", embedUrl: TETRIS_URL || "/tetris" },
+  // 👉 por defecto apuntamos a /arena (tu ruta real en app/arena/page.tsx)
+  //    Si en tu DB quedó /static-games/arena, abajo tenemos fallbacks para ambas.
+  arena:          { title: "Twin-Stick Arena",   embedUrl: ARENA_URL || "/arena" },
 };
 
 // ✅ Query: top de scores
 const topByGameRef = (
-  (api as any)["queries/scores/topByGame"] as {
-    topByGame: FunctionReference<"query">;
-  }
+  (api as any)["queries/scores/topByGame"] as { topByGame: FunctionReference<"query"> }
 ).topByGame;
 
 // ✅ Query: resolver id del juego por embedUrl (para armar /play/[id])
 const getIdByEmbedUrlRef = (
-  (api as any)["queries/games/getIdByEmbedUrl"] as {
-    getIdByEmbedUrl: FunctionReference<"query">;
-  }
+  (api as any)["queries/games/getIdByEmbedUrl"] as { getIdByEmbedUrl: FunctionReference<"query"> }
 ).getIdByEmbedUrl;
 
 export default function LeaderboardPage() {
@@ -45,7 +45,8 @@ export default function LeaderboardPage() {
 
   const meta = GAME_META[selected];
 
-  // 🔁 Fallback para Tetris: absoluta (env) + relativa (/tetris)
+  // ---------- Fallbacks de rutas ----------
+  // TETRIS: absoluta (env) + relativa (/tetris)
   const tetrisAbs = GAME_META.tetris.embedUrl; // puede estar vacío si falta el .env
   let tetrisRel = "/tetris";
   try {
@@ -53,36 +54,51 @@ export default function LeaderboardPage() {
       const u = new URL(tetrisAbs, "https://example.org");
       tetrisRel = u.pathname || "/tetris";
     }
-  } catch {
-    // si TETRIS_URL no es URL válida, usamos /tetris
-  }
+  } catch {}
+
+  // ARENA: absoluta (env) ó relativa principal (usamos pathname) + fallback /arena + /static-games/arena
+  const arenaAbs = GAME_META.arena.embedUrl || "";
+  let arenaMain = "/arena";
+  try {
+    if (arenaAbs) {
+      const u = new URL(arenaAbs, "https://example.org");
+      arenaMain = u.pathname || "/arena";
+    }
+  } catch {}
+  const arenaStatic = "/static-games/arena";
 
   // ---------- TOP SCORES ----------
   const rowsPrimary = useQuery(
     topByGameRef as any,
     { embedUrl: meta.embedUrl, limit: 25 } as any
-  ) as Array<{
-    _id: string;
-    userName: string;
-    userEmail: string;
-    score: number;
-    updatedAt?: number;
-  }> | undefined;
+  ) as Array<{ _id: string; userName: string; userEmail: string; score: number; updatedAt?: number }> | undefined;
 
   const rowsTetrisFallback = useQuery(
     topByGameRef as any,
     { embedUrl: tetrisRel, limit: 25 } as any
-  ) as Array<{
-    _id: string;
-    userName: string;
-    userEmail: string;
-    score: number;
-    updatedAt?: number;
-  }> | undefined;
+  ) as Array<{ _id: string; userName: string; userEmail: string; score: number; updatedAt?: number }> | undefined;
+
+  // Fallbacks de Arena: prueba principal (arenaMain) y la estática
+  const rowsArenaMain = useQuery(
+    topByGameRef as any,
+    { embedUrl: arenaMain, limit: 25 } as any
+  ) as Array<{ _id: string; userName: string; userEmail: string; score: number; updatedAt?: number }> | undefined;
+
+  const rowsArenaStatic = useQuery(
+    topByGameRef as any,
+    { embedUrl: arenaStatic, limit: 25 } as any
+  ) as Array<{ _id: string; userName: string; userEmail: string; score: number; updatedAt?: number }> | undefined;
 
   const rows =
     selected === "tetris"
       ? (rowsPrimary && rowsPrimary.length > 0 ? rowsPrimary : rowsTetrisFallback)
+      : selected === "arena"
+      ? // 👇 Arena: elegimos el primero que tenga datos
+        (rowsPrimary && rowsPrimary.length > 0
+          ? rowsPrimary
+          : rowsArenaMain && rowsArenaMain.length > 0
+          ? rowsArenaMain
+          : rowsArenaStatic)
       : rowsPrimary;
 
   // ---------- RESOLVER /play/[id] ----------
@@ -91,6 +107,7 @@ export default function LeaderboardPage() {
     { embedUrl: meta.embedUrl } as any
   ) as { id: string; title: string; embedUrl: string } | null | undefined;
 
+  // Tetris fallbacks
   const tetrisInfoAbs = useQuery(
     getIdByEmbedUrlRef as any,
     { embedUrl: tetrisAbs } as any
@@ -101,33 +118,36 @@ export default function LeaderboardPage() {
     { embedUrl: tetrisRel } as any
   ) as { id: string } | null | undefined;
 
+  // Arena fallbacks
+  const arenaInfoMain = useQuery(
+    getIdByEmbedUrlRef as any,
+    { embedUrl: arenaMain } as any
+  ) as { id: string } | null | undefined;
+
+  const arenaInfoStaticQ = useQuery(
+    getIdByEmbedUrlRef as any,
+    { embedUrl: arenaStatic } as any
+  ) as { id: string } | null | undefined;
+
   const selectedInfo =
     selected === "tetris"
       ? (tetrisInfoAbs ?? tetrisInfoRel ?? selectedInfoPrimary)
+      : selected === "arena"
+      ? (selectedInfoPrimary ?? arenaInfoMain ?? arenaInfoStaticQ)
       : selectedInfoPrimary;
 
-  // Enlaces directos extra
-  const snakeInfo = useQuery(
-    getIdByEmbedUrlRef as any,
-    { embedUrl: GAME_META.snake.embedUrl } as any
-  ) as { id: string } | null | undefined;
-
-  const prInfo = useQuery(
-    getIdByEmbedUrlRef as any,
-    { embedUrl: GAME_META["pulse-riders"].embedUrl } as any
-  ) as { id: string } | null | undefined;
-
-  const arenaInfo = useQuery(
-    getIdByEmbedUrlRef as any,
-    { embedUrl: GAME_META.arena.embedUrl } as any
-  ) as { id: string } | null | undefined;
+  // Enlaces directos extra (para ver estado de todos)
+  const snakeInfo = useQuery(getIdByEmbedUrlRef as any, { embedUrl: GAME_META.snake.embedUrl } as any) as { id: string } | null | undefined;
+  const prInfo    = useQuery(getIdByEmbedUrlRef as any, { embedUrl: GAME_META["pulse-riders"].embedUrl } as any) as { id: string } | null | undefined;
+  const arenaInfo = useQuery(getIdByEmbedUrlRef as any, { embedUrl: GAME_META.arena.embedUrl } as any) as { id: string } | null | undefined;
 
   const playHrefSelected = selectedInfo?.id ? `/play/${selectedInfo.id}` : undefined;
-  const playHrefSnake = snakeInfo?.id ? `/play/${snakeInfo.id}` : undefined;
-  const playHrefPR = prInfo?.id ? `/play/${prInfo.id}` : undefined;
-  const playHrefArena = arenaInfo?.id ? `/play/${arenaInfo.id}` : undefined;
-  const playHrefTetris =
-    (tetrisInfoAbs ?? tetrisInfoRel)?.id ? `/play/${(tetrisInfoAbs ?? tetrisInfoRel)!.id}` : undefined;
+  const playHrefSnake    = snakeInfo?.id ? `/play/${snakeInfo.id}` : undefined;
+  const playHrefPR       = prInfo?.id ? `/play/${prInfo.id}` : undefined;
+  const playHrefArena    = (arenaInfo?.id || arenaInfoMain?.id || arenaInfoStaticQ?.id)
+    ? `/play/${(arenaInfo?.id || arenaInfoMain?.id || arenaInfoStaticQ?.id)!}`
+    : undefined;
+  const playHrefTetris   = (tetrisInfoAbs ?? tetrisInfoRel)?.id ? `/play/${(tetrisInfoAbs ?? tetrisInfoRel)!.id}` : undefined;
 
   const when = (t?: number) => (t ? new Date(t).toLocaleString() : "-");
 
@@ -146,6 +166,18 @@ export default function LeaderboardPage() {
       </button>
     );
   };
+
+  // Qué string mostrar al costado del tab (útil para debug)
+  const debugPath =
+    selected === "tetris"
+      ? (tetrisInfoAbs?.id ? tetrisAbs : tetrisRel)
+      : selected === "arena"
+      ? (arenaInfo?.id
+          ? GAME_META.arena.embedUrl
+          : arenaInfoMain?.id
+          ? arenaMain
+          : arenaStatic)
+      : meta.embedUrl;
 
   return (
     <main className="min-h-screen bg-slate-900 text-slate-200">
@@ -178,9 +210,9 @@ export default function LeaderboardPage() {
           <Tab k="tetris">Tetris</Tab>
           <Tab k="arena">Twin-Stick Arena</Tab>
 
-          {/* Muestra del destino al costado */}
+          {/* Muestra del destino al costado (para ver qué ruta está usando) */}
           <span className="ml-2 text-xs text-slate-400 hidden sm:inline">
-            {playHrefSelected ? playHrefSelected : meta.embedUrl || "/tetris"}
+            {playHrefSelected ? playHrefSelected : debugPath}
           </span>
           <span className="ml-auto text-xs text-slate-400">
             Fuente: Convex · query <code>scores/topByGame</code>
@@ -257,7 +289,7 @@ export default function LeaderboardPage() {
                 {playHrefArena}
               </Link>
             ) : (
-              <span className="opacity-60">/play/[id] (Twin-Stick Arena)</span>
+              <span className="opacity-60">/play/[id] (Arena)</span>
             )}
             &nbsp;· Tamaño: &amp;limit=25.
           </div>
