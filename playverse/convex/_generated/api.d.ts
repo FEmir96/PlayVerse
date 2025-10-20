@@ -12,6 +12,7 @@ import type * as actions_ageRatingsNuke from "../actions/ageRatingsNuke.js";
 import type * as actions_backfillCoversFromIGDB from "../actions/backfillCoversFromIGDB.js";
 import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetailsFromIGDB.js";
 import type * as actions_cleanupNotRated from "../actions/cleanupNotRated.js";
+import type * as actions_contact from "../actions/contact.js";
 import type * as actions_debugRawgSearch from "../actions/debugRawgSearch.js";
 import type * as actions_debugSearchIgdb from "../actions/debugSearchIgdb.js";
 import type * as actions_devPlanRemindersNow from "../actions/devPlanRemindersNow.js";
@@ -52,6 +53,7 @@ import type * as mutations_applyIgdbRating from "../mutations/applyIgdbRating.js
 import type * as mutations_authLogin from "../mutations/authLogin.js";
 import type * as mutations_cancelPremiumPlan from "../mutations/cancelPremiumPlan.js";
 import type * as mutations_cart from "../mutations/cart.js";
+import type * as mutations_contact from "../mutations/contact.js";
 import type * as mutations_createGame from "../mutations/createGame.js";
 import type * as mutations_createUser from "../mutations/createUser.js";
 import type * as mutations_deleteGame from "../mutations/deleteGame.js";
@@ -138,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   "actions/backfillCoversFromIGDB": typeof actions_backfillCoversFromIGDB;
   "actions/backfillDetailsFromIGDB": typeof actions_backfillDetailsFromIGDB;
   "actions/cleanupNotRated": typeof actions_cleanupNotRated;
+  "actions/contact": typeof actions_contact;
   "actions/debugRawgSearch": typeof actions_debugRawgSearch;
   "actions/debugSearchIgdb": typeof actions_debugSearchIgdb;
   "actions/devPlanRemindersNow": typeof actions_devPlanRemindersNow;
@@ -178,6 +181,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/authLogin": typeof mutations_authLogin;
   "mutations/cancelPremiumPlan": typeof mutations_cancelPremiumPlan;
   "mutations/cart": typeof mutations_cart;
+  "mutations/contact": typeof mutations_contact;
   "mutations/createGame": typeof mutations_createGame;
   "mutations/createUser": typeof mutations_createUser;
   "mutations/deleteGame": typeof mutations_deleteGame;

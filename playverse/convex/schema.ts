@@ -275,6 +275,19 @@ export default defineSchema({
     .index("by_user_time", ["userId", "createdAt"])
     .index("by_ad_time", ["adId", "createdAt"]),
 
+    contactMessages: defineTable({
+    name: v.string(),
+    email: v.string(),
+    subject: v.string(),
+    message: v.string(),
+    profileId: v.optional(v.id("profiles")),
+    userAgent: v.optional(v.string()),
+    status: v.optional(v.string()), // "new" | "read" | "closed"
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_createdAt", ["createdAt"]),
+
   // 🛒 Carrito
   cartItems: defineTable({
     userId: v.id("profiles"),

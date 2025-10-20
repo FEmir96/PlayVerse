@@ -1,8 +1,8 @@
+// app/contacto/page.tsx
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,24 +10,84 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Mail, Phone, MessageSquare, ChevronDown, ChevronUp } from "lucide-react"
+import { useSession } from "next-auth/react"
+import { useQuery, useAction } from "convex/react"
+import { api } from "@convex/_generated/api"
+import type { Id } from "@convex/_generated/dataModel"
+import { useToast } from "@/hooks/use-toast"
+
+const EMAIL_RE =
+  /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i
+
+type Errors = Partial<Record<"nombre"|"email"|"asunto"|"mensaje", string>>
 
 export default function ContactoPage() {
+  const { toast } = useToast()
+  const { data: session } = useSession()
+  const emailSession = useMemo(() => session?.user?.email?.toLowerCase() || null, [session?.user?.email])
+
+  const profile = useQuery(
+    api.queries.getUserByEmail.getUserByEmail as any,
+    emailSession ? { email: emailSession } : "skip"
+  ) as { _id: Id<"profiles"> } | null | undefined
+
+  const submitContact = useAction(api.actions.contact.submitContact as any)
+
   const [formData, setFormData] = useState({
     nombre: "",
-    email: "",
+    email: emailSession || "",
     asunto: "",
     mensaje: "",
   })
+  const [errors, setErrors] = useState<Errors>({})
+  const [submitting, setSubmitting] = useState(false)
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validate = (): boolean => {
+    const e: Errors = {}
+    const { nombre, email, asunto, mensaje } = formData
+    if (!nombre.trim() || nombre.trim().length < 2) e.nombre = "Ingresá tu nombre completo"
+    if (!EMAIL_RE.test(email)) e.email = "Ingresá un email válido"
+    if (!asunto.trim() || asunto.trim().length < 3) e.asunto = "Falta ingresar el asunto"
+    if (!mensaje.trim() || mensaje.trim().length < 10) e.mensaje = "El mensaje debe tener al menos 10 caracteres"
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Form submitted:", formData)
-    // Handle form submission here
+    if (!validate()) return
+    try {
+      setSubmitting(true)
+      await submitContact({
+        name: formData.nombre.trim(),
+        email: formData.email.trim().toLowerCase(),
+        subject: formData.asunto.trim(),
+        message: formData.mensaje.trim(),
+        profileId: profile?._id ?? null,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+      })
+      toast({ title: "Consulta enviada", description: "Gracias por escribirnos. Te responderemos a la brevedad." })
+      setFormData({
+        nombre: "",
+        email: emailSession || "",
+        asunto: "",
+        mensaje: "",
+      })
+      setErrors({})
+    } catch (err: any) {
+      toast({
+        title: "No se pudo enviar",
+        description: err?.message ?? "Intentá nuevamente en unos minutos.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -56,7 +116,7 @@ export default function ContactoPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                   <div className="space-y-2">
                     <Label htmlFor="nombre" className="text-slate-300">
                       Nombre completo
@@ -69,7 +129,9 @@ export default function ContactoPage() {
                       onChange={handleInputChange}
                       className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                       required
+                      aria-invalid={!!errors.nombre}
                     />
+                    {errors.nombre && <p className="text-rose-300 text-xs">{errors.nombre}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -85,7 +147,9 @@ export default function ContactoPage() {
                       onChange={handleInputChange}
                       className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                       required
+                      aria-invalid={!!errors.email}
                     />
+                    {errors.email && <p className="text-rose-300 text-xs">{errors.email}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -100,7 +164,9 @@ export default function ContactoPage() {
                       onChange={handleInputChange}
                       className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                       required
+                      aria-invalid={!!errors.asunto}
                     />
+                    {errors.asunto && <p className="text-rose-300 text-xs">{errors.asunto}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -115,14 +181,17 @@ export default function ContactoPage() {
                       onChange={handleInputChange}
                       className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 min-h-32"
                       required
+                      aria-invalid={!!errors.mensaje}
                     />
+                    {errors.mensaje && <p className="text-rose-300 text-xs">{errors.mensaje}</p>}
                   </div>
 
                   <Button
                     type="submit"
-                    className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                    disabled={submitting}
+                    className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold disabled:opacity-60"
                   >
-                    Enviar mensaje
+                    {submitting ? "Enviando..." : "Enviar mensaje"}
                   </Button>
                 </form>
               </CardContent>

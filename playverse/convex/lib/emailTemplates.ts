@@ -18,7 +18,7 @@ const COLORS = {
   cardBg:    "#0f172a",
   border:    "#1f2937",
   brand:     "#fbbf24",
-  accent:    "#fbbf24", // amarillo de referencia
+  accent:    "#fbbf24",
   text:      "#fbbf24",
   textSoft:  "#fbbf24",
   textMuted: "#fbbf24",
@@ -135,7 +135,6 @@ function layout(title: string, intro: string, inner: string, appUrl?: string | n
 /* ========= Cabecera compacta título + miniatura ========= */
 
 function titleWithThumb(title: string, coverUrl?: string | null) {
-  // Usa tabla para máxima compatibilidad con clientes
   if (!coverUrl) {
     return `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 8px 0">
@@ -274,7 +273,6 @@ export function buildCartEmail(opts: {
 
   const rows = opts.items.map((it) => {
     const money = it.amount.toLocaleString("en-US", { style: "currency", currency: cur });
-    // Tabla anidada: imagen + título en la misma línea con 10px de separación
     return `
       <tr>
         <td style="padding:10px 12px">
@@ -318,9 +316,58 @@ export function buildCartEmail(opts: {
   return layout("Compra confirmada (Carrito)", intro, inner, opts.appUrl);
 }
 
+/* ---- Email de contacto a admin (sin user-agent) ---- */
+export function buildContactAdminEmail(opts: {
+  name?: string | null;
+  email?: string | null;
+  subject?: string | null;
+  message?: string | null;
+  appUrl?: string | null;
+  createdAt?: number | null;
+}) {
+  const when = opts.createdAt ? new Date(opts.createdAt).toLocaleString("es-AR") : "";
+  const intro = `Recibiste una nueva consulta desde el formulario de PlayVerse.`;
+  const inner = `
+    <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:16px">
+      <div style="color:${COLORS.accent};font-size:16px;font-weight:800;margin-bottom:8px">${esc(opts.subject ?? "Sin asunto")}</div>
+      <div style="color:${COLORS.textSoft};white-space:pre-wrap;line-height:1.6">${esc(opts.message ?? "")}</div>
+      <div style="margin-top:12px;color:${COLORS.textMuted};font-size:12px;line-height:1.55">
+        <div><strong>Nombre:</strong> ${esc(opts.name ?? "—")}</div>
+        <div><strong>Email:</strong> ${esc(opts.email ?? "—")}</div>
+        ${when ? `<div><strong>Fecha:</strong> ${when}</div>` : ""}
+      </div>
+    </div>
+  `;
+  return layout("Nueva consulta — PlayVerse", intro, inner, opts.appUrl);
+}
+
+/* ---- Email de acuse para el usuario ---- */
+export function buildContactUserEmail(opts: {
+  name?: string | null;
+  subject?: string | null;
+  message?: string | null;
+  appUrl?: string | null;
+}) {
+  const intro = `Hola ${esc(opts.name ?? "jugador/a")}, ¡gracias por contactarte con PlayVerse! Recibimos tu mensaje y te responderemos a la brevedad.`;
+  const inner = `
+    <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:16px">
+      <div style="color:${COLORS.accent};font-size:16px;font-weight:800;margin-bottom:8px">${esc(opts.subject ?? "Tu consulta")}</div>
+      <div style="color:${COLORS.textSoft};white-space:pre-wrap;line-height:1.6">${esc(opts.message ?? "")}</div>
+      ${opts.appUrl ? `
+        <div style="margin-top:16px">
+          <a href="${opts.appUrl}" style="display:inline-block;background:${COLORS.brand};color:#0b0f19;text-decoration:none;padding:11px 16px;border-radius:10px;font-weight:800;letter-spacing:.2px">Ir a PlayVerse</a>
+        </div>
+      ` : ""}
+    </div>
+  `;
+  return layout("¡Gracias por tu mensaje!", intro, inner, opts.appUrl);
+}
+
 export default {
   buildPurchaseEmail,
   buildRentalEmail,
   buildExtendEmail,
   buildCartEmail,
+  buildContactAdminEmail,
+  buildContactUserEmail,
 };
