@@ -1,76 +1,105 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, ImageBackground, Dimensions, RefreshControl } from 'react-native';
-import { colors, radius, spacing, typography } from '../styles/theme';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { colors, spacing, typography } from '../styles/theme';
 import { Button, GameCard, PremiumBanner } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { Game, UpcomingGame } from '../types/game';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
-// Assets
-const bgStars = require('../../assets/images/rob2.png'); // using available image as decorative background
+const bgStars = require('../../assets/images/rob2.png');
 const logo = require('../../assets/images/playverse-logo.png');
 
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - spacing.xl * 2 - spacing.md) / 2;
+
 export default function HomeScreen() {
-  // 1) Data: queries to Convex (HTTP polling for now)
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
     'queries/getGames:getGames',
     {},
     { refreshMs: 15000 }
   );
 
-  const { data: upcoming, loading: loadingUp, refetch: refetchUp } = useConvexQuery<UpcomingGame[]>(
+  const { data: upcoming, loading: loadingUpcoming, refetch: refetchUpcoming } = useConvexQuery<UpcomingGame[]>(
     'queries/getUpcomingGames:getUpcomingGames',
     { limit: 6 },
     { refreshMs: 30000 }
   );
 
-  // 2) Derivados: nuevos por fecha
   const newest = useMemo(() => {
     const list = (allGames ?? []).slice();
     list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     return list.slice(0, 6);
   }, [allGames]);
 
-  const refreshing = !!(loadingAll || loadingUp);
-  const onRefresh = () => { refetchAll(); refetchUp(); };
+  const refreshing = !!(loadingAll || loadingUpcoming);
+  const onRefresh = () => {
+    refetchAll();
+    refetchUpcoming();
+  };
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: spacing.xxl }}
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
-      {/* Hero - cabecera con fondo, logo y CTA */}
       <ImageBackground source={bgStars} style={styles.hero} resizeMode="cover">
         <View style={styles.heroOverlay} />
         <View style={styles.heroContent}>
           <Image source={logo} style={styles.logo} resizeMode="contain" />
           <Text style={styles.heroTitle}>PLAYVERSE</Text>
           <Text style={styles.heroSubtitle}>
-            Explora, descubre y juega. Catálogo en crecimiento con clásicos y nuevas joyas.
+            Explora, descubre y juega. Catalogo en crecimiento con clasicos y nuevas joyas.
           </Text>
           <Button title="Explorar" variant="primary" />
         </View>
       </ImageBackground>
 
-      {/* Nuevos juegos */}
-      <Section title="Nuevos juegos" subtitle="Explora la colección. ¡Encuentra tu próxima aventura!">
-        <GridTwo>
-          {newest.map((g, i) => (
-            <GameCard key={g.id ?? String(i)} game={g} tag={i < 2 ? 'Acción' : undefined} />
+      <Section title="Nuevos juegos" subtitle="Explora la coleccion. Encuentra tu proxima aventura!">
+        <View style={styles.grid}>
+          {newest.map((game: any, index) => (
+            <GameCard
+              key={String(game._id ?? index)}
+              game={{
+                id: String(game._id ?? index),
+                title: game.title,
+                cover_url: game.cover_url,
+                weeklyPrice: game.weeklyPrice,
+                purchasePrice: game.purchasePrice,
+                igdbRating: game.igdbRating,
+                createdAt: game.createdAt,
+                description: game.description,
+              }}
+              tag={index < 2 ? 'Accion' : undefined}
+              style={{ width: CARD_WIDTH }}
+              onPress={() => game._id && navigation.navigate('GameDetail', { gameId: String(game._id) })}
+            />
           ))}
-        </GridTwo>
-        <View style={{ alignItems: 'center', marginTop: spacing.md }}>
+        </View>
+        <View style={styles.ctaRow}>
           <Button title="Ver todo" variant="ghost" />
         </View>
       </Section>
 
-      {/* Próximamente */}
-      <Section title="Próximamente">
-        <GridTwo>
-          {(upcoming ?? []).map((u, i) => (
-            <GameCard key={u.id ?? String(i)} game={u as any} tag="Pronto" />
+      <Section title="Proximamente">
+        <View style={styles.grid}>
+          {(upcoming ?? []).map((item: any, index) => (
+            <GameCard
+              key={String(item.id ?? index)}
+              game={item as any}
+              tag="Pronto"
+              style={{ width: CARD_WIDTH }}
+              onPress={() => item.gameId && navigation.navigate('GameDetail', { gameId: String(item.gameId) })}
+            />
           ))}
-        </GridTwo>
+        </View>
       </Section>
 
-      {/* Premium CTA */}
       <View style={{ paddingHorizontal: spacing.xl }}>
         <PremiumBanner />
       </View>
@@ -78,26 +107,29 @@ export default function HomeScreen() {
   );
 }
 
-// Section helper component to keep layout consistent and well commented
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
       {children}
     </View>
   );
 }
 
-// Two-column grid for cards
-function GridTwo({ children }: { children: React.ReactNode }) {
-  return <View style={styles.gridTwo}>{children}</View>;
-}
-
-const { width } = Dimensions.get('window');
-const CARD_W = (width - (spacing.xl * 2) - spacing.md) / 2; // paddings and gap
-
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   hero: {
     width: '100%',
     height: 260,
@@ -110,16 +142,16 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xl,
     justifyContent: 'center',
-    gap: 10,
+    gap: spacing.sm,
   },
   logo: {
     width: 96,
     height: 42,
   },
   heroTitle: {
-    fontSize: 30,
-    fontWeight: '900',
     color: colors.accent,
+    fontSize: 32,
+    fontWeight: '900',
     letterSpacing: 1.2,
   },
   heroSubtitle: {
@@ -140,13 +172,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.body,
   },
-  gridTwo: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
   },
-  // Card override to impose two-column width
-  card: {
-    width: CARD_W,
+  ctaRow: {
+    alignItems: 'center',
+    marginTop: spacing.md,
   },
 });

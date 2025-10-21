@@ -4,11 +4,15 @@ import { colors, spacing, typography } from '../styles/theme';
 import { Button, Chip, GameCard } from '../components';
 import { useAuth } from '../context/AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
 const { width } = Dimensions.get('window');
 const CARD_W = (width - (spacing.xl * 2) - spacing.md) / 2;
 
 export default function MyGamesScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuth();
   const [show, setShow] = useState<'rentals' | 'purchases'>('rentals');
 
@@ -61,7 +65,7 @@ export default function MyGamesScreen() {
               cover_url: row.cover_url || row.game?.cover_url,
               purchasePrice: row.purchasePrice,
               weeklyPrice: row.weeklyPrice,
-            }} style={{ width: CARD_W }} tag={show === 'rentals' ? 'Alquiler' : 'Compra'} />
+            }} style={{ width: CARD_W }} tag={show === 'rentals' ? 'Alquiler' : 'Compra'} onPress={() => nav.navigate('GameDetail', { gameId: String(row.gameId ?? '') })} />
           ))}
         </View>
       )}

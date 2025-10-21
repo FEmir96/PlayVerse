@@ -4,11 +4,15 @@ import { colors, spacing, typography } from '../styles/theme';
 import { GameCard } from '../components';
 import { useAuth } from '../context/AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
 const { width } = Dimensions.get('window');
 const CARD_W = (width - (spacing.xl * 2) - spacing.md) / 2;
 
 export default function FavoritesScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuth();
   const userId = profile?._id;
   const { data, loading, refetch } = useConvexQuery<any[]>(
@@ -43,7 +47,7 @@ export default function FavoritesScreen() {
               id: String(row.game?._id ?? row.gameId ?? i),
               title: row.game?.title || 'Juego',
               cover_url: row.game?.cover_url,
-            }} style={{ width: CARD_W }} tag="Favorito" />
+            }} style={{ width: CARD_W }} tag="Favorito" onPress={() => row.game?._id && nav.navigate('GameDetail', { gameId: String(row.game._id) })} />
           ))}
         </View>
       )}
