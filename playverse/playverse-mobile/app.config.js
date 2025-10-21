@@ -33,11 +33,21 @@ export default {
       output: "static",
       favicon: "./assets/favicon.png"
     },
-    plugins: ["expo-router"],
-    experiments: { typedRoutes: true },
+    // We use React Navigation, not Expo Router
+    plugins: [],
+    experiments: {},
     extra: {
       // Convex URL desde .env.local / .env
-      convexUrl: process.env.CONVEX_URL || process.env.EXPO_PUBLIC_CONVEX_URL
+      convexUrl: process.env.CONVEX_URL || process.env.EXPO_PUBLIC_CONVEX_URL,
+      // Web auth base URL (para abrir login/registro desde la app)
+      webAuthUrl: process.env.EXPO_PUBLIC_WEB_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000',
+
+      // Exponer credenciales para flujos nativos futuros (no requeridas si usamos web auth)
+      googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+      googleClientSecret: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET,
+      microsoftClientId: process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID,
+      microsoftClientSecret: process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_SECRET,
+      microsoftTenantId: process.env.EXPO_PUBLIC_MICROSOFT_TENANT_ID,
     }
   }
 };

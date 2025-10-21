@@ -91,16 +91,18 @@ export default defineSchema({
     .index("by_user_game", ["userId", "gameId"])
     .index("by_game", ["gameId"]),
 
-  transactions: defineTable({
-    userId: v.id("profiles"),
-    gameId: v.id("games"),
-    type: v.union(v.literal("rental"), v.literal("purchase")),
-    expiresAt: v.optional(v.number()),
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_type", ["userId", "type"])
-    .index("by_game", ["gameId"]),
+transactions: defineTable({
+  userId: v.id("profiles"),
+  gameId: v.id("games"),
+  type: v.union(v.literal("rental"), v.literal("purchase")),
+  expiresAt: v.optional(v.number()),
+  createdAt: v.number(),
+})
+  .index("by_user", ["userId"])
+  .index("by_user_type", ["userId", "type"])
+  .index("by_game", ["gameId"])
+  // NUEVO: hace posible barridos por fecha sin table-scan
+  .index("by_expiresAt", ["expiresAt"]),
 
   payments: defineTable({
     userId: v.id("profiles"),

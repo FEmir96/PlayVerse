@@ -1,17 +1,26 @@
-import Constants from "expo-constants";
-import { ConvexReactClient } from "convex/react";
-import { ConvexHttpClient } from "convex/browser";
+import Constants from 'expo-constants';
+import { ConvexReactClient } from 'convex/react';
+import { ConvexHttpClient } from 'convex/browser';
 
-const convexUrl =
-  Constants.expoConfig?.extra?.convexUrl ||
-  process.env.EXPO_PUBLIC_CONVEX_URL;
+// Resolve Convex URL from multiple sources to avoid crashes during dev.
+let convexUrl =
+  (Constants.expoConfig?.extra as any)?.convexUrl ||
+  process.env.EXPO_PUBLIC_CONVEX_URL ||
+  process.env.CONVEX_URL ||
+  '';
 
 if (!convexUrl) {
-  throw new Error("convexUrl no está definido (revisá app.config.js y .env/.env.local)");
+  // Safe fallback so the app doesn't crash while setting up envs.
+  // Adjust this to your local/cloud instance.
+  console.warn(
+    '[Convex] convexUrl not set. Configure .env.local (EXPO_PUBLIC_CONVEX_URL) or app.config.js > extra.convexUrl'
+  );
+  convexUrl = 'http://localhost:8187'; // typical `npx convex dev` address
 }
 
-// Hooks tipados (si más adelante usás `api.*`)
+// React client (for ConvexProvider and future typed hooks `useQuery`)
 export const convex = new ConvexReactClient(convexUrl);
 
-// Llamadas por string (lo que necesitás ahora)
+// HTTP client by string path (what we use now)
 export const convexHttp = new ConvexHttpClient(convexUrl);
+
