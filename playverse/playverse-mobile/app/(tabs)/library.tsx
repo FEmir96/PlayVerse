@@ -5,7 +5,7 @@ import SectionHeader from '@/components/SectionHeader';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
-export default function FavoritesTab() {
+export default function LibraryTab() {
   const cs = useColorScheme();
   const colors = Colors[cs ?? 'light'];
 
@@ -13,9 +13,9 @@ export default function FavoritesTab() {
     <View style={styles.container}>
       <Header />
       <ScrollView showsVerticalScrollIndicator={false}>
-        <SectionHeader title="Favoritos" />
+        <SectionHeader title="Mis juegos" subtitle="alquileres y compras" />
         <Text style={{ paddingHorizontal: 20, color: colors.gray, marginBottom: 24 }}>
-          Todavía no agregaste juegos a favoritos.
+          No hay juegos activos por ahora.
         </Text>
       </ScrollView>
     </View>

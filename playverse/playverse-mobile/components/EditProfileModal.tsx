@@ -1,408 +1,93 @@
 import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ScrollView, 
-  Modal,
-  TextInput,
-  Alert
-} from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
-interface EditProfileModalProps {
-  visible: boolean;
-  onClose: () => void;
-  currentUsername?: string;
-  currentEmail?: string;
-}
+export default function EditProfileModal({ visible, onClose, currentUsername = 'Eros Bianchini', currentEmail = 'usuario@gmail.com' }: {
+  visible: boolean; onClose: () => void; currentUsername?: string; currentEmail?: string;
+}) {
+  const cs = useColorScheme(); const colors = Colors[cs ?? 'light'];
+  const [form, setForm] = useState({ username: currentUsername, currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [show, setShow] = useState({ cur: false, n: false, c: false });
+  const setField = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
-export default function EditProfileModal({ 
-  visible, 
-  onClose, 
-  currentUsername = "Eros Bianchini",
-  currentEmail = "usuario@gmail.com"
-}: EditProfileModalProps) {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  
-  const [profileForm, setProfileForm] = useState({
-    username: currentUsername,
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  const handleInputChange = (field: string, value: string) => {
-    setProfileForm(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSaveProfile = () => {
-    // Validaciones básicas
-    if (!profileForm.username.trim()) {
-      Alert.alert('Error', 'El nombre de usuario no puede estar vacío');
-      return;
+  const save = () => {
+    if (!form.username.trim()) { Alert.alert('Error', 'El nombre de usuario no puede estar vacío'); return; }
+    if (form.newPassword || form.confirmPassword || form.currentPassword) {
+      if (!form.currentPassword) return Alert.alert('Error', 'Debes ingresar tu contraseña actual');
+      if (!form.newPassword) return Alert.alert('Error', 'Debes ingresar una nueva contraseña');
+      if (form.newPassword !== form.confirmPassword) return Alert.alert('Error', 'Las contraseñas no coinciden');
+      if (form.newPassword.length < 6) return Alert.alert('Error', 'La nueva contraseña debe tener al menos 6 caracteres');
     }
-
-    // Si quiere cambiar la contraseña, validar que todos los campos estén llenos
-    if (profileForm.newPassword || profileForm.confirmPassword || profileForm.currentPassword) {
-      if (!profileForm.currentPassword) {
-        Alert.alert('Error', 'Debes ingresar tu contraseña actual');
-        return;
-      }
-      if (!profileForm.newPassword) {
-        Alert.alert('Error', 'Debes ingresar una nueva contraseña');
-        return;
-      }
-      if (profileForm.newPassword !== profileForm.confirmPassword) {
-        Alert.alert('Error', 'Las contraseñas no coinciden');
-        return;
-      }
-      if (profileForm.newPassword.length < 6) {
-        Alert.alert('Error', 'La nueva contraseña debe tener al menos 6 caracteres');
-        return;
-      }
-    }
-
-    // Aquí harías la llamada a la API para actualizar el perfil
-    console.log('Profile updated:', {
-      username: profileForm.username,
-      passwordChanged: !!profileForm.newPassword
-    });
-
-    Alert.alert(
-      'Éxito', 
-      'Perfil actualizado correctamente',
-      [{ text: 'OK', onPress: onClose }]
-    );
+    Alert.alert('Éxito', 'Perfil actualizado correctamente', [{ text: 'OK', onPress: onClose }]);
   };
 
-  const resetForm = () => {
-    setProfileForm({
-      username: currentUsername,
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    });
-  };
-
-  const handleClose = () => {
-    resetForm();
-    onClose();
-  };
+  const resetClose = () => { setForm({ username: currentUsername, currentPassword: '', newPassword: '', confirmPassword: '' }); onClose(); };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleClose}
-    >
-      <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-        {/* Modal Header */}
-        <View style={styles.modalHeader}>
-          <Text style={[styles.modalTitle, { color: colors.secondary }]}>EDITAR PERFIL</Text>
-          <TouchableOpacity 
-            style={styles.modalCloseButton}
-            onPress={handleClose}
-          >
-            <Ionicons name="close" size={24} color={colors.white} />
-          </TouchableOpacity>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={resetClose}>
+      <View style={{ flex:1, backgroundColor: colors.background }}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.secondary }]}>EDITAR PERFIL</Text>
+          <TouchableOpacity style={styles.close} onPress={resetClose}><Ionicons name="close" size={24} color={colors.white} /></TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.modalDescription, { color: colors.white }]}>
-            Actualiza tu información personal y cambia tu contraseña si lo deseas
-          </Text>
+        <ScrollView style={{ paddingHorizontal:20 }} showsVerticalScrollIndicator={false}>
+          <Text style={{ color: colors.white, textAlign:'center', marginBottom: 24, opacity: 0.9 }}>Actualiza tu información personal</Text>
 
-          {/* Profile Form */}
-          <View style={[styles.profileFormCard, { backgroundColor: colors.cardBackground, borderColor: colors.secondary }]}>
-            <View style={styles.formHeader}>
-              <Ionicons name="person" size={20} color={colors.secondary} />
-              <Text style={[styles.formTitle, { color: colors.secondary }]}>Información personal</Text>
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.secondary }]}>
+            <View style={styles.row}><Ionicons name="person" size={20} color={colors.secondary} /><Text style={[styles.cardTitle, { color: colors.secondary }]}>Información personal</Text></View>
+
+            <View style={styles.group}>
+              <Text style={[styles.label, { color: colors.white }]}>Nombre de usuario</Text>
+              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.secondary, color: colors.white }]} placeholder="Tu nombre gamer" placeholderTextColor={colors.gray} value={form.username} onChangeText={v => setField('username', v)} />
             </View>
 
-            {/* Username Field */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.white }]}>Nombre de usuario</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.secondary, color: colors.white }]}
-                placeholder="Tu nombre gamer"
-                placeholderTextColor={colors.gray}
-                value={profileForm.username}
-                onChangeText={(value) => handleInputChange('username', value)}
-                autoCapitalize="words"
-              />
-            </View>
-
-            {/* Email Field (Read-only for now) */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.white }]}>Email</Text>
-              <View style={[styles.input, styles.readOnlyInput, { backgroundColor: colors.background, borderColor: colors.gray }]}>
-                <Text style={[styles.readOnlyText, { color: colors.gray }]}>{currentEmail}</Text>
-                <Ionicons name="lock-closed" size={16} color={colors.gray} />
-              </View>
-              <Text style={[styles.helperText, { color: colors.gray }]}>
-                El email no se puede cambiar por ahora
-              </Text>
+            <View style={styles.group}>
+              <Text style={[styles.label, { color: colors.white }]}>Email</Text>
+              <View style={[styles.input, styles.readOnly, { backgroundColor: colors.background, borderColor: colors.gray }]}><Text style={{ color: colors.gray }}>{currentEmail}</Text><Ionicons name="lock-closed" size={16} color={colors.gray} /></View>
+              <Text style={{ color: colors.gray, fontSize:12, marginTop:4, fontStyle:'italic' }}>El email no se puede cambiar por ahora</Text>
             </View>
           </View>
 
-          {/* Password Change Section */}
-          <View style={[styles.passwordFormCard, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}>
-            <View style={styles.formHeader}>
-              <Ionicons name="lock-closed" size={20} color={colors.accent} />
-              <Text style={[styles.formTitle, { color: colors.accent }]}>Cambiar contraseña</Text>
-            </View>
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}>
+            <View style={styles.row}><Ionicons name="lock-closed" size={20} color={colors.accent} /><Text style={[styles.cardTitle, { color: colors.accent }]}>Cambiar contraseña</Text></View>
+            <Text style={{ color: colors.white, fontSize: 12, opacity: 0.8, marginBottom: 12, fontStyle: 'italic' }}>Deja vacíos si no querés cambiarla</Text>
 
-            <Text style={[styles.sectionDescription, { color: colors.white }]}>
-              Deja estos campos vacíos si no quieres cambiar tu contraseña
-            </Text>
-
-            {/* Current Password */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.white }]}>Contraseña actual</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={[styles.passwordInput, { backgroundColor: colors.background, borderColor: colors.accent, color: colors.white }]}
-                  placeholder="Tu contraseña actual"
-                  placeholderTextColor={colors.gray}
-                  value={profileForm.currentPassword}
-                  onChangeText={(value) => handleInputChange('currentPassword', value)}
-                  secureTextEntry={!showCurrentPassword}
-                />
-                <TouchableOpacity
-                  style={styles.passwordToggle}
-                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                >
-                  <Ionicons 
-                    name={showCurrentPassword ? "eye-off" : "eye"} 
-                    size={20} 
-                    color={colors.gray} 
+            {[
+              { key: 'currentPassword', label: 'Contraseña actual', vis: 'cur' as const },
+              { key: 'newPassword', label: 'Nueva contraseña', vis: 'n' as const },
+              { key: 'confirmPassword', label: 'Confirmar nueva contraseña', vis: 'c' as const }
+            ].map(i => (
+              <View key={i.key} style={styles.group}>
+                <Text style={[styles.label, { color: colors.white }]}>{i.label}</Text>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.accent, color: colors.white, paddingRight: 50 }]}
+                    placeholder={i.label} placeholderTextColor={colors.gray} value={(form as any)[i.key]} onChangeText={v => setField(i.key, v)}
+                    secureTextEntry={!show[i.vis]}
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity style={styles.eye} onPress={() => setShow(s => ({ ...s, [i.vis]: !s[i.vis] }))}><Ionicons name={show[i.vis] ? 'eye-off' : 'eye'} size={20} color={colors.gray} /></TouchableOpacity>
+                </View>
               </View>
-            </View>
-
-            {/* New Password */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.white }]}>Nueva contraseña</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={[styles.passwordInput, { backgroundColor: colors.background, borderColor: colors.accent, color: colors.white }]}
-                  placeholder="Tu nueva contraseña"
-                  placeholderTextColor={colors.gray}
-                  value={profileForm.newPassword}
-                  onChangeText={(value) => handleInputChange('newPassword', value)}
-                  secureTextEntry={!showNewPassword}
-                />
-                <TouchableOpacity
-                  style={styles.passwordToggle}
-                  onPress={() => setShowNewPassword(!showNewPassword)}
-                >
-                  <Ionicons 
-                    name={showNewPassword ? "eye-off" : "eye"} 
-                    size={20} 
-                    color={colors.gray} 
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Confirm New Password */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.white }]}>Confirmar nueva contraseña</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={[styles.passwordInput, { backgroundColor: colors.background, borderColor: colors.accent, color: colors.white }]}
-                  placeholder="Repite tu nueva contraseña"
-                  placeholderTextColor={colors.gray}
-                  value={profileForm.confirmPassword}
-                  onChangeText={(value) => handleInputChange('confirmPassword', value)}
-                  secureTextEntry={!showConfirmPassword}
-                />
-                <TouchableOpacity
-                  style={styles.passwordToggle}
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  <Ionicons 
-                    name={showConfirmPassword ? "eye-off" : "eye"} 
-                    size={20} 
-                    color={colors.gray} 
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
+            ))}
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={[styles.cancelButton, { borderColor: colors.gray }]}
-              onPress={handleClose}
-            >
-              <Text style={[styles.cancelButtonText, { color: colors.gray }]}>Cancelar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.saveButton, { backgroundColor: colors.secondary }]}
-              onPress={handleSaveProfile}
-            >
-              <Ionicons name="checkmark" size={20} color={colors.background} />
-              <Text style={[styles.saveButtonText, { color: colors.background }]}>Guardar cambios</Text>
-            </TouchableOpacity>
+          <View style={styles.actions}>
+            <TouchableOpacity style={[styles.btnCancel, { borderColor: colors.gray }]} onPress={resetClose}><Text style={{ color: colors.gray, fontWeight: 'bold' }}>Cancelar</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.btnSave, { backgroundColor: colors.secondary }]} onPress={save}><Ionicons name="checkmark" size={20} color={colors.background} /><Text style={{ color: colors.background, fontWeight: 'bold', marginLeft: 8 }}>Guardar</Text></TouchableOpacity>
           </View>
         </ScrollView>
       </View>
     </Modal>
   );
 }
-
 const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 30,
-    paddingBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  modalCloseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  modalDescription: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 32,
-    opacity: 0.9,
-    lineHeight: 24,
-  },
-  profileFormCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 24,
-    marginBottom: 24,
-  },
-  passwordFormCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 24,
-    marginBottom: 32,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  formTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    opacity: 0.8,
-    marginBottom: 20,
-    fontStyle: 'italic',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  readOnlyInput: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  readOnlyText: {
-    fontSize: 16,
-  },
-  helperText: {
-    fontSize: 12,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  passwordInputContainer: {
-    position: 'relative',
-  },
-  passwordInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingRight: 50,
-    fontSize: 16,
-  },
-  passwordToggle: {
-    position: 'absolute',
-    right: 12,
-    top: 0,
-    bottom: 0,
-    width: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 40,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  saveButton: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
+  header:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,paddingTop:30,paddingBottom:20},
+  title:{fontSize:24,fontWeight:'bold'}, close:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.1)',justifyContent:'center',alignItems:'center'},
+  card:{borderRadius:16,borderWidth:1,padding:24,marginBottom:24}, row:{flexDirection:'row',alignItems:'center',marginBottom:16}, cardTitle:{fontSize:20,fontWeight:'bold',marginLeft:8},
+  group:{marginBottom:16}, label:{fontSize:16,fontWeight:'600',marginBottom:8}, input:{borderWidth:1,borderRadius:8,paddingHorizontal:16,paddingVertical:12,fontSize:16},
+  readOnly:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'}, eye:{ position:'absolute', right:12, top:0, bottom:0, justifyContent:'center', alignItems:'center', width:40 },
+  actions:{flexDirection:'row',gap:12,marginBottom:40}, btnCancel:{flex:1,paddingVertical:14,borderRadius:12,borderWidth:1,alignItems:'center'}, btnSave:{flex:2,flexDirection:'row',alignItems:'center',justifyContent:'center',paddingVertical:14,borderRadius:12}
 });
