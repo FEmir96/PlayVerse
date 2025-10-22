@@ -1,17 +1,36 @@
-﻿import * as AuthSession from 'expo-auth-session';
+// playverse/playverse-mobile/src/auth/nativeOAuth.ts
+import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+
 import { convexHttp } from '../lib/convexClient';
 
 WebBrowser.maybeCompleteAuthSession();
 
-type OAuthResult = { ok: boolean; email?: string; name?: string; avatarUrl?: string; error?: string };
+type OAuthResult = {
+  ok: boolean;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
+  error?: string;
+};
 
-function b64UrlJson<T = any>(input: string | undefined): T | undefined {
+const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
+
+function randomNonce() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function b64UrlJson<T = unknown>(input?: string): T | undefined {
   if (!input) return undefined;
   try {
     const pad = input.length % 4 === 0 ? 0 : 4 - (input.length % 4);
     const base64 = input.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(pad);
+    if (typeof atob === 'function') {
+      const json = decodeURIComponent(escape(atob(base64)));
+      return JSON.parse(json) as T;
+    }
     const json = Buffer.from(base64, 'base64').toString('utf8');
     return JSON.parse(json) as T;
   } catch {
@@ -19,31 +38,59 @@ function b64UrlJson<T = any>(input: string | undefined): T | undefined {
   }
 }
 
-function randomNonce() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+type PromptOptions = AuthSession.AuthRequestPromptOptions & { useProxy?: boolean };
+type RedirectSetup = { redirectUri: string; promptOptions: PromptOptions };
+
+function resolveRedirect(): RedirectSetup {
+  const isExpoGo = Constants.appOwnership === 'expo';
+  const isWeb = Platform.OS === 'web';
+
+  if (isExpoGo || isWeb) {
+    const redirectUri = AuthSession.makeRedirectUri({ path: 'auth/callback' });
+    console.log('[Auth] Redirect URI (expo proxy):', redirectUri);
+    return {
+      redirectUri,
+      promptOptions: { useProxy: true } as PromptOptions,
+    };
+  }
+
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'playverse', path: 'auth/callback' });
+  console.log('[Auth] Redirect URI (native):', redirectUri);
+  return {
+    redirectUri,
+    promptOptions: {},
+  };
 }
 
 export async function signInWithGoogleNative(): Promise<OAuthResult> {
-  const clientId = (Constants.expoConfig?.extra as any)?.googleClientId || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+  const clientId =
+    (Constants.expoConfig?.extra as any)?.googleClientId ?? process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) return { ok: false, error: 'Missing GOOGLE_CLIENT_ID' };
 
-  const { uri: redirectUri } = (function(){ const isExpoGo = (require('expo-constants').default.appOwnership === 'expo'); if (isExpoGo) { const u = require('expo-auth-session').makeRedirectUri({ useProxy: true }); console.log('[Auth] Redirect URI (proxy):', u); return { uri: u }; } const u = require('expo-auth-session').makeRedirectUri({ scheme: 'playverse' }); console.log('[Auth] Redirect URI (scheme):', u); return { uri: u }; })();
+  const { redirectUri, promptOptions } = resolveRedirect();
+
   const request = new AuthSession.AuthRequest({
     clientId,
     redirectUri,
     responseType: 'id_token',
+    usePKCE: false,
     scopes: ['openid', 'email', 'profile'],
     extraParams: { nonce: randomNonce() },
   });
 
-  await request.makeAuthUrlAsync({ authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth' });
-  const result = await request.promptAsync({ authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth' }, { useProxy: (require('expo-constants').default.appOwnership === 'expo') });
+  const authUrl = await request.makeAuthUrlAsync({ authorizationEndpoint: GOOGLE_AUTH_ENDPOINT });
+  console.log('[Auth] Google authUrl:', authUrl);
+
+  const result = await request.promptAsync(
+    { authorizationEndpoint: GOOGLE_AUTH_ENDPOINT },
+    promptOptions as AuthSession.AuthRequestPromptOptions
+  );
   if (result.type !== 'success') return { ok: false, error: 'Canceled or failed' };
 
   const idToken = (result.params as any).id_token as string | undefined;
   if (!idToken) return { ok: false, error: 'Missing id_token' };
-  const parts = idToken.split('.');
-  const payload = b64UrlJson<any>(parts[1]);
+
+  const payload = b64UrlJson<any>(idToken.split('.')[1]);
   const email = String(payload?.email || '').toLowerCase();
   const name = String(payload?.name || '');
   const avatarUrl = String(payload?.picture || '');
@@ -59,32 +106,45 @@ export async function signInWithGoogleNative(): Promise<OAuthResult> {
       providerId: sub,
     });
     return { ok: true, email, name, avatarUrl };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'Upsert failed' };
+  } catch (error: any) {
+    return { ok: false, error: error?.message || 'Upsert failed' };
   }
 }
 
 export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
-  const clientId = (Constants.expoConfig?.extra as any)?.microsoftClientId || process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID;
-  const tenant = (Constants.expoConfig?.extra as any)?.microsoftTenantId || process.env.EXPO_PUBLIC_MICROSOFT_TENANT_ID || 'common';
+  const clientId =
+    (Constants.expoConfig?.extra as any)?.microsoftClientId ??
+    process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID;
+  const tenant =
+    (Constants.expoConfig?.extra as any)?.microsoftTenantId ??
+    process.env.EXPO_PUBLIC_MICROSOFT_TENANT_ID ??
+    'common';
   if (!clientId) return { ok: false, error: 'Missing MICROSOFT_CLIENT_ID' };
 
-  const { uri: redirectUri } = (function(){ const isExpoGo = (require('expo-constants').default.appOwnership === 'expo'); if (isExpoGo) { const u = require('expo-auth-session').makeRedirectUri({ useProxy: true }); console.log('[Auth] Redirect URI (proxy):', u); return { uri: u }; } const u = require('expo-auth-session').makeRedirectUri({ scheme: 'playverse' }); console.log('[Auth] Redirect URI (scheme):', u); return { uri: u }; })();
+  const { redirectUri, promptOptions } = resolveRedirect();
   const authEndpoint = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`;
+
   const request = new AuthSession.AuthRequest({
     clientId,
     redirectUri,
     responseType: 'id_token',
+    usePKCE: false,
     scopes: ['openid', 'profile', 'email'],
     extraParams: { response_mode: 'fragment', nonce: randomNonce() },
   });
 
-  await request.makeAuthUrlAsync({ authorizationEndpoint: authEndpoint });
-  const result = await request.promptAsync({ authorizationEndpoint: authEndpoint }, { useProxy: (require('expo-constants').default.appOwnership === 'expo') });
+  const authUrl = await request.makeAuthUrlAsync({ authorizationEndpoint: authEndpoint });
+  console.log('[Auth] Microsoft authUrl:', authUrl);
+
+  const result = await request.promptAsync(
+    { authorizationEndpoint: authEndpoint },
+    promptOptions as AuthSession.AuthRequestPromptOptions
+  );
   if (result.type !== 'success') return { ok: false, error: 'Canceled or failed' };
 
   const idToken = (result.params as any).id_token as string | undefined;
   if (!idToken) return { ok: false, error: 'Missing id_token' };
+
   const payload = b64UrlJson<any>(idToken.split('.')[1]);
   const email = String(payload?.email || payload?.preferred_username || '').toLowerCase();
   const name = String(payload?.name || '');
@@ -99,9 +159,7 @@ export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
       providerId: sub,
     });
     return { ok: true, email, name };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'Upsert failed' };
+  } catch (error: any) {
+    return { ok: false, error: error?.message || 'Upsert failed' };
   }
 }
-
-

@@ -3,20 +3,25 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../styles/theme';
+import { useAuth } from '../context/AuthContext';
 
 // Custom bottom tab bar matching Figma: dark bar with a centered
 // circular Home button (accent color) slightly elevated.
 export default function BottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const { profile } = useAuth();
   return (
     <View style={styles.container}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
-        const label =
+        let label =
           options.tabBarLabel !== undefined
             ? options.tabBarLabel
             : options.title !== undefined
             ? options.title
             : route.name;
+        if (route.name === 'Profile') {
+          label = profile ? 'Perfil' : 'Iniciar sesión';
+        }
 
         const isFocused = state.index === index;
         const onPress = () => {

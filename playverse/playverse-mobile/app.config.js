@@ -1,7 +1,5 @@
-﻿import * as dotenv from "dotenv";
-
-dotenv.config({ path: ".env.local" });
-dotenv.config();
+﻿// app.config.js
+import "dotenv/config";
 
 export default {
   expo: {
@@ -32,16 +30,20 @@ export default {
       output: "static",
       favicon: "./assets/favicon.png"
     },
-    plugins: [],
+
+    plugins: [
+      "expo-router",
+      "expo-web-browser"
+    ],
+
     experiments: {},
     extra: {
       convexUrl: process.env.CONVEX_URL || process.env.EXPO_PUBLIC_CONVEX_URL,
-      webAuthUrl: process.env.EXPO_PUBLIC_WEB_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      webAuthUrl: process.env.EXPO_PUBLIC_WEB_URL || process.env.NEXTAUTH_URL || "http://localhost:3000",
       webAssetBase: process.env.EXPO_PUBLIC_WEB_ASSET_BASE,
+      // ⚠️ No expongas secretos en el bundle móvil:
       googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-      googleClientSecret: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET,
       microsoftClientId: process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID,
-      microsoftClientSecret: process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_SECRET,
       microsoftTenantId: process.env.EXPO_PUBLIC_MICROSOFT_TENANT_ID,
     }
   }

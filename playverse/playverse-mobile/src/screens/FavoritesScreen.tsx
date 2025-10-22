@@ -1,24 +1,36 @@
-﻿import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, useWindowDimensions } from 'react-native';
-import { colors, spacing, typography } from '../styles/theme';
-import { GameCard } from '../components';
-import { useAuth } from '../context/AuthContext';
-import { useConvexQuery } from '../lib/useConvexQuery';
+import React from 'react';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/AppNavigator';
 
-const BREAKPOINT = 768;
-const MIN_CARD_WIDTH = 240;
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import { GameCard } from '../components';
+import { spacing, colors, typography } from '../styles/theme';
+import { useAuth } from '../context/AuthContext';
+import { useConvexQuery } from '../lib/useConvexQuery';
+
+const TABLET_BREAKPOINT = 768;
+const LAPTOP_BREAKPOINT = 1024;
+const TWO_COLUMN_BREAKPOINT = 360;
+const MIN_CARD_WIDTH = 160;
 
 export default function FavoritesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuth();
   const { width } = useWindowDimensions();
-  const columns = width >= BREAKPOINT ? 2 : 1;
+  const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
-    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns,
+    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
   );
 
   const userId = profile?._id;
@@ -28,11 +40,26 @@ export default function FavoritesScreen() {
     { enabled: !!userId, refreshMs: 25000 }
   );
 
+  const renderBackButton = () => (
+    <Pressable
+      onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
+      className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
+    >
+      <View className="flex-row items-center gap-[6px]">
+        <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
+        <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">Volver</Text>
+      </View>
+    </Pressable>
+  );
+
   if (!profile) {
     return (
-      <View style={styles.center}> 
-        <Text style={styles.title}>FAVORITOS</Text>
-        <Text style={styles.subtitle}>Inicia sesion para ver tus favoritos.</Text>
+      <View className="flex-1 items-center justify-center bg-background px-xl gap-sm">
+        {renderBackButton()}
+        <Text className="text-h1 font-black text-accent">FAVORITOS</Text>
+        <Text className="text-body text-textSecondary text-center">
+          Inicia sesión para ver tus juegos favoritos y seguir sus novedades.
+        </Text>
       </View>
     );
   }
@@ -41,14 +68,20 @@ export default function FavoritesScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />}
+      refreshControl={
+        <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />
+      }
     >
       <View style={styles.header}>
+        {renderBackButton()}
         <Text style={styles.title}>FAVORITOS</Text>
-        <Text style={styles.subtitle}>Elige tu proxima aventura entre tus titulos favoritos.</Text>
+        <Text style={styles.subtitle}>Tu radar personal de juegos imperdibles.</Text>
       </View>
+
       {(!data || data.length === 0) ? (
-        <View style={styles.center}><Text style={styles.subtitle}>Aun no tienes favoritos.</Text></View>
+        <View style={styles.center}>
+          <Text style={styles.subtitle}>Aún no tienes favoritos.</Text>
+        </View>
       ) : (
         <View style={[styles.grid, { justifyContent: columns === 1 ? 'center' : 'flex-start' }]}>
           {(data ?? []).map((row: any, i: number) => (
@@ -100,4 +133,5 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
 });
+
 

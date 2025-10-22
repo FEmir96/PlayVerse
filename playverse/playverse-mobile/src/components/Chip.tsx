@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, Text, StyleSheet, ViewStyle } from 'react-native';
 import { colors, radius, spacing, typography } from '../styles/theme';
 
 type Props = {
@@ -10,14 +10,23 @@ type Props = {
 };
 
 export default function Chip({ label, selected, onPress, style }: Props) {
+  const baseClass =
+    'rounded-pill border px-md py-[6px] transition-transform duration-150 active:scale-95 active:bg-surface/70';
+  const selectedClass = selected ? 'bg-accent border-accent shadow-card' : 'bg-transparent border-surfaceBorder';
+  const textClass = selected
+    ? 'text-[#1B1B1B] text-caption font-extrabold'
+    : 'text-textSecondary text-caption font-extrabold';
+
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      activeOpacity={0.85}
+      className={`${baseClass} ${selectedClass}`}
       style={[styles.base, selected ? styles.sel : styles.unsel, style]}
     >
-      <Text style={[styles.text, selected ? styles.textSel : styles.textUnsel]}>{label}</Text>
-    </TouchableOpacity>
+      <Text className={textClass} style={[styles.text, selected ? styles.textSel : styles.textUnsel]}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 

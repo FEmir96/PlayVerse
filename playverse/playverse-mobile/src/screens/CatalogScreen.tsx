@@ -9,15 +9,17 @@ import { useConvexQuery } from '../lib/useConvexQuery';
 import type { Game } from '../types/game';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10;
 const CATEGORIES = ['Todos', 'Accion', 'RPG', 'Carreras'];
 const TABLET_BREAKPOINT = 768;
-const MIN_CARD_WIDTH = 240;
+const LAPTOP_BREAKPOINT = 1024;
+const TWO_COLUMN_BREAKPOINT = 360;
+const MIN_CARD_WIDTH = 160;
 
 export default function CatalogScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
-  const columns = width >= TABLET_BREAKPOINT ? 2 : 1;
+  const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
     (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns

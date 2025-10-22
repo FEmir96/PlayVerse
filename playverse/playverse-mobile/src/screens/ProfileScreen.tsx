@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Image } from 'react-native';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Image, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { colors, spacing, typography, radius } from '../styles/theme';
 import Button from '../components/Button';
@@ -8,6 +9,9 @@ import { useAuth } from '../context/AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import { resolveAssetUrl } from '../lib/asset';
 import { signInWithGoogleNative, signInWithMicrosoftNative } from '../auth/nativeOAuth';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
 const PLAN_LABEL: Record<string, string> = {
   monthly: 'Mensual',
@@ -15,6 +19,34 @@ const PLAN_LABEL: Record<string, string> = {
   annual: 'Anual',
   lifetime: 'De por vida',
 };
+
+type RoleChipStyle = {
+  label: string;
+  pill: { backgroundColor: string; borderColor: string };
+  text: string;
+};
+
+const ROLE_CHIP_STYLES: Record<string, RoleChipStyle> = {
+  free: {
+    label: 'Free',
+    pill: { backgroundColor: '#1B2F3B', borderColor: '#A4C9D3' },
+    text: '#D9E7EF',
+  },
+  premium: {
+    label: 'Premium',
+    pill: { backgroundColor: '#F2B70522', borderColor: '#F2B705' },
+    text: colors.accent,
+  },
+  admin: {
+    label: 'Admin',
+    pill: { backgroundColor: '#2D1D49', borderColor: '#A855F7' },
+    text: '#D8B4FE',
+  },
+};
+
+function getRoleChip(role: string): RoleChipStyle {
+  return ROLE_CHIP_STYLES[role] ?? ROLE_CHIP_STYLES.free;
+}
 
 function formatDate(epoch?: number) {
   if (!epoch) return '-';
@@ -26,6 +58,7 @@ function formatDate(epoch?: number) {
 }
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile, loading, error, loginEmail, register, logout, setFromProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
@@ -103,10 +136,24 @@ export default function ProfileScreen() {
   }, [profile, upgrades]);
 
   const avatarUri = resolveAssetUrl((fullProfile as any)?.avatarUrl || (profile as any)?.avatarUrl);
+  const roleChip = useMemo(() => getRoleChip(profile?.role ?? 'free'), [profile?.role]);
+  const goHome = useCallback(
+    () => navigation.navigate('Tabs' as any, { screen: 'Home' } as any),
+    [navigation]
+  );
 
   if (!profile) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={styles.authContainer}>
+        <Pressable
+          onPress={goHome}
+          className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
+        >
+          <View className="flex-row items-center gap-[6px]">
+            <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
+            <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">Volver</Text>
+          </View>
+        </Pressable>
         <View style={styles.branding}>
           <Text style={styles.title}>PLAYVERSE</Text>
           <Text style={styles.subtitle}>Accede a tu cuenta o registrate</Text>
@@ -218,6 +265,15 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.profileContainer}>
+      <Pressable
+        onPress={goHome}
+        className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
+      >
+        <View className="flex-row items-center gap-[6px]">
+          <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
+          <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">Volver</Text>
+        </View>
+      </Pressable>
       <Text style={styles.title}>PERFIL</Text>
       <Text style={styles.subtitle}>Tu información personal y actividad reciente.</Text>
 
@@ -240,7 +296,12 @@ export default function ProfileScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionHeading}>Plan y suscripción</Text>
-        <Text style={styles.label}>Rol actual: {profile.role}</Text>
+        <View style={styles.roleRow}>
+          <Text style={styles.label}>Rol actual</Text>
+          <View style={[styles.rolePill, roleChip.pill]}>
+            <Text style={[styles.roleText, { color: roleChip.text }]}>{roleChip.label}</Text>
+          </View>
+        </View>
         <Text style={styles.label}>
           Plan actual: {currentPlan?.plan ? PLAN_LABEL[currentPlan.plan] ?? currentPlan.plan : 'Free'}
         </Text>
@@ -405,6 +466,25 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.caption,
   },
+  roleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  rolePill: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    backgroundColor: '#1B2F3B',
+    borderColor: '#A4C9D3',
+  },
+  roleText: {
+    fontSize: typography.caption,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -461,6 +541,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  gameTitle: {
+    color: colors.accent,
+    fontSize: typography.body,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
 });
+
+
+
+
+
+
+
+
+
+
 
 

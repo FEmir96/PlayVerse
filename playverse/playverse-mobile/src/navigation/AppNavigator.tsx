@@ -24,7 +24,11 @@ const Tab = createBottomTabNavigator();
 
 function Tabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(p) => <BottomTabBar {...p} />}>
+    <Tab.Navigator
+      initialRouteName="Home"
+      screenOptions={{ headerShown: false }}
+      tabBar={(p) => <BottomTabBar {...p} />}
+    >
       <Tab.Screen name="MyGames" component={MyGamesScreen} options={{ title: 'Mis juegos' }} />
       <Tab.Screen name="Catalog" component={CatalogScreen} options={{ title: 'Catalogo' }} />
       <Tab.Screen name="Home" component={HomeScreen} />

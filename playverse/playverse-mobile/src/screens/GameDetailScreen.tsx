@@ -209,6 +209,11 @@ export default function GameDetailScreen() {
       : undefined;
 
   const isLoading = loadingRemote && !game;
+  const purchasePrice =
+    typeof (game as any)?.purchasePrice === 'number' ? Number((game as any).purchasePrice) : undefined;
+  const weeklyPrice =
+    typeof (game as any)?.weeklyPrice === 'number' ? Number((game as any).weeklyPrice) : undefined;
+  const originalPurchase = purchasePrice ? Math.round((purchasePrice / 0.9) * 100) / 100 : undefined;
 
   return (
     <ScrollView
@@ -278,11 +283,18 @@ export default function GameDetailScreen() {
       ) : null}
 
       <View style={styles.card}>
-        {typeof (game as any)?.purchasePrice === 'number' ? (
-          <Text style={styles.price}>Compra - ${(game as any).purchasePrice.toFixed(2)}</Text>
+        {purchasePrice ? (
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>Compra</Text>
+            {originalPurchase ? (
+              <Text style={styles.priceOriginal}>${originalPurchase.toFixed(2)}</Text>
+            ) : null}
+            <Text style={styles.priceFinal}>${purchasePrice.toFixed(2)}</Text>
+            <Text style={styles.discountPill}>-10%</Text>
+          </View>
         ) : null}
-        {typeof (game as any)?.weeklyPrice === 'number' ? (
-          <Text style={styles.price}>Alquiler semanal - ${(game as any).weeklyPrice.toFixed(2)}</Text>
+        {weeklyPrice ? (
+          <Text style={styles.price}>Alquiler semanal - ${weeklyPrice.toFixed(2)}</Text>
         ) : null}
         <Text style={styles.note}>Gestiona compras y suscripciones desde la web PlayVerse.</Text>
       </View>
@@ -390,6 +402,38 @@ const styles = StyleSheet.create({
   price: {
     color: colors.textPrimary,
     fontWeight: '800',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  priceLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '700',
+  },
+  priceOriginal: {
+    color: colors.textSecondary,
+    textDecorationLine: 'line-through',
+    fontSize: typography.body,
+  },
+  priceFinal: {
+    color: colors.accent,
+    fontSize: typography.h3,
+    fontWeight: '900',
+  },
+  discountPill: {
+    backgroundColor: '#F2B70522',
+    color: colors.accent,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    fontSize: typography.caption,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   note: {
     color: colors.textSecondary,

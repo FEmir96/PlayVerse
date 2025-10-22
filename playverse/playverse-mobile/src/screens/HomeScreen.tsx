@@ -10,15 +10,17 @@ import type { Game, UpcomingGame } from '../types/game';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 const bgStars = require('../../assets/images/rob2.png');
-const heroMartian = require('../../assets/images/rob1.png');
+const heroLogo = require('../../assets/images/playverse-logo.png');
 
 const TABLET_BREAKPOINT = 768;
-const MIN_CARD_WIDTH = 240;
+const LAPTOP_BREAKPOINT = 1024;
+const TWO_COLUMN_BREAKPOINT = 360;
+const MIN_CARD_WIDTH = 160;
 
 export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
-  const columns = width >= TABLET_BREAKPOINT ? 2 : 1;
+  const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
     (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
@@ -53,6 +55,7 @@ export default function HomeScreen() {
   };
 
   const gridJustify = columns === 1 ? 'justify-center' : 'justify-start';
+  const goToCatalog = () => navigation.navigate('Tabs' as any, { screen: 'Catalog' } as any);
 
   return (
     <ScrollView
@@ -69,7 +72,7 @@ export default function HomeScreen() {
       <ImageBackground source={bgStars} className="h-[260px] w-full overflow-hidden" resizeMode="cover">
         <View className="absolute inset-0 bg-[#0f2d3a59]" />
         <View className="flex-1 items-center justify-center px-xl py-xl tablet:px-[80px] tablet:py-[48px]">
-          <Image source={heroMartian} className="h-[160px] w-[160px]" resizeMode="contain" />
+          <Image source={heroLogo} className="h-[120px] w-[200px] tablet:h-[140px] tablet:w-[240px]" resizeMode="contain" />
         </View>
       </ImageBackground>
 
@@ -99,31 +102,29 @@ export default function HomeScreen() {
           })}
         </View>
         <View className="items-center pt-md">
-          <Button title="Ver todo" variant="ghost" />
+          <Button title="Ver todo" variant="ghost" onPress={goToCatalog} />
         </View>
       </Section>
 
       <Section title="Proximamente">
-        <View className={`flex-row flex-wrap gap-md ${gridJustify}`}>
+        <View className={`flex-row flex-wrap gap-md ${gridJustify} border-t border-surfaceBorder/40 pt-xl mt-xl`}>
           {(upcoming ?? []).map((item: any, index) => {
             const normalized = {
               ...item,
               convexId: item.gameId ?? item._id,
               id: String(item.id ?? item.gameId ?? index),
             };
+            const releaseAt = normalized.releaseAt ?? normalized.release_at ?? normalized.launchDate;
+            const releaseLabel = releaseAt
+              ? `Proximamente en ${new Date(releaseAt).getFullYear()}`
+              : 'Proximamente';
             return (
               <GameCard
                 key={normalized.id}
                 game={normalized}
-                tag="Pronto"
                 style={{ width: cardWidth }}
-                onPress={() =>
-                  normalized.convexId &&
-                  navigation.navigate('GameDetail', {
-                    gameId: String(normalized.convexId),
-                    initial: normalized,
-                  })
-                }
+                disabled
+                overlayLabel={releaseLabel}
               />
             );
           })}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '../styles/theme';
@@ -11,22 +11,33 @@ type Props = {
   style?: ViewStyle;
   tag?: string;
   rightBadge?: React.ReactNode;
+  overlayLabel?: string;
+  disabled?: boolean;
   onPress?: () => void;
 };
 
-export default function GameCard({ game, style, tag, rightBadge, onPress }: Props) {
+export default function GameCard({
+  game,
+  style,
+  tag,
+  rightBadge,
+  overlayLabel,
+  disabled,
+  onPress,
+}: Props) {
   const imageUri = resolveAssetUrl((game as any).cover_url as string | undefined);
   const title = game.title || 'Juego';
   const summary = (game as any).description as string | undefined;
   const weekly = (game as any).weeklyPrice as number | undefined;
   const buy = (game as any).purchasePrice as number | undefined;
   const rating = (game as any).igdbRating as number | undefined;
+  const isDisabled = disabled || !onPress;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
+    <Pressable
       onPress={onPress}
-      className="overflow-hidden rounded-lg border border-surfaceBorder bg-surface shadow-card"
+      disabled={isDisabled}
+      className={`overflow-hidden rounded-lg border border-surfaceBorder bg-surface shadow-card transition-transform duration-150 ${isDisabled ? 'opacity-80' : 'active:scale-97 active:bg-surface/90'}`}
       style={[styles.shadow, style]}
     >
       <View className="relative">
@@ -41,6 +52,14 @@ export default function GameCard({ game, style, tag, rightBadge, onPress }: Prop
         {tag ? (
           <View className="absolute left-sm top-sm rounded-pill bg-accent px-sm py-[4px]">
             <Text className="text-caption font-extrabold text-[#1B1B1B]">{tag}</Text>
+          </View>
+        ) : null}
+
+        {overlayLabel ? (
+          <View className="absolute left-0 top-0 rounded-br-lg bg-[#22d3eecc] px-sm py-[4px]">
+            <Text className="text-[11px] font-extrabold uppercase tracking-[0.8px] text-[#0b2530]">
+              {overlayLabel}
+            </Text>
           </View>
         ) : null}
 
@@ -72,7 +91,7 @@ export default function GameCard({ game, style, tag, rightBadge, onPress }: Prop
           ) : null}
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 

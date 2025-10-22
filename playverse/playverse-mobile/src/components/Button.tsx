@@ -1,5 +1,5 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle, GestureResponderEvent } from 'react-native';
+import React, { useMemo } from 'react';
+import { Pressable, Text, StyleSheet, ViewStyle, TextStyle, GestureResponderEvent } from 'react-native';
 import { colors, radius, spacing, typography } from '../styles/theme';
 
 type Variant = 'primary' | 'ghost';
@@ -17,43 +17,58 @@ type Props = {
 // - primary: filled with accent color
 // - ghost: transparent, accent border
 export default function Button({ title, onPress, variant = 'primary', style, textStyle, disabled }: Props) {
-  const isPrimary = variant === 'primary';
+  const { buttonClass, textClass } = useMemo(() => {
+    const base =
+      'self-start rounded-pill px-lg py-sm transition-transform duration-150 active:scale-95 active:opacity-90';
+    if (variant === 'primary') {
+      return {
+        buttonClass: `${base} bg-accent shadow-card`,
+        textClass: 'text-[#1B1B1B] text-body font-bold',
+      };
+    }
+    return {
+      buttonClass: `${base} border-2 border-accent bg-transparent active:border-accentAlt`,
+      textClass: 'text-accent text-body font-bold',
+    };
+  }, [variant]);
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
+    <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={[styles.base, isPrimary ? styles.primary : styles.ghost, disabled && { opacity: 0.6 }, style]}
+      className={`${buttonClass} ${disabled ? 'opacity-50 active:scale-100 active:opacity-50' : ''}`}
+      style={[styles.fallbackBase, variant === 'primary' ? styles.fallbackPrimary : styles.fallbackGhost, style]}
     >
-      <Text style={[styles.text, isPrimary ? styles.textPrimary : styles.textGhost, textStyle]}>{title}</Text>
-    </TouchableOpacity>
+      <Text className={textClass} style={[styles.fallbackText, variant === 'primary' ? styles.fallbackTextPrimary : styles.fallbackTextGhost, textStyle]}>
+        {title}
+      </Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: {
+  fallbackBase: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
     alignSelf: 'flex-start',
   },
-  primary: {
+  fallbackPrimary: {
     backgroundColor: colors.accent,
   },
-  ghost: {
+  fallbackGhost: {
     borderWidth: 2,
     borderColor: colors.accent,
     backgroundColor: 'transparent',
   },
-  text: {
+  fallbackText: {
     fontSize: typography.body,
     fontWeight: '700',
   },
-  textPrimary: {
+  fallbackTextPrimary: {
     color: '#1B1B1B',
   },
-  textGhost: {
+  fallbackTextGhost: {
     color: colors.accent,
   },
 });
