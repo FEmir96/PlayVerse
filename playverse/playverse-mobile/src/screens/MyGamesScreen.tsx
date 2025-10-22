@@ -1,19 +1,27 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, RefreshControl } from 'react-native';
-import { colors, spacing, typography } from '../styles/theme';
+import { RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { spacing } from '../styles/theme';
 import { Button, Chip, GameCard } from '../components';
 import { useAuth } from '../context/AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
-const { width } = Dimensions.get('window');
-const CARD_W = (width - (spacing.xl * 2) - spacing.md) / 2;
+const TABLET_BREAKPOINT = 768;
+const MIN_CARD_WIDTH = 240;
 
 export default function MyGamesScreen() {
-  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuth();
+  const { width } = useWindowDimensions();
+  const columns = width >= TABLET_BREAKPOINT ? 2 : 1;
+  const cardWidth = Math.max(
+    MIN_CARD_WIDTH,
+    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
+  );
+
   const [show, setShow] = useState<'rentals' | 'purchases'>('rentals');
 
   const userId = profile?._id;
@@ -28,78 +36,100 @@ export default function MyGamesScreen() {
     { enabled: !!userId, refreshMs: 30000 }
   );
 
-  const list = useMemo(() => (show === 'rentals' ? rentals.data ?? [] : purchases.data ?? []), [show, rentals.data, purchases.data]);
+  const list = useMemo(
+    () => (show === 'rentals' ? rentals.data ?? [] : purchases.data ?? []),
+    [show, rentals.data, purchases.data]
+  );
 
   if (!profile) {
     return (
-      <View style={styles.center}> 
-        <Text style={styles.title}>MIS JUEGOS</Text>
-        <Text style={styles.subtitle}>Inicia sesión para ver tus compras y alquileres.</Text>
+      <View className="flex-1 items-center justify-center bg-background px-xl">
+        <Text className="text-h1 font-black text-accent">MIS JUEGOS</Text>
+        <Text className="mt-sm text-body text-textSecondary">
+          Inicia sesion para ver tus compras y alquileres.
+        </Text>
+        <Button
+          title="Ir al perfil"
+          variant="primary"
+          style={{ marginTop: spacing.lg }}
+          onPress={() => navigation.navigate('Profile' as any)}
+        />
       </View>
     );
   }
 
   const refreshing = rentals.loading || purchases.loading;
-  const onRefresh = () => { rentals.refetch(); purchases.refetch(); };
+  const onRefresh = () => {
+    rentals.refetch();
+    purchases.refetch();
+  };
+
+  const gridJustify = columns === 1 ? 'justify-center' : 'justify-start';
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+    <ScrollView
+      className="flex-1 bg-background"
+      contentContainerStyle={{ paddingBottom: spacing.xxl }}
+      refreshControl={
+        <RefreshControl
+          refreshing={!!refreshing}
+          onRefresh={onRefresh}
+          tintColor="#F2B705"
+        />
+      }
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>MIS JUEGOS</Text>
-        <Text style={styles.subtitle}>Tu arsenal personal de aventuras.</Text>
-        <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
+      <View className="gap-sm px-xl pt-xl tablet:px-[80px]">
+        <Text className="text-h1 font-black text-accent">MIS JUEGOS</Text>
+        <Text className="text-body text-textSecondary">
+          Tu arsenal personal de aventuras.
+        </Text>
+        <View className="mt-sm flex-row gap-md">
           <Chip label="Mis compras" selected={show === 'purchases'} onPress={() => setShow('purchases')} />
           <Chip label="Mis alquileres" selected={show === 'rentals'} onPress={() => setShow('rentals')} />
         </View>
       </View>
 
       {list.length === 0 ? (
-        <View style={styles.center}><Text style={styles.subtitle}>No hay {show === 'rentals' ? 'alquileres' : 'compras'} aún.</Text></View>
+        <View className="items-center px-xl pt-xl tablet:px-[80px]">
+          <Text className="text-body text-textSecondary">
+            No hay {show === 'rentals' ? 'alquileres' : 'compras'} aun.
+          </Text>
+        </View>
       ) : (
-        <View style={styles.gridTwo}>
-          {list.map((row: any, i: number) => (
-            <GameCard key={String(row._id ?? i)} game={{
-              id: String(row.gameId ?? row._id ?? i),
-              title: row.title || row.game?.title || 'Juego',
-              cover_url: row.cover_url || row.game?.cover_url,
-              purchasePrice: row.purchasePrice,
-              weeklyPrice: row.weeklyPrice,
-            }} style={{ width: CARD_W }} tag={show === 'rentals' ? 'Alquiler' : 'Compra'} onPress={() => nav.navigate('GameDetail', { gameId: String(row.gameId ?? '') })} />
-          ))}
+        <View className={`flex-row flex-wrap gap-md px-xl pt-md ${gridJustify}`}>
+          {list.map((row: any, index: number) => {
+            const targetId = row.gameId ?? row.game?._id ?? null;
+            const initialGame = row.game
+              ? {
+                  ...row.game,
+                  purchasePrice: row.purchasePrice,
+                  weeklyPrice: row.weeklyPrice,
+                }
+              : undefined;
+            return (
+              <GameCard
+                key={String(row._id ?? index)}
+                game={{
+                  id: String(targetId ?? row._id ?? index),
+                  title: row.title || row.game?.title || 'Juego',
+                  cover_url: row.cover_url || row.game?.cover_url,
+                  purchasePrice: row.purchasePrice,
+                  weeklyPrice: row.weeklyPrice,
+                }}
+                tag={show === 'rentals' ? 'Alquiler' : 'Compra'}
+                style={{ width: cardWidth }}
+                onPress={() => {
+                  if (!targetId) return;
+                  navigation.navigate('GameDetail', {
+                    gameId: String(targetId),
+                    initial: initialGame,
+                  });
+                }}
+              />
+            );
+          })}
         </View>
       )}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    gap: spacing.sm,
-  },
-  title: {
-    color: colors.accent,
-    fontSize: typography.h1,
-    fontWeight: '900',
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.body,
-  },
-  gridTwo: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-});

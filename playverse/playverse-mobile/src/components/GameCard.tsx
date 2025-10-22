@@ -1,8 +1,8 @@
-﻿import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
+import React from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors, radius, spacing, typography, shadows } from '../styles/theme';
+import { colors } from '../styles/theme';
 import type { Game, UpcomingGame } from '../types/game';
 import { resolveAssetUrl } from '../lib/asset';
 
@@ -23,41 +23,52 @@ export default function GameCard({ game, style, tag, rightBadge, onPress }: Prop
   const rating = (game as any).igdbRating as number | undefined;
 
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.card, style]}>
-      <View style={styles.coverWrap}>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      className="overflow-hidden rounded-lg border border-surfaceBorder bg-surface shadow-card"
+      style={[styles.shadow, style]}
+    >
+      <View className="relative">
         {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.cover} />
+          <Image source={{ uri: imageUri }} className="aspect-[0.68] w-full" />
         ) : (
-          <View style={[styles.cover, styles.coverFallback]}>
+          <View className="aspect-[0.68] w-full items-center justify-center bg-[#0F2D3A]">
             <Ionicons name="game-controller" size={36} color={colors.textSecondary} />
           </View>
         )}
 
         {tag ? (
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{tag}</Text>
+          <View className="absolute left-sm top-sm rounded-pill bg-accent px-sm py-[4px]">
+            <Text className="text-caption font-extrabold text-[#1B1B1B]">{tag}</Text>
           </View>
         ) : null}
 
-        {rightBadge ? <View style={styles.badgeRight}>{rightBadge}</View> : null}
+        {rightBadge ? <View className="absolute right-sm top-sm">{rightBadge}</View> : null}
       </View>
 
-      <View style={styles.meta}>
-        <Text style={styles.title} numberOfLines={2}>{title}</Text>
-        {summary ? <Text style={styles.summary} numberOfLines={2}>{summary}</Text> : null}
+      <View className="min-h-[110px] gap-xs px-md py-md">
+        <Text className="text-h3 font-bold text-textPrimary" numberOfLines={2}>
+          {title}
+        </Text>
+        {summary ? (
+          <Text className="text-caption text-textSecondary" numberOfLines={2}>
+            {summary}
+          </Text>
+        ) : null}
 
-        <View style={styles.detailsRow}>
+        <View className="flex-row flex-wrap items-center gap-xs">
           {typeof rating === 'number' ? (
-            <View style={styles.rating}>
+            <View className="flex-row items-center gap-[4px] rounded-pill bg-[#244552] px-2 py-[2px]">
               <Ionicons name="star" size={12} color="#FFD166" />
-              <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+              <Text className="text-[12px] font-bold text-textPrimary">{rating.toFixed(1)}</Text>
             </View>
           ) : null}
           {typeof weekly === 'number' ? (
-            <Text style={styles.price}>Alquiler ${weekly.toFixed(2)}/sem</Text>
+            <Text className="text-[12px] font-semibold text-info">Alquiler ${weekly.toFixed(2)}/sem</Text>
           ) : null}
           {typeof buy === 'number' ? (
-            <Text style={styles.price}>Compra ${buy.toFixed(2)}</Text>
+            <Text className="text-[12px] font-semibold text-info">Compra ${buy.toFixed(2)}</Text>
           ) : null}
         </View>
       </View>
@@ -66,81 +77,12 @@ export default function GameCard({ game, style, tag, rightBadge, onPress }: Prop
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    overflow: 'hidden',
-    ...shadows.card,
-  },
-  coverWrap: { position: 'relative' },
-  cover: {
-    width: '100%',
-    aspectRatio: 0.68,
-    resizeMode: 'cover',
-  },
-  coverFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0F2D3A',
-  },
-  tag: {
-    position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  tagText: {
-    fontSize: typography.caption,
-    fontWeight: '800',
-    color: '#1B1B1B',
-  },
-  badgeRight: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-  },
-  meta: {
-    padding: spacing.md,
-    gap: spacing.xs,
-    minHeight: 110,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.h3,
-    fontWeight: '700',
-  },
-  summary: {
-    color: colors.textSecondary,
-    fontSize: typography.caption,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  rating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#244552',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    gap: 4,
-  },
-  ratingText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  price: {
-    color: colors.info,
-    fontWeight: '700',
-    fontSize: 12,
+  shadow: {
+    elevation: 8,
+    shadowColor: 'rgba(0,0,0,0.35)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
   },
 });
+

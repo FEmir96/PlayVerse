@@ -1,30 +1,40 @@
-﻿import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, ImageBackground, Dimensions, RefreshControl } from 'react-native';
+import React, { useMemo } from 'react';
+import { Image, ImageBackground, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { colors, spacing, typography } from '../styles/theme';
+import { spacing } from '../styles/theme';
 import { Button, GameCard, PremiumBanner } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { Game, UpcomingGame } from '../types/game';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 const bgStars = require('../../assets/images/rob2.png');
-const logo = require('../../assets/images/playverse-logo.png');
+const heroMartian = require('../../assets/images/rob1.png');
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - spacing.xl * 2 - spacing.md) / 2;
+const TABLET_BREAKPOINT = 768;
+const MIN_CARD_WIDTH = 240;
 
 export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
-  const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
-    'queries/getGames:getGames',
-    {},
-    { refreshMs: 15000 }
+  const { width } = useWindowDimensions();
+  const columns = width >= TABLET_BREAKPOINT ? 2 : 1;
+  const cardWidth = Math.max(
+    MIN_CARD_WIDTH,
+    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
   );
 
-  const { data: upcoming, loading: loadingUpcoming, refetch: refetchUpcoming } = useConvexQuery<UpcomingGame[]>(
+  const {
+    data: allGames,
+    loading: loadingAll,
+    refetch: refetchAll,
+  } = useConvexQuery<Game[]>('queries/getGames:getGames', {}, { refreshMs: 15000 });
+
+  const {
+    data: upcoming,
+    loading: loadingUpcoming,
+    refetch: refetchUpcoming,
+  } = useConvexQuery<UpcomingGame[]>(
     'queries/getUpcomingGames:getUpcomingGames',
     { limit: 6 },
     { refreshMs: 30000 }
@@ -42,65 +52,85 @@ export default function HomeScreen() {
     refetchUpcoming();
   };
 
+  const gridJustify = columns === 1 ? 'justify-center' : 'justify-start';
+
   return (
     <ScrollView
-      style={styles.root}
+      className="flex-1 bg-background"
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#F2B705"
+        />
+      }
     >
-      <ImageBackground source={bgStars} style={styles.hero} resizeMode="cover">
-        <View style={styles.heroOverlay} />
-        <View style={styles.heroContent}>
-          <Image source={logo} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.heroTitle}>PLAYVERSE</Text>
-          <Text style={styles.heroSubtitle}>
-            Explora, descubre y juega. Catalogo en crecimiento con clasicos y nuevas joyas.
-          </Text>
-          <Button title="Explorar" variant="primary" />
+      <ImageBackground source={bgStars} className="h-[260px] w-full overflow-hidden" resizeMode="cover">
+        <View className="absolute inset-0 bg-[#0f2d3a59]" />
+        <View className="flex-1 items-center justify-center px-xl py-xl tablet:px-[80px] tablet:py-[48px]">
+          <Image source={heroMartian} className="h-[160px] w-[160px]" resizeMode="contain" />
         </View>
       </ImageBackground>
 
-      <Section title="Nuevos juegos" subtitle="Explora la coleccion. Encuentra tu proxima aventura!">
-        <View style={styles.grid}>
-          {newest.map((game: any, index) => (
-            <GameCard
-              key={String(game._id ?? index)}
-              game={{
-                id: String(game._id ?? index),
-                title: game.title,
-                cover_url: game.cover_url,
-                weeklyPrice: game.weeklyPrice,
-                purchasePrice: game.purchasePrice,
-                igdbRating: game.igdbRating,
-                createdAt: game.createdAt,
-                description: game.description,
-              }}
-              tag={index < 2 ? 'Accion' : undefined}
-              style={{ width: CARD_WIDTH }}
-              onPress={() => game._id && navigation.navigate('GameDetail', { gameId: String(game._id) })}
-            />
-          ))}
+      <Section title="Nuevos juegos" subtitle="Explora la coleccion. Encuentra tu proxima aventura.">
+        <View className={`flex-row flex-wrap gap-md ${gridJustify}`}>
+          {newest.map((game: any, index) => {
+            const normalized = {
+              ...game,
+              convexId: game._id,
+              id: String(game._id ?? index),
+            };
+            return (
+              <GameCard
+                key={normalized.id}
+                game={normalized}
+                tag={index < 2 ? 'Accion' : undefined}
+                style={{ width: cardWidth }}
+                onPress={() =>
+                  normalized.convexId &&
+                  navigation.navigate('GameDetail', {
+                    gameId: String(normalized.convexId),
+                    initial: normalized,
+                  })
+                }
+              />
+            );
+          })}
         </View>
-        <View style={styles.ctaRow}>
+        <View className="items-center pt-md">
           <Button title="Ver todo" variant="ghost" />
         </View>
       </Section>
 
       <Section title="Proximamente">
-        <View style={styles.grid}>
-          {(upcoming ?? []).map((item: any, index) => (
-            <GameCard
-              key={String(item.id ?? index)}
-              game={item as any}
-              tag="Pronto"
-              style={{ width: CARD_WIDTH }}
-              onPress={() => item.gameId && navigation.navigate('GameDetail', { gameId: String(item.gameId) })}
-            />
-          ))}
+        <View className={`flex-row flex-wrap gap-md ${gridJustify}`}>
+          {(upcoming ?? []).map((item: any, index) => {
+            const normalized = {
+              ...item,
+              convexId: item.gameId ?? item._id,
+              id: String(item.id ?? item.gameId ?? index),
+            };
+            return (
+              <GameCard
+                key={normalized.id}
+                game={normalized}
+                tag="Pronto"
+                style={{ width: cardWidth }}
+                onPress={() =>
+                  normalized.convexId &&
+                  navigation.navigate('GameDetail', {
+                    gameId: String(normalized.convexId),
+                    initial: normalized,
+                  })
+                }
+              />
+            );
+          })}
         </View>
       </Section>
 
-      <View style={{ paddingHorizontal: spacing.xl }}>
+      <View className="px-xl tablet:px-[80px]">
         <PremiumBanner />
       </View>
     </ScrollView>
@@ -117,68 +147,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+    <View className="gap-sm px-xl pt-xl tablet:px-[80px] tablet:pt-[48px]">
+      <Text className="text-h2 font-black text-accent tablet:text-[26px]">{title}</Text>
+      {subtitle ? <Text className="text-body text-textSecondary">{subtitle}</Text> : null}
       {children}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  hero: {
-    width: '100%',
-    height: 260,
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,45,58,0.35)',
-  },
-  heroContent: {
-    flex: 1,
-    paddingHorizontal: spacing.xl,
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  logo: {
-    width: 96,
-    height: 42,
-  },
-  heroTitle: {
-    color: colors.accent,
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-  heroSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.body,
-  },
-  section: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    gap: spacing.sm,
-  },
-  sectionTitle: {
-    color: colors.accent,
-    fontSize: typography.h2,
-    fontWeight: '900',
-  },
-  sectionSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.body,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  ctaRow: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-});

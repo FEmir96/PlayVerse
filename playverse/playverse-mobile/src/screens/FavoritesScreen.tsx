@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, RefreshControl } from 'react-native';
+﻿import React from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, useWindowDimensions } from 'react-native';
 import { colors, spacing, typography } from '../styles/theme';
 import { GameCard } from '../components';
 import { useAuth } from '../context/AuthContext';
@@ -8,12 +8,19 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
-const { width } = Dimensions.get('window');
-const CARD_W = (width - (spacing.xl * 2) - spacing.md) / 2;
+const BREAKPOINT = 768;
+const MIN_CARD_WIDTH = 240;
 
 export default function FavoritesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuth();
+  const { width } = useWindowDimensions();
+  const columns = width >= BREAKPOINT ? 2 : 1;
+  const cardWidth = Math.max(
+    MIN_CARD_WIDTH,
+    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns,
+  );
+
   const userId = profile?._id;
   const { data, loading, refetch } = useConvexQuery<any[]>(
     'queries/listFavoritesByUser:listFavoritesByUser',
@@ -25,29 +32,37 @@ export default function FavoritesScreen() {
     return (
       <View style={styles.center}> 
         <Text style={styles.title}>FAVORITOS</Text>
-        <Text style={styles.subtitle}>Inicia sesión para ver tus favoritos.</Text>
+        <Text style={styles.subtitle}>Inicia sesion para ver tus favoritos.</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: spacing.xxl }}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />}
     >
       <View style={styles.header}>
         <Text style={styles.title}>FAVORITOS</Text>
-        <Text style={styles.subtitle}>Elige tu próxima aventura entre tus títulos favoritos.</Text>
+        <Text style={styles.subtitle}>Elige tu proxima aventura entre tus titulos favoritos.</Text>
       </View>
       {(!data || data.length === 0) ? (
-        <View style={styles.center}><Text style={styles.subtitle}>Aún no tienes favoritos.</Text></View>
+        <View style={styles.center}><Text style={styles.subtitle}>Aun no tienes favoritos.</Text></View>
       ) : (
-        <View style={styles.gridTwo}>
+        <View style={[styles.grid, { justifyContent: columns === 1 ? 'center' : 'flex-start' }]}>
           {(data ?? []).map((row: any, i: number) => (
-            <GameCard key={String(row._id ?? i)} game={{
-              id: String(row.game?._id ?? row.gameId ?? i),
-              title: row.game?.title || 'Juego',
-              cover_url: row.game?.cover_url,
-            }} style={{ width: CARD_W }} tag="Favorito" onPress={() => row.game?._id && nav.navigate('GameDetail', { gameId: String(row.game._id) })} />
+            <GameCard
+              key={String(row._id ?? i)}
+              game={{
+                id: String(row.game?._id ?? row.gameId ?? i),
+                title: row.game?.title || 'Juego',
+                cover_url: row.game?.cover_url,
+              }}
+              style={{ width: cardWidth }}
+              tag="Favorito"
+              onPress={() => row.game?._id && nav.navigate('GameDetail', { gameId: String(row.game._id) })}
+            />
           ))}
         </View>
       )}
@@ -70,7 +85,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.body,
   },
-  gridTwo: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
@@ -85,3 +100,4 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
 });
+

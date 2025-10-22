@@ -18,10 +18,11 @@ function baseFromWindow(): string | undefined {
 
 export function resolveAssetUrl(input?: string | null): string | undefined {
   if (!input) return undefined;
-  if (/^https?:/i.test(input)) return input;
+  if (/^(https?:|data:|file:|asset:)/i.test(input)) return input;
 
   const base = baseFromWindow() || extra.webAssetBase || extra.webAuthUrl;
   if (!base) return undefined;
 
   return `${String(base).replace(/\/$/, '')}/${String(input).replace(/^\//, '')}`;
 }
+

@@ -16,6 +16,12 @@ export default function MainApp() {
     config: {
       screens: {
         AuthCallback: 'auth',
+        GameDetail: {
+          path: 'GameDetail/:gameId?',
+          parse: {
+            gameId: (value: string) => value,
+          },
+        },
         Tabs: {
           screens: {
             Home: 'home',

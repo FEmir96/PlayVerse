@@ -20,9 +20,12 @@ export const getUserPurchases = query({
         const g = t.gameId ? await db.get(t.gameId) : null;
         return {
           _id: t._id,
+          gameId: t.gameId ?? null,
           createdAt: t.createdAt,
           // por compatibilidad con el mapeo en React:
-          game: g ? { title: g.title ?? "", cover_url: (g as any).cover_url ?? "" } : undefined,
+          game: g
+            ? { _id: g._id, title: g.title ?? "", cover_url: (g as any).cover_url ?? "" }
+            : undefined,
           title: g?.title ?? "",
           cover_url: (g as any)?.cover_url ?? "",
         };

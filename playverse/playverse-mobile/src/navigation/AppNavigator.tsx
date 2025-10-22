@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeScreen from '../screens/HomeScreen';
@@ -15,7 +15,7 @@ import AuthCallbackScreen from '../screens/AuthCallbackScreen';
 export type RootStackParamList = {
   Login: undefined;
   Tabs: undefined;
-  GameDetail: { gameId: string };
+  GameDetail: { gameId: string; initial?: any };
   AuthCallback: undefined;
 };
 
@@ -26,7 +26,7 @@ function Tabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(p) => <BottomTabBar {...p} />}>
       <Tab.Screen name="MyGames" component={MyGamesScreen} options={{ title: 'Mis juegos' }} />
-      <Tab.Screen name="Catalog" component={CatalogScreen} options={{ title: 'Catálogo' }} />
+      <Tab.Screen name="Catalog" component={CatalogScreen} options={{ title: 'Catalogo' }} />
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Favoritos' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil' }} />

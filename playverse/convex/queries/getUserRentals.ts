@@ -25,7 +25,7 @@ export const getUserRentals = query({
           title: (game as any)?.title,
           cover_url: (game as any)?.cover_url,
           game: game
-            ? { title: (game as any).title, cover_url: (game as any).cover_url }
+            ? { _id: game._id, title: (game as any).title, cover_url: (game as any).cover_url }
             : undefined,
         };
       })
