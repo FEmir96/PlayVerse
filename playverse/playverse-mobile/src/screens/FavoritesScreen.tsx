@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from "react";
 import {
   Pressable,
   RefreshControl,
@@ -7,16 +7,16 @@ import {
   Text,
   View,
   useWindowDimensions,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import type { RootStackParamList } from '../navigation/AppNavigator';
-import { GameCard } from '../components';
-import { spacing, colors, typography } from '../styles/theme';
-import { useAuth } from '../context/AuthContext';
-import { useConvexQuery } from '../lib/useConvexQuery';
+import type { RootStackParamList } from "../navigation/AppNavigator";
+import { GameCard } from "../components";
+import { spacing, colors, typography } from "../styles/theme";
+import { useAuth } from "../context/AuthContext";
+import { useConvexQuery } from "../lib/useConvexQuery";
 
 const TABLET_BREAKPOINT = 768;
 const LAPTOP_BREAKPOINT = 1024;
@@ -28,9 +28,11 @@ export default function FavoritesScreen() {
   const { profile } = useAuth();
   const { width } = useWindowDimensions();
   const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
+  const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
+  const rawCardWidth = (width - horizontalSpace) / columns;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
-    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
+    Math.min(columns === 1 ? 320 : 220, rawCardWidth)
   );
 
   const userId = profile?._id;
@@ -57,8 +59,8 @@ export default function FavoritesScreen() {
       <View className="flex-1 items-center justify-center bg-background px-xl gap-sm">
         {renderBackButton()}
         <Text className="text-h1 font-black text-accent">FAVORITOS</Text>
-        <Text className="text-body text-textSecondary text-center">
-          Inicia sesión para ver tus juegos favoritos y seguir sus novedades.
+        <Text className="text-body text-accent text-center">
+          Inicia sesi\u00F3n para ver tus juegos favoritos y seguir sus novedades.
         </Text>
       </View>
     );
@@ -80,7 +82,7 @@ export default function FavoritesScreen() {
 
       {(!data || data.length === 0) ? (
         <View style={styles.center}>
-          <Text style={styles.subtitle}>Aún no tienes favoritos.</Text>
+          <Text style={styles.subtitle}>A\u00FAn no tienes favoritos.</Text>
         </View>
       ) : (
         <View style={[styles.grid, { justifyContent: columns === 1 ? 'center' : 'flex-start' }]}>
@@ -92,7 +94,7 @@ export default function FavoritesScreen() {
                 title: row.game?.title || 'Juego',
                 cover_url: row.game?.cover_url,
               }}
-              style={{ width: cardWidth }}
+              style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
               tag="Favorito"
               onPress={() => row.game?._id && nav.navigate('GameDetail', { gameId: String(row.game._id) })}
             />
@@ -115,8 +117,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   subtitle: {
-    color: colors.textSecondary,
+    color: colors.accent,
     fontSize: typography.body,
+    textAlign: 'center',
   },
   grid: {
     flexDirection: 'row',
@@ -133,5 +136,3 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
 });
-
-

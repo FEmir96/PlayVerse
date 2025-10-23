@@ -1,14 +1,21 @@
-import React, { useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View, useWindowDimensions, Pressable } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
+﻿import React, { useMemo, useState } from "react";
+import {
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+  Pressable,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 
-import { spacing } from '../styles/theme';
-import { Button, Chip, GameCard } from '../components';
-import { useAuth } from '../context/AuthContext';
-import { useConvexQuery } from '../lib/useConvexQuery';
-import type { RootStackParamList } from '../navigation/AppNavigator';
+import { spacing } from "../styles/theme";
+import { Button, Chip, GameCard } from "../components";
+import { useAuth } from "../context/AuthContext";
+import { useConvexQuery } from "../lib/useConvexQuery";
+import type { RootStackParamList } from "../navigation/AppNavigator";
 
 const TABLET_BREAKPOINT = 768;
 const LAPTOP_BREAKPOINT = 1024;
@@ -20,9 +27,11 @@ export default function MyGamesScreen() {
   const { profile } = useAuth();
   const { width } = useWindowDimensions();
   const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
+  const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
+  const rawCardWidth = (width - horizontalSpace) / columns;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
-    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
+    Math.min(columns === 1 ? 320 : 220, rawCardWidth)
   );
 
   const [show, setShow] = useState<'rentals' | 'purchases'>('rentals');
@@ -48,7 +57,7 @@ export default function MyGamesScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-background px-xl gap-sm">
         <Pressable
-          onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
+          onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as any)}
           className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
         >
           <View className="flex-row items-center gap-[6px]">
@@ -59,11 +68,11 @@ export default function MyGamesScreen() {
           </View>
         </Pressable>
         <Text className="text-h1 font-black text-accent">MIS JUEGOS</Text>
-        <Text className="text-body text-textSecondary text-center">
-          Inicia sesion para ver tus compras y alquileres.
+        <Text className="text-body text-accent text-center">
+          Inicia sesi\u00F3n para ver tus compras y alquileres.
         </Text>
         <Button
-          title="Iniciar sesion"
+          title="Iniciar sesi\u00F3n"
           variant="primary"
           style={{ marginTop: spacing.lg, alignSelf: 'center' }}
           onPress={() => navigation.navigate('Profile' as any)}
@@ -94,7 +103,7 @@ export default function MyGamesScreen() {
     >
       <View className="gap-sm px-xl pt-xl tablet:px-[80px]">
         <Pressable
-          onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
+          onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as any)}
           className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
         >
           <View className="flex-row items-center gap-[6px]">
@@ -105,7 +114,7 @@ export default function MyGamesScreen() {
           </View>
         </Pressable>
         <Text className="text-h1 font-black text-accent">MIS JUEGOS</Text>
-        <Text className="text-body text-textSecondary">
+        <Text className="text-body text-accent">
           Tu arsenal personal de aventuras.
         </Text>
         <View className="mt-sm flex-row flex-wrap gap-md">
@@ -116,8 +125,8 @@ export default function MyGamesScreen() {
 
       {list.length === 0 ? (
         <View className="items-center px-xl pt-xl tablet:px-[80px]">
-          <Text className="text-body text-textSecondary">
-            No hay {show === 'rentals' ? 'alquileres' : 'compras'} aun.
+          <Text className="text-body text-accent">
+            No hay {show === 'rentals' ? 'alquileres' : 'compras'} a\u00FAn.
           </Text>
         </View>
       ) : (
@@ -142,7 +151,7 @@ export default function MyGamesScreen() {
                   weeklyPrice: row.weeklyPrice,
                 }}
                 tag={show === 'rentals' ? 'Alquiler' : 'Compra'}
-                style={{ width: cardWidth }}
+                style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
                 onPress={() => {
                   if (!targetId) return;
                   navigation.navigate('GameDetail', {
@@ -158,4 +167,3 @@ export default function MyGamesScreen() {
     </ScrollView>
   );
 }
-

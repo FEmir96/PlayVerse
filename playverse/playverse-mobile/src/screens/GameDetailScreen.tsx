@@ -2,24 +2,28 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Linking from 'expo-linking';
 import WebView from 'react-native-webview';
+import { Ionicons } from '@expo/vector-icons';
 
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import { colors, spacing, typography, radius } from '../styles/theme';
 import { resolveAssetUrl } from '../lib/asset';
 import { convexHttp } from '../lib/convexClient';
 
 export default function GameDetailScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'GameDetail'>>();
   const params = (route.params ?? {}) as Partial<RootStackParamList['GameDetail']>;
   const linkingUrl = Linking.useURL();
@@ -76,7 +80,7 @@ export default function GameDetailScreen() {
     async function loadShots(title: string) {
       try {
         setLoadingShots(true);
-        const response = await convexHttp.action('actions/getIGDBScreenshots:getIGDBScreenshots', {
+        const response = await (convexHttp as any).action('actions/getIGDBScreenshots:getIGDBScreenshots', {
           title,
           limit: 8,
           size2x: true,
@@ -176,7 +180,6 @@ export default function GameDetailScreen() {
   const player = useVideoPlayer(playerSource, (instance) => {
     instance.pause();
     instance.staysActiveInBackground = false;
-    instance.isLooping = false;
   });
 
   useEffect(() => {
@@ -185,7 +188,7 @@ export default function GameDetailScreen() {
 
   const genres = useMemo(() => {
     if (Array.isArray(game?.genres) && game.genres.length) {
-      return game.genres.join(' • ');
+      return game.genres.join(' \u2022 ');
     }
     return undefined;
   }, [game?.genres]);
@@ -220,6 +223,18 @@ export default function GameDetailScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
     >
+      <Pressable
+        onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as any)}
+        className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95 ml-xl mt-xl"
+      >
+        <View className="flex-row items-center gap-[6px]">
+          <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
+          <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">
+            Volver
+          </Text>
+        </View>
+      </Pressable>
+
       <View style={styles.header}>
         <Text style={styles.title}>{game?.title || 'Juego'}</Text>
         {genres ? <Text style={styles.subtitle}>{genres}</Text> : null}
@@ -250,7 +265,7 @@ export default function GameDetailScreen() {
           ))
         ) : (
           <View style={[styles.slide, styles.slideFallback, { width: slideWidth }]}>
-            <Text style={{ color: colors.textSecondary }}>
+            <Text style={{ color: colors.accent }}>
               {loadingShots ? 'Buscando imagenes...' : 'Sin imagenes disponibles'}
             </Text>
           </View>
@@ -340,7 +355,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   subtitle: {
-    color: colors.textSecondary,
+    color: colors.accent,
   },
   metaRow: {
     flexDirection: 'row',
@@ -349,7 +364,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   metaPill: {
-    color: colors.textPrimary,
+    color: colors.accent,
     backgroundColor: '#103447',
     borderRadius: radius.md,
     paddingHorizontal: spacing.sm,
@@ -400,7 +415,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   price: {
-    color: colors.textPrimary,
+    color: colors.accent,
     fontWeight: '800',
   },
   priceRow: {
@@ -409,14 +424,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   priceLabel: {
-    color: colors.textSecondary,
+    color: colors.accent,
     fontSize: typography.body,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     fontWeight: '700',
   },
   priceOriginal: {
-    color: colors.textSecondary,
+    color: colors.accent,
     textDecorationLine: 'line-through',
     fontSize: typography.body,
   },
@@ -436,19 +451,28 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   note: {
-    color: colors.textSecondary,
+    color: colors.accent,
     marginTop: spacing.xs,
   },
   sectionLabel: {
-    color: colors.textPrimary,
+    color: colors.accent,
     fontWeight: '800',
     marginBottom: spacing.xs,
   },
   body: {
-    color: colors.textSecondary,
+    color: colors.accent,
     lineHeight: 20,
   },
   metaLine: {
-    color: colors.textSecondary,
+    color: colors.accent,
   },
 });
+
+
+
+
+
+
+
+
+

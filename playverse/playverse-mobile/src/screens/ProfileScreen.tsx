@@ -103,6 +103,17 @@ export default function ProfileScreen() {
     { enabled: !!userId, refreshMs: 45000 }
   );
 
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    userId ? { userId, limit: 20 } : ({} as any),
+    { enabled: !!userId, refreshMs: 20000 }
+  );
+
+  const unreadCount = useMemo(
+    () => (notifications ?? []).filter((n: any) => n?.isRead === false).length,
+    [notifications]
+  );
+
   useEffect(() => {
     if (!profile || !fullProfile?._id) return;
     const normalizedEmail = (fullProfile.email || profile?.email || "").toLowerCase();
@@ -156,7 +167,7 @@ export default function ProfileScreen() {
         </Pressable>
         <View style={styles.branding}>
           <Text style={styles.title}>PLAYVERSE</Text>
-          <Text style={styles.subtitle}>Accede a tu cuenta o registrate</Text>
+          <Text style={styles.subtitle}>Accede a tu cuenta o reg\u00EDstrate</Text>
         </View>
 
         <View style={styles.card}>
@@ -167,7 +178,7 @@ export default function ProfileScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Tu nombre"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={colors.accent}
                 style={styles.input}
               />
             </View>
@@ -181,19 +192,19 @@ export default function ProfileScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               placeholder="tu@email.com"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={colors.accent}
               style={styles.input}
             />
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Contraseña</Text>
+            <Text style={styles.label}>Contrase\u00F1a</Text>
             <TextInput
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              placeholder="Tu contraseña"
-              placeholderTextColor={colors.textSecondary}
+              placeholder="Tu contrase\u00F1a"
+              placeholderTextColor={colors.accent}
               style={styles.input}
             />
           </View>
@@ -255,7 +266,7 @@ export default function ProfileScreen() {
               }
             }}
           />
-          <Text style={styles.helper}>Autenticación nativa sin abrir la web.</Text>
+          <Text style={styles.helper}>Autenticaci\u00F3n nativa sin abrir la web.</Text>
         </View>
 
         <FAQ />
@@ -275,7 +286,7 @@ export default function ProfileScreen() {
         </View>
       </Pressable>
       <Text style={styles.title}>PERFIL</Text>
-      <Text style={styles.subtitle}>Tu información personal y actividad reciente.</Text>
+      <Text style={styles.subtitle}>Tu informaci\u00F3n personal y actividad reciente.</Text>
 
       <View style={styles.card}>
         <View style={styles.profileHeader}>
@@ -283,7 +294,7 @@ export default function ProfileScreen() {
             {avatarUri ? (
               <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
             ) : (
-              <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>PV</Text>
+              <Text style={{ color: colors.accent, fontWeight: '700' }}>PV</Text>
             )}
           </View>
           <View style={{ flex: 1, gap: 4 }}>
@@ -291,11 +302,11 @@ export default function ProfileScreen() {
             <Text style={styles.label}>{profile.email}</Text>
           </View>
         </View>
-        <Button title="Cerrar sesion" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={logout} />
+        <Button title="Cerrar sesi\u00F3n" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={logout} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionHeading}>Plan y suscripción</Text>
+        <Text style={styles.sectionHeading}>Plan y suscripci\u00F3n</Text>
         <View style={styles.roleRow}>
           <Text style={styles.label}>Rol actual</Text>
           <View style={[styles.rolePill, roleChip.pill]}>
@@ -311,16 +322,32 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionHeading}>Metodos de pago</Text>
+        <Text style={styles.sectionHeading}>Alertas</Text>
+        <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.notificationButton}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Ionicons name="notifications" size={20} color={colors.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.notificationTitle}>Ver notificaciones</Text>
+              <Text style={styles.helper}>
+                {unreadCount > 0 ? `${unreadCount} pendientes` : 'Est\u00E1s al d\u00EDa'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+          </View>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionHeading}>m\u00E9todos de pago</Text>
         {(paymentMethods ?? []).length === 0 ? (
-          <Text style={styles.label}>No tienes metodos guardados.</Text>
+          <Text style={styles.label}>No tienes m\u00E9todos guardados.</Text>
         ) : (
           (paymentMethods ?? []).map((pm: any) => (
             <View key={String(pm._id)} style={styles.paymentRow}>
               <View style={styles.paymentIcon}>
-                <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{(pm.brand || '??').slice(0, 2).toUpperCase()}</Text>
+                <Text style={{ color: colors.accent, fontWeight: '700' }}>{(pm.brand || '??').slice(0, 2).toUpperCase()}</Text>
               </View>
-              <Text style={styles.label}>{pm.brand?.toUpperCase()} · **** {pm.last4}</Text>
+              <Text style={styles.label}>{pm.brand?.toUpperCase()} \u00B7 **** {pm.last4}</Text>
               <Text style={styles.helper}>Exp {String(pm.expMonth).padStart(2, '0')}/{pm.expYear}</Text>
             </View>
           ))
@@ -331,7 +358,7 @@ export default function ProfileScreen() {
         <Text style={styles.sectionHeading}>Historial de pagos</Text>
         {(payments ?? []).slice(0, 5).map((pay: any) => (
           <View key={String(pay._id)} style={styles.paymentRow}>
-            <Text style={styles.label}>${pay.amount.toFixed(2)} · {pay.currency?.toUpperCase?.() ?? 'USD'}</Text>
+            <Text style={styles.label}>${pay.amount.toFixed(2)} \u00B7 {pay.currency?.toUpperCase?.() ?? 'USD'}</Text>
             <Text style={styles.helper}>{formatDate(pay.createdAt)}</Text>
           </View>
         ))}
@@ -388,9 +415,9 @@ function FAQ() {
   return (
     <View style={styles.card}>
       <Text style={styles.sectionHeading}>Preguntas frecuentes</Text>
-      <Text style={styles.label}>¿Como funciona el alquiler de juegos?</Text>
-      <Text style={styles.label}>¿Que incluye la membresia Premium?</Text>
-      <Text style={styles.label}>¿Puedo cancelar mi suscripcion?</Text>
+      <Text style={styles.label}>\u00BFC\u00F3mo funciona el alquiler de juegos?</Text>
+      <Text style={styles.label}>\u00BFQu\u00E9 incluye la membres\u00EDa Premium?</Text>
+      <Text style={styles.label}>\u00BFPuedo cancelar mi suscripci\u00F3n?</Text>
       <Button title="Contacto" variant="ghost" style={{ alignSelf: 'flex-start', marginTop: spacing.md }} />
     </View>
   );
@@ -419,7 +446,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   subtitle: {
-    color: colors.textSecondary,
+    color: colors.accent,
   },
   card: {
     backgroundColor: colors.surface,
@@ -433,11 +460,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    color: colors.textSecondary,
+    color: colors.accent,
     fontSize: typography.body,
   },
   value: {
-    color: colors.textPrimary,
+    color: colors.accent,
     fontSize: typography.h3,
     fontWeight: '700',
   },
@@ -446,7 +473,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
     borderRadius: radius.md,
-    color: colors.textPrimary,
+    color: colors.accent,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
   },
@@ -458,12 +485,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   sectionHeading: {
-    color: colors.textPrimary,
+    color: colors.accent,
     fontWeight: '800',
     fontSize: typography.h3,
   },
   helper: {
-    color: colors.textSecondary,
+    color: colors.accent,
     fontSize: typography.caption,
   },
   roleRow: {
@@ -484,6 +511,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
+  },
+  notificationButton: {
+    marginTop: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#F2B70522',
+  },
+  notificationTitle: {
+    color: colors.accent,
+    fontWeight: '700',
   },
   profileHeader: {
     flexDirection: 'row',
@@ -549,6 +589,20 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

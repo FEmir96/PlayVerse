@@ -12,7 +12,7 @@ export default function LoginScreen({ navigation }: Props) {
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>PLAYVERSE</Text>
-        <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
+        <Text style={styles.subtitle}>Inicia sesi\u00F3n para continuar</Text>
         <Button title="Ingresar" onPress={() => navigation.replace('Tabs')} />
       </View>
     </View>

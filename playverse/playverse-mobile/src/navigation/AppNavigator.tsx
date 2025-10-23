@@ -11,12 +11,14 @@ import BottomTabBar from './BottomTabBar';
 import MyGamesScreen from '../screens/MyGamesScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import AuthCallbackScreen from '../screens/AuthCallbackScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 
 export type RootStackParamList = {
   Login: undefined;
   Tabs: undefined;
   GameDetail: { gameId: string; initial?: any };
   AuthCallback: undefined;
+  Notifications: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -45,6 +47,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Tabs" component={Tabs} />
       <Stack.Screen name="GameDetail" component={GameDetailScreen} />
       <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
     </Stack.Navigator>
   );
 }

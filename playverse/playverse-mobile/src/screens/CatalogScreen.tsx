@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 
 import { spacing } from '../styles/theme';
 import { Button, Chip, GameCard, SearchBar } from '../components';
@@ -20,9 +21,11 @@ export default function CatalogScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
   const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
+  const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
+  const rawCardWidth = (width - horizontalSpace) / columns;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
-    (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
+    Math.min(columns === 1 ? 320 : 220, rawCardWidth)
   );
 
   const { data: allGames, loading, refetch } = useConvexQuery<Game[]>(
@@ -67,9 +70,20 @@ export default function CatalogScreen() {
         />
       }
     >
+      <Pressable
+        onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as any)}
+        className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95 ml-xl mt-xl"
+      >
+        <View className="flex-row items-center gap-[6px]">
+          <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
+          <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">
+            Volver
+          </Text>
+        </View>
+      </Pressable>
       <View className="gap-sm px-xl pt-xl tablet:px-[80px]">
         <Text className="text-h1 font-black text-accent">CATALOGO DE JUEGOS</Text>
-        <Text className="max-w-[560px] text-body text-textSecondary">
+        <Text className="max-w-[560px] text-body text-accent">
           Sumergete en PlayVerse. Encuentra tu proximo juego favorito.
         </Text>
       </View>
@@ -103,13 +117,13 @@ export default function CatalogScreen() {
             <View
               key={index}
               className="h-[320px] rounded-lg bg-[#143547] opacity-40"
-              style={{ width: cardWidth }}
+              style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
             />
           ))}
         </View>
       ) : visible.length === 0 ? (
         <View className="px-xl pt-xl tablet:px-[80px]">
-          <Text className="text-body text-textSecondary">No se encontraron juegos.</Text>
+          <Text className="text-body text-accent">No se encontraron juegos.</Text>
         </View>
       ) : (
         <View className={`flex-row flex-wrap gap-md px-xl pt-md ${gridJustify}`}>
@@ -119,7 +133,7 @@ export default function CatalogScreen() {
               <GameCard
                 key={String(gameId ?? index)}
                 game={{ ...game, id: String(gameId ?? index) }}
-                style={{ width: cardWidth }}
+                style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
                 onPress={() =>
                   gameId &&
                   navigation.navigate('GameDetail', {
@@ -146,3 +160,9 @@ export default function CatalogScreen() {
     </ScrollView>
   );
 }
+
+
+
+
+
+

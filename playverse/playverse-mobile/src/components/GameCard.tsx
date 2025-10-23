@@ -67,7 +67,7 @@ export default function GameCard({
       </View>
 
       <View className="min-h-[110px] gap-xs px-md py-md">
-        <Text className="text-h3 font-bold text-textPrimary" numberOfLines={2}>
+        <Text className="text-h3 font-bold text-accent" numberOfLines={2}>
           {title}
         </Text>
         {summary ? (
@@ -80,14 +80,14 @@ export default function GameCard({
           {typeof rating === 'number' ? (
             <View className="flex-row items-center gap-[4px] rounded-pill bg-[#244552] px-2 py-[2px]">
               <Ionicons name="star" size={12} color="#FFD166" />
-              <Text className="text-[12px] font-bold text-textPrimary">{rating.toFixed(1)}</Text>
+              <Text className="text-[12px] font-bold text-accent">{rating.toFixed(1)}</Text>
             </View>
           ) : null}
           {typeof weekly === 'number' ? (
-            <Text className="text-[12px] font-semibold text-info">Alquiler ${weekly.toFixed(2)}/sem</Text>
+            <Text className="text-[12px] font-semibold text-accent">Alquiler ${weekly.toFixed(2)}/sem</Text>
           ) : null}
           {typeof buy === 'number' ? (
-            <Text className="text-[12px] font-semibold text-info">Compra ${buy.toFixed(2)}</Text>
+            <Text className="text-[12px] font-semibold text-accent">Compra ${buy.toFixed(2)}</Text>
           ) : null}
         </View>
       </View>
@@ -104,4 +104,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
 });
+
+
+
 

@@ -42,8 +42,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    color: colors.textPrimary,
+    color: colors.accent,
     fontWeight: '700',
   },
 });
+
 

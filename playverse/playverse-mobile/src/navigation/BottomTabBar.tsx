@@ -20,7 +20,7 @@ export default function BottomTabBar({ state, descriptors, navigation }: BottomT
             ? options.title
             : route.name;
         if (route.name === 'Profile') {
-          label = profile ? 'Perfil' : 'Iniciar sesión';
+          label = profile ? 'Perfil' : 'Iniciar sesi\u00F3n';
         }
 
         const isFocused = state.index === index;

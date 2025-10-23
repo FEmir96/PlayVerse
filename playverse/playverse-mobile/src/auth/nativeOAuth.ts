@@ -1,4 +1,4 @@
-// playverse/playverse-mobile/src/auth/nativeOAuth.ts
+﻿// playverse/playverse-mobile/src/auth/nativeOAuth.ts
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
@@ -46,12 +46,9 @@ function resolveRedirect(): RedirectSetup {
   const isWeb = Platform.OS === 'web';
 
   if (isExpoGo || isWeb) {
-    const redirectUri = AuthSession.makeRedirectUri({ path: 'auth/callback' });
+    const redirectUri = AuthSession.makeRedirectUri({ useProxy: true } as any);
     console.log('[Auth] Redirect URI (expo proxy):', redirectUri);
-    return {
-      redirectUri,
-      promptOptions: { useProxy: true } as PromptOptions,
-    };
+    return { redirectUri, promptOptions: { useProxy: true } as PromptOptions };
   }
 
   const redirectUri = AuthSession.makeRedirectUri({ scheme: 'playverse', path: 'auth/callback' });
@@ -163,3 +160,4 @@ export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
     return { ok: false, error: error?.message || 'Upsert failed' };
   }
 }
+

@@ -21,6 +21,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
   const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
+  const heroLogoSize = width >= LAPTOP_BREAKPOINT ? 220 : width >= TABLET_BREAKPOINT ? 180 : 140;
   const cardWidth = Math.max(
     MIN_CARD_WIDTH,
     (width - spacing.xl * 2 - spacing.md * (columns - 1)) / columns
@@ -72,7 +73,7 @@ export default function HomeScreen() {
       <ImageBackground source={bgStars} className="h-[260px] w-full overflow-hidden" resizeMode="cover">
         <View className="absolute inset-0 bg-[#0f2d3a59]" />
         <View className="flex-1 items-center justify-center px-xl py-xl tablet:px-[80px] tablet:py-[48px]">
-          <Image source={heroLogo} className="h-[120px] w-[200px] tablet:h-[140px] tablet:w-[240px]" resizeMode="contain" />
+          <Image source={heroLogo} style={{ width: heroLogoSize, height: heroLogoSize }} resizeMode="contain" />
         </View>
       </ImageBackground>
 
@@ -89,7 +90,7 @@ export default function HomeScreen() {
                 key={normalized.id}
                 game={normalized}
                 tag={index < 2 ? 'Accion' : undefined}
-                style={{ width: cardWidth }}
+                style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
                 onPress={() =>
                   normalized.convexId &&
                   navigation.navigate('GameDetail', {
@@ -122,7 +123,7 @@ export default function HomeScreen() {
               <GameCard
                 key={normalized.id}
                 game={normalized}
-                style={{ width: cardWidth }}
+                style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
                 disabled
                 overlayLabel={releaseLabel}
               />
@@ -150,9 +151,11 @@ function Section({
   return (
     <View className="gap-sm px-xl pt-xl tablet:px-[80px] tablet:pt-[48px]">
       <Text className="text-h2 font-black text-accent tablet:text-[26px]">{title}</Text>
-      {subtitle ? <Text className="text-body text-textSecondary">{subtitle}</Text> : null}
+      {subtitle ? <Text className="text-body text-accent">{subtitle}</Text> : null}
       {children}
     </View>
   );
 }
+
+
 
