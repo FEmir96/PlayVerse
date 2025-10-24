@@ -1,15 +1,18 @@
-﻿// app.config.js
+﻿// playverse/playverse-mobile/app.config.js
 import "dotenv/config";
 
 export default {
   expo: {
+    
     name: "playverse",
     slug: "playverse",
+    owner: "fernandoemir",                // 👈 IMPORTANTE
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
     scheme: "playverse",
     userInterfaceStyle: "automatic",
+    
     newArchEnabled: true,
     splash: {
       image: "./assets/splash-icon.png",
@@ -30,18 +33,13 @@ export default {
       output: "static",
       favicon: "./assets/favicon.png"
     },
-
     plugins: [
-      "expo-router",
       "expo-web-browser"
     ],
-
-    experiments: {},
     extra: {
       convexUrl: process.env.CONVEX_URL || process.env.EXPO_PUBLIC_CONVEX_URL,
       webAuthUrl: process.env.EXPO_PUBLIC_WEB_URL || process.env.NEXTAUTH_URL || "http://localhost:3000",
       webAssetBase: process.env.EXPO_PUBLIC_WEB_ASSET_BASE,
-      // ⚠️ No expongas secretos en el bundle móvil:
       googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
       microsoftClientId: process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID,
       microsoftTenantId: process.env.EXPO_PUBLIC_MICROSOFT_TENANT_ID,

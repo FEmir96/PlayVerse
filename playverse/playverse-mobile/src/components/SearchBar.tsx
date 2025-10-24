@@ -16,7 +16,7 @@ export default function SearchBar({ value, onChangeText, placeholder }: Props) {
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder || 'Buscar por t\u00EDtulo...'}
+        placeholder={placeholder || 'Buscar por título...'}
         placeholderTextColor={colors.textSecondary}
         style={styles.input}
       />

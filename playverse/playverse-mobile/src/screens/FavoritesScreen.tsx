@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React, { useLayoutEffect } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -7,18 +7,18 @@ import {
   Text,
   View,
   useWindowDimensions,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+  Image,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import type { RootStackParamList } from "../navigation/AppNavigator";
-import { GameCard } from "../components";
-import { spacing, colors, typography } from "../styles/theme";
-import { useAuth } from "../context/AuthContext";
-import { useConvexQuery } from "../lib/useConvexQuery";
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import { GameCard } from '../components';
+import { spacing, colors, typography } from '../styles/theme';
+import { useAuth } from '../context/AuthContext';
+import { useFavorites } from '../context/FavoritesContext';
 
-const TABLET_BREAKPOINT = 768;
 const LAPTOP_BREAKPOINT = 1024;
 const TWO_COLUMN_BREAKPOINT = 360;
 const MIN_CARD_WIDTH = 160;
@@ -26,45 +26,18 @@ const MIN_CARD_WIDTH = 160;
 export default function FavoritesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuth();
+  const { favorites, loading, refetch } = useFavorites();
+
+  // Oculta el header del Stack (evita el título duplicado)
+  useLayoutEffect(() => {
+    nav.setOptions({ headerShown: false });
+  }, [nav]);
+
   const { width } = useWindowDimensions();
   const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
   const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
   const rawCardWidth = (width - horizontalSpace) / columns;
-  const cardWidth = Math.max(
-    MIN_CARD_WIDTH,
-    Math.min(columns === 1 ? 320 : 220, rawCardWidth)
-  );
-
-  const userId = profile?._id;
-  const { data, loading, refetch } = useConvexQuery<any[]>(
-    'queries/listFavoritesByUser:listFavoritesByUser',
-    userId ? { userId } : ({} as any),
-    { enabled: !!userId, refreshMs: 25000 }
-  );
-
-  const renderBackButton = () => (
-    <Pressable
-      onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
-      className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
-    >
-      <View className="flex-row items-center gap-[6px]">
-        <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
-        <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">Volver</Text>
-      </View>
-    </Pressable>
-  );
-
-  if (!profile) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background px-xl gap-sm">
-        {renderBackButton()}
-        <Text className="text-h1 font-black text-accent">FAVORITOS</Text>
-        <Text className="text-body text-accent text-center">
-          Inicia sesi\u00F3n para ver tus juegos favoritos y seguir sus novedades.
-        </Text>
-      </View>
-    );
-  }
+  const cardWidth = Math.max(MIN_CARD_WIDTH, Math.min(columns === 1 ? 320 : 220, rawCardWidth));
 
   return (
     <ScrollView
@@ -74,52 +47,129 @@ export default function FavoritesScreen() {
         <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />
       }
     >
-      <View style={styles.header}>
-        {renderBackButton()}
-        <Text style={styles.title}>FAVORITOS</Text>
-        <Text style={styles.subtitle}>Tu radar personal de juegos imperdibles.</Text>
+      {/* Header propio */}
+      <View style={styles.headerBar}>
+        <Pressable
+          onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
+          style={styles.iconButton}
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.accent} />
+        </Pressable>
+
+        <View style={styles.centerLogoWrap}>
+          <Image
+            source={require('../../assets/branding/pv-logo-h28.png')}
+            style={styles.centerLogo}
+            resizeMode="contain"
+          />
+          <Text style={styles.headerTitle}>FAVORITOS</Text>
+        </View>
+
+        <Pressable onPress={() => nav.navigate('Notifications')} style={styles.iconButton}>
+          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+        </Pressable>
       </View>
 
-      {(!data || data.length === 0) ? (
+      {!profile ? (
         <View style={styles.center}>
-          <Text style={styles.subtitle}>A\u00FAn no tienes favoritos.</Text>
+          <Text style={styles.title}>Inicia sesión</Text>
+          <Text style={styles.subtitleCenter}>
+            Inicia sesión para ver tus juegos favoritos y seguir sus novedades.
+          </Text>
+          <Pressable
+            onPress={() => nav.navigate('Profile' as any)}
+            style={[styles.cta, { marginTop: spacing.md }]}
+          >
+            <Text style={styles.ctaText}>Iniciar sesión</Text>
+          </Pressable>
         </View>
       ) : (
-        <View style={[styles.grid, { justifyContent: columns === 1 ? 'center' : 'flex-start' }]}>
-          {(data ?? []).map((row: any, i: number) => (
-            <GameCard
-              key={String(row._id ?? i)}
-              game={{
-                id: String(row.game?._id ?? row.gameId ?? i),
-                title: row.game?.title || 'Juego',
-                cover_url: row.game?.cover_url,
-              }}
-              style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
-              tag="Favorito"
-              onPress={() => row.game?._id && nav.navigate('GameDetail', { gameId: String(row.game._id) })}
-            />
-          ))}
-        </View>
+        <>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>Tu radar personal de juegos imperdibles</Text>
+          </View>
+
+          {favorites.length === 0 ? (
+            <View style={styles.center}>
+              <Text style={styles.subtitleCenter}>Aún no tienes favoritos.</Text>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.grid,
+                { justifyContent: columns === 1 ? 'center' : 'flex-start' },
+              ]}
+            >
+              {favorites.map((row, i) => {
+                const gameId = row.game?._id ?? row.gameId;
+                return (
+                  <GameCard
+                    key={String(row._id ?? i)}
+                    game={{
+                      id: String(gameId ?? row._id ?? i),
+                      title: row.game?.title || 'Juego',
+                      cover_url: row.game?.cover_url,
+                      gameId: gameId ? String(gameId) : undefined,
+                    }}
+                    style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
+                    tag="Favorito"
+                    onPress={() => gameId && nav.navigate('GameDetail', { gameId: String(gameId) })}
+                  />
+                );
+              })}
+            </View>
+          )}
+        </>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xl,
+  headerBar: {
     paddingTop: spacing.xl,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#072633',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceBorder,
   },
-  title: {
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    backgroundColor: '#0F2D3A',
+  },
+  centerLogoWrap: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  centerLogo: {
+    height: 28,
+    width: 120,
+  },
+  headerTitle: {
+    textAlign: 'center',
     color: colors.accent,
-    fontSize: typography.h1,
+    fontSize: typography.h3,
     fontWeight: '900',
+    letterSpacing: 0.8,
   },
-  subtitle: {
+  sectionHead: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  sectionTitle: {
     color: colors.accent,
     fontSize: typography.body,
-    textAlign: 'center',
   },
   grid: {
     flexDirection: 'row',
@@ -129,10 +179,28 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   center: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  title: {
+    color: colors.accent,
+    fontSize: typography.h1,
+    fontWeight: '900',
+  },
+  subtitleCenter: {
+    color: colors.accent,
+    textAlign: 'center',
+  },
+  cta: {
+    backgroundColor: colors.accent,
+    borderRadius: 999,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  ctaText: {
+    color: '#1B1B1B',
+    fontWeight: '800',
   },
 });

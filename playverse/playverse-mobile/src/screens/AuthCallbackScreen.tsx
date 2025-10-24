@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
@@ -11,12 +11,20 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 export default function AuthCallbackScreen() {
   const nav = useNavigation<NavigationProp<RootStackParamList>>();
   const { setFromProfile } = useAuth();
-  const [message, setMessage] = useState('Procesando autenticaci\u00F3n...');
+  const [message, setMessage] = useState('Procesando autenticación...');
+  const handledRef = useRef(false);
 
   useEffect(() => {
-    const run = async () => {
+    const handleUrl = async (url?: string | null) => {
+      if (handledRef.current) return;
+      const current = url ?? (await Linking.getInitialURL()) ?? '';
+      if (!current) {
+        setMessage('No se recibió URL de autenticación.');
+        return;
+      }
+      handledRef.current = true;
+
       try {
-        const current = (await Linking.getInitialURL()) ?? '';
         const { queryParams } = Linking.parse(current);
         const email = String(queryParams?.email || '').toLowerCase();
         const name = String(queryParams?.name || '');
@@ -24,7 +32,9 @@ export default function AuthCallbackScreen() {
         const provider = String(queryParams?.provider || 'web');
 
         if (!email) {
-          setMessage('No se recibi\u00F3 email en el callback.');
+          // En flujos nativos con id_token no esperamos query params aquí.
+          setMessage('Callback sin email (flujo nativo); redirigiendo...');
+          nav.navigate('Tabs');
           return;
         }
 
@@ -53,14 +63,25 @@ export default function AuthCallbackScreen() {
           role: prof.role,
           createdAt: prof.createdAt,
         });
-        setMessage('\u00A1Autenticado! Redirigiendo...');
+        setMessage('¡Autenticado! Redirigiendo...');
         nav.navigate('Tabs');
       } catch {
-        setMessage('Error durante la autenticaci\u00F3n');
+        setMessage('Error durante la autenticación');
       }
     };
 
-    run();
+    // 1) initialURL si la app se abrió por el deep link
+    handleUrl(null);
+
+    // 2) eventos posteriores si la app ya estaba abierta
+    const sub = Linking.addEventListener('url', (evt: { url: string }) => {
+      handleUrl(evt?.url);
+    });
+    return () => {
+      // RN/Expo proveen .remove en la subscripción
+      // @ts-ignore: compat layer
+      sub.remove?.();
+    };
   }, [nav, setFromProfile]);
 
   return (

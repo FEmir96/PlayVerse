@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await (convexHttp as any).mutation('auth:authLogin', { email, password });
       if (!res?.ok) {
-        setError(res?.error || 'Error de autenticaci\u00F3n');
+        setError(res?.error || 'Error de autenticación');
         return false;
       }
       setProfile(res.profile);

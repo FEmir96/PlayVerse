@@ -1,9 +1,11 @@
 ﻿// playverse/playverse-mobile/src/auth/nativeOAuth.ts
+import 'react-native-get-random-values';
+import 'react-native-url-polyfill/auto';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-
+import { Buffer } from 'buffer';
 import { convexHttp } from '../lib/convexClient';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -22,46 +24,68 @@ function randomNonce() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+// Decodifica el payload de un JWT (base64url) a JSON
 function b64UrlJson<T = unknown>(input?: string): T | undefined {
   if (!input) return undefined;
   try {
     const pad = input.length % 4 === 0 ? 0 : 4 - (input.length % 4);
     const base64 = input.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(pad);
+
+    // En web solemos tener atob; en nativo usamos Buffer sin tocar 'global'
     if (typeof atob === 'function') {
+      // ojo: atob devuelve binario en latin1
+      // eslint-disable-next-line no-undef
       const json = decodeURIComponent(escape(atob(base64)));
       return JSON.parse(json) as T;
     }
+
     const json = Buffer.from(base64, 'base64').toString('utf8');
-    return JSON.parse(json) as T;
+    return json ? (JSON.parse(json) as T) : undefined;
   } catch {
     return undefined;
   }
 }
 
+// --- helpers de tipos para TS ---
+type ResultWithParams = AuthSession.AuthSessionResult & {
+  params?: Record<string, string>;
+};
+const getParams = (r: AuthSession.AuthSessionResult) =>
+  ((r as ResultWithParams).params ?? {}) as Record<string, string>;
+
+// ---------------------------------
+
 type PromptOptions = AuthSession.AuthRequestPromptOptions & { useProxy?: boolean };
 type RedirectSetup = { redirectUri: string; promptOptions: PromptOptions };
 
 function resolveRedirect(): RedirectSetup {
-  const isExpoGo = Constants.appOwnership === 'expo';
   const isWeb = Platform.OS === 'web';
+  const isExpoGo = Constants.appOwnership === 'expo';
 
-  if (isExpoGo || isWeb) {
+  if (isWeb) {
+    // Google/Azure requieren origin EXACTO
+    const base =
+      (typeof window !== 'undefined' && window.location.origin) || 'http://localhost:8081';
+    const redirectUri = base.endsWith('/') ? base : `${base}/`;
+    console.log('[Auth] Redirect URI (web origin):', redirectUri);
+    return { redirectUri, promptOptions: {} as PromptOptions };
+  }
+
+  if (isExpoGo) {
     const redirectUri = AuthSession.makeRedirectUri({ useProxy: true } as any);
     console.log('[Auth] Redirect URI (expo proxy):', redirectUri);
     return { redirectUri, promptOptions: { useProxy: true } as PromptOptions };
   }
 
   const redirectUri = AuthSession.makeRedirectUri({ scheme: 'playverse', path: 'auth/callback' });
-  console.log('[Auth] Redirect URI (native):', redirectUri);
-  return {
-    redirectUri,
-    promptOptions: {},
-  };
+  console.log('[Auth] Redirect URI (native scheme):', redirectUri);
+  return { redirectUri, promptOptions: {} as PromptOptions };
 }
 
 export async function signInWithGoogleNative(): Promise<OAuthResult> {
   const clientId =
-    (Constants.expoConfig?.extra as any)?.googleClientId ?? process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+    (Constants.expoConfig?.extra as any)?.googleClientId ??
+    process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) return { ok: false, error: 'Missing GOOGLE_CLIENT_ID' };
 
   const { redirectUri, promptOptions } = resolveRedirect();
@@ -75,16 +99,26 @@ export async function signInWithGoogleNative(): Promise<OAuthResult> {
     extraParams: { nonce: randomNonce() },
   });
 
-  const authUrl = await request.makeAuthUrlAsync({ authorizationEndpoint: GOOGLE_AUTH_ENDPOINT });
+  const authUrl = await request.makeAuthUrlAsync({
+    authorizationEndpoint: GOOGLE_AUTH_ENDPOINT,
+  });
   console.log('[Auth] Google authUrl:', authUrl);
 
   const result = await request.promptAsync(
     { authorizationEndpoint: GOOGLE_AUTH_ENDPOINT },
     promptOptions as AuthSession.AuthRequestPromptOptions
   );
-  if (result.type !== 'success') return { ok: false, error: 'Canceled or failed' };
+  console.log('[Google] result:', result);
 
-  const idToken = (result.params as any).id_token as string | undefined;
+  if (result.type !== 'success') {
+    const p = getParams(result);
+    const err = (result as any).error ?? p.error;
+    const desc = (result as any).error_description ?? p.error_description;
+    return { ok: false, error: err ? `${err}: ${decodeURIComponent(desc || '')}` : 'Canceled or failed' };
+  }
+
+  const p = getParams(result);
+  const idToken = p.id_token as string | undefined;
   if (!idToken) return { ok: false, error: 'Missing id_token' };
 
   const payload = b64UrlJson<any>(idToken.split('.')[1]);
@@ -112,10 +146,12 @@ export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
   const clientId =
     (Constants.expoConfig?.extra as any)?.microsoftClientId ??
     process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID;
+
   const tenant =
     (Constants.expoConfig?.extra as any)?.microsoftTenantId ??
     process.env.EXPO_PUBLIC_MICROSOFT_TENANT_ID ??
-    'common';
+    'consumers';
+
   if (!clientId) return { ok: false, error: 'Missing MICROSOFT_CLIENT_ID' };
 
   const { redirectUri, promptOptions } = resolveRedirect();
@@ -127,7 +163,10 @@ export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
     responseType: 'id_token',
     usePKCE: false,
     scopes: ['openid', 'profile', 'email'],
-    extraParams: { response_mode: 'fragment', nonce: randomNonce() },
+    extraParams: {
+      response_mode: 'fragment',
+      nonce: randomNonce(),
+    },
   });
 
   const authUrl = await request.makeAuthUrlAsync({ authorizationEndpoint: authEndpoint });
@@ -137,13 +176,27 @@ export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
     { authorizationEndpoint: authEndpoint },
     promptOptions as AuthSession.AuthRequestPromptOptions
   );
-  if (result.type !== 'success') return { ok: false, error: 'Canceled or failed' };
+  console.log('[MS] result:', result);
 
-  const idToken = (result.params as any).id_token as string | undefined;
+  if (result.type !== 'success') {
+    const p = getParams(result);
+    const err = (result as any).error ?? p.error;
+    const desc = (result as any).error_description ?? p.error_description;
+    return { ok: false, error: err ? `${err}: ${decodeURIComponent(desc || '')}` : 'Canceled or failed' };
+  }
+
+  const p = getParams(result);
+  if (p.error) {
+    return { ok: false, error: `${p.error}: ${decodeURIComponent(p.error_description || '')}` };
+  }
+
+  const idToken = p.id_token as string | undefined;
   if (!idToken) return { ok: false, error: 'Missing id_token' };
 
   const payload = b64UrlJson<any>(idToken.split('.')[1]);
-  const email = String(payload?.email || payload?.preferred_username || '').toLowerCase();
+  const email = String(
+    payload?.email || payload?.preferred_username || (payload?.emails?.[0] ?? '')
+  ).toLowerCase();
   const name = String(payload?.name || '');
   const sub = String(payload?.sub || '');
   if (!email) return { ok: false, error: 'Token without email' };
@@ -160,4 +213,3 @@ export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
     return { ok: false, error: error?.message || 'Upsert failed' };
   }
 }
-

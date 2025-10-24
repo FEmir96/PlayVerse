@@ -1,6 +1,18 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Image, Pressable } from 'react-native';
+﻿import React, { useCallback, useEffect, useMemo, useState, useLayoutEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  Alert,
+  Image,
+  Pressable,
+  Modal,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { colors, spacing, typography, radius } from '../styles/theme';
 import Button from '../components/Button';
@@ -9,24 +21,12 @@ import { useAuth } from '../context/AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import { resolveAssetUrl } from '../lib/asset';
 import { signInWithGoogleNative, signInWithMicrosoftNative } from '../auth/nativeOAuth';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
-const PLAN_LABEL: Record<string, string> = {
-  monthly: 'Mensual',
-  quarterly: 'Trimestral',
-  annual: 'Anual',
-  lifetime: 'De por vida',
-};
-
-type RoleChipStyle = {
-  label: string;
-  pill: { backgroundColor: string; borderColor: string };
-  text: string;
-};
-
-const ROLE_CHIP_STYLES: Record<string, RoleChipStyle> = {
+const ROLE_CHIP_STYLES: Record<
+  string,
+  { label: string; pill: { backgroundColor: string; borderColor: string }; text: string }
+> = {
   free: {
     label: 'Free',
     pill: { backgroundColor: '#1B2F3B', borderColor: '#A4C9D3' },
@@ -44,18 +44,8 @@ const ROLE_CHIP_STYLES: Record<string, RoleChipStyle> = {
   },
 };
 
-function getRoleChip(role: string): RoleChipStyle {
-  return ROLE_CHIP_STYLES[role] ?? ROLE_CHIP_STYLES.free;
-}
-
-function formatDate(epoch?: number) {
-  if (!epoch) return '-';
-  try {
-    return new Date(epoch).toLocaleDateString();
-  } catch {
-    return '-';
-  }
-}
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type FieldErrors = { name?: string; email?: string; password?: string };
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -64,6 +54,13 @@ export default function ProfileScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [avatarModal, setAvatarModal] = useState(false);
+
+  // 🔕 Oculta el header del Stack para no duplicar títulos
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   const userId = profile?._id;
 
@@ -71,12 +68,6 @@ export default function ProfileScreen() {
     'queries/getUserById:getUserById',
     userId ? { id: userId } : ({} as any),
     { enabled: !!userId, refreshMs: 45000 }
-  );
-
-  const { data: upgrades } = useConvexQuery<any[]>(
-    'queries/getUserUpgrades:getUserUpgrades',
-    userId ? { userId } : ({} as any),
-    { enabled: !!userId, refreshMs: 30000 }
   );
 
   const { data: paymentMethods } = useConvexQuery<any[]>(
@@ -115,59 +106,133 @@ export default function ProfileScreen() {
   );
 
   useEffect(() => {
+    setFieldErrors({});
+  }, [mode]);
+
+  const validateForm = useCallback(() => {
+    const errors: FieldErrors = {};
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const normalizedEmail = trimmedEmail.toLowerCase();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail) {
+      errors.email = 'Ingresa tu email.';
+    } else if (!EMAIL_REGEX.test(normalizedEmail)) {
+      errors.email = 'Ingresa un email válido.';
+    }
+
+    if (!trimmedPassword) {
+      errors.password = 'Ingresa tu contraseña.';
+    } else if (trimmedPassword.length < 6) {
+      errors.password = 'La contraseña debe tener al menos 6 caracteres.';
+    }
+
+    if (mode === 'register') {
+      if (!trimmedName) {
+        errors.name = 'Ingresa tu nombre.';
+      } else if (trimmedName.length < 2) {
+        errors.name = 'El nombre es demasiado corto.';
+      }
+    }
+
+    return {
+      errors,
+      values: {
+        name: trimmedName,
+        email: normalizedEmail,
+        password: trimmedPassword,
+      },
+    };
+  }, [email, password, name, mode]);
+
+  const handleSubmit = useCallback(async () => {
+    if (loading) return;
+    const { errors, values } = validateForm();
+    const hasErrors = Object.values(errors).some(Boolean);
+    if (hasErrors) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
+    setEmail(values.email);
+    if (mode === 'register') setName(values.name);
+
+    const ok =
+      mode === 'login'
+        ? await loginEmail(values.email, values.password)
+        : await register(values.name, values.email, values.password);
+
+    if (ok) setPassword('');
+  }, [loading, mode, validateForm, loginEmail, register]);
+
+  // Mantiene profile actualizado si llega un fullProfile del usuario actual
+  useEffect(() => {
     if (!profile || !fullProfile?._id) return;
-    const normalizedEmail = (fullProfile.email || profile?.email || "").toLowerCase();
-    const name = fullProfile.name ?? profile?.name ?? "";
-    const role = fullProfile.role ?? profile?.role ?? "free";
-    const createdAt = fullProfile.createdAt ?? profile?.createdAt ?? Date.now();
+    if (String(fullProfile._id) !== profile._id) return;
+
+    const normalizedEmail = (fullProfile.email || profile.email || '').toLowerCase();
+    const name = fullProfile.name ?? profile.name ?? '';
+    const role = fullProfile.role ?? profile.role ?? 'free';
+    const createdAt = fullProfile.createdAt ?? profile.createdAt ?? Date.now();
+
     const hasDiff =
-      !profile ||
       profile.name !== name ||
       profile.role !== role ||
-      (profile.email || "").toLowerCase() !== normalizedEmail;
+      (profile.email || '').toLowerCase() !== normalizedEmail;
 
     if (hasDiff) {
       setFromProfile({
         _id: String(fullProfile._id),
         name,
-        email: normalizedEmail || profile?.email || "",
+        email: normalizedEmail || profile.email || '',
         role: role as any,
         createdAt,
       });
     }
   }, [fullProfile, profile, setFromProfile]);
 
-  const currentPlan = useMemo(() => {
-    if (!profile) return undefined;
-    if (upgrades && upgrades.length) return upgrades[0];
-    if (profile.role === 'premium') {
-      return { plan: 'premium', status: 'active', effectiveAt: profile.createdAt };
-    }
-    return undefined;
-  }, [profile, upgrades]);
-
   const avatarUri = resolveAssetUrl((fullProfile as any)?.avatarUrl || (profile as any)?.avatarUrl);
-  const roleChip = useMemo(() => getRoleChip(profile?.role ?? 'free'), [profile?.role]);
-  const goHome = useCallback(
-    () => navigation.navigate('Tabs' as any, { screen: 'Home' } as any),
-    [navigation]
+  const roleChip = ROLE_CHIP_STYLES[profile?.role ?? 'free'];
+
+  // Header común (logo centrado + back + campana)
+  const HeaderBar = (
+    <View style={styles.headerBar}>
+      <Pressable
+        onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
+        style={styles.iconButton}
+      >
+        <Ionicons name="arrow-back" size={18} color={colors.accent} />
+      </Pressable>
+
+      <View style={styles.centerLogoWrap}>
+        <Image
+          source={require('../../assets/branding/pv-logo-h28.png')}
+          style={styles.centerLogo}
+          resizeMode="contain"
+        />
+        <Text style={styles.headerTitle}>PERFIL</Text>
+      </View>
+
+      <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.iconButton}>
+        <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+        {unreadCount > 0 ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
   );
 
+  // ----- SIN SESIÓN -----
   if (!profile) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={styles.authContainer}>
-        <Pressable
-          onPress={goHome}
-          className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
-        >
-          <View className="flex-row items-center gap-[6px]">
-            <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
-            <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">Volver</Text>
-          </View>
-        </Pressable>
+        {HeaderBar}
+
         <View style={styles.branding}>
-          <Text style={styles.title}>PLAYVERSE</Text>
-          <Text style={styles.subtitle}>Accede a tu cuenta o reg\u00EDstrate</Text>
+          <Text style={styles.heroTitle}>Accede a tu cuenta o regístrate</Text>
         </View>
 
         <View style={styles.card}>
@@ -176,11 +241,15 @@ export default function ProfileScreen() {
               <Text style={styles.label}>Nombre</Text>
               <TextInput
                 value={name}
-                onChangeText={setName}
+                onChangeText={(v) => {
+                  setName(v);
+                  if (fieldErrors.name) setFieldErrors((p) => ({ ...p, name: undefined }));
+                }}
                 placeholder="Tu nombre"
                 placeholderTextColor={colors.accent}
                 style={styles.input}
               />
+              {fieldErrors.name ? <Text style={styles.fieldError}>{fieldErrors.name}</Text> : null}
             </View>
           )}
 
@@ -188,34 +257,44 @@ export default function ProfileScreen() {
             <Text style={styles.label}>Email</Text>
             <TextInput
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => {
+                setEmail(v);
+                if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
+              }}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
               placeholder="tu@email.com"
               placeholderTextColor={colors.accent}
               style={styles.input}
             />
+            {fieldErrors.email ? <Text style={styles.fieldError}>{fieldErrors.email}</Text> : null}
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Contrase\u00F1a</Text>
+            <Text style={styles.label}>Contraseña</Text>
             <TextInput
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(v) => {
+                setPassword(v);
+                if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+              }}
               secureTextEntry
-              placeholder="Tu contrase\u00F1a"
+              placeholder="Tu contraseña"
               placeholderTextColor={colors.accent}
               style={styles.input}
             />
+            {fieldErrors.password ? (
+              <Text style={styles.fieldError}>{fieldErrors.password}</Text>
+            ) : null}
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {mode === 'login' ? (
-            <Button title={loading ? 'Ingresando...' : 'Ingresar'} onPress={() => loginEmail(email, password)} />
-          ) : (
-            <Button title={loading ? 'Registrando...' : 'Registrarse'} onPress={() => register(name, email, password)} />
-          )}
+          <Button
+            title={mode === 'login' ? (loading ? 'Ingresando...' : 'Ingresar') : loading ? 'Registrando...' : 'Registrarse'}
+            onPress={handleSubmit}
+          />
 
           <Button
             title={mode === 'login' ? 'Ir a registro' : 'Ir a login'}
@@ -237,9 +316,18 @@ export default function ProfileScreen() {
               }
               try {
                 const { convexHttp } = require('../lib/convexClient');
-                const prof: any = await (convexHttp as any).query('queries/getUserByEmail:getUserByEmail', { email: res.email });
+                const prof: any = await (convexHttp as any).query(
+                  'queries/getUserByEmail:getUserByEmail',
+                  { email: res.email }
+                );
                 if (prof) {
-                  setFromProfile({ _id: String(prof._id), name: prof.name || '', email: prof.email, role: prof.role, createdAt: prof.createdAt });
+                  setFromProfile({
+                    _id: String(prof._id),
+                    name: prof.name || '',
+                    email: prof.email,
+                    role: prof.role,
+                    createdAt: prof.createdAt,
+                  });
                 }
               } catch (e: any) {
                 Alert.alert('Convex', e?.message || 'No se pudo actualizar el perfil.');
@@ -257,16 +345,25 @@ export default function ProfileScreen() {
               }
               try {
                 const { convexHttp } = require('../lib/convexClient');
-                const prof: any = await (convexHttp as any).query('queries/getUserByEmail:getUserByEmail', { email: res.email });
+                const prof: any = await (convexHttp as any).query(
+                  'queries/getUserByEmail:getUserByEmail',
+                  { email: res.email }
+                );
                 if (prof) {
-                  setFromProfile({ _id: String(prof._id), name: prof.name || '', email: prof.email, role: prof.role, createdAt: prof.createdAt });
+                  setFromProfile({
+                    _id: String(prof._id),
+                    name: prof.name || '',
+                    email: prof.email,
+                    role: prof.role,
+                    createdAt: prof.createdAt,
+                  });
                 }
               } catch (e: any) {
                 Alert.alert('Convex', e?.message || 'No se pudo actualizar el perfil.');
               }
             }}
           />
-          <Text style={styles.helper}>Autenticaci\u00F3n nativa sin abrir la web.</Text>
+          <Text style={styles.helper}>Autenticación nativa sin abrir la web.</Text>
         </View>
 
         <FAQ />
@@ -274,51 +371,37 @@ export default function ProfileScreen() {
     );
   }
 
+  // ----- CON SESIÓN -----
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.profileContainer}>
-      <Pressable
-        onPress={goHome}
-        className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
-      >
-        <View className="flex-row items-center gap-[6px]">
-          <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
-          <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">Volver</Text>
-        </View>
-      </Pressable>
-      <Text style={styles.title}>PERFIL</Text>
-      <Text style={styles.subtitle}>Tu informaci\u00F3n personal y actividad reciente.</Text>
+      {HeaderBar}
 
       <View style={styles.card}>
         <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
+          <Pressable style={styles.avatar} onPress={() => setAvatarModal(true)}>
             {avatarUri ? (
               <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
             ) : (
               <Text style={{ color: colors.accent, fontWeight: '700' }}>PV</Text>
             )}
-          </View>
+          </Pressable>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={styles.value}>{fullProfile?.name || profile.name || 'Jugador'}</Text>
             <Text style={styles.label}>{profile.email}</Text>
           </View>
+          <Button title="Cerrar sesión" variant="ghost" onPress={logout} />
         </View>
-        <Button title="Cerrar sesi\u00F3n" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={logout} />
       </View>
 
+      {/* Plan y rol: SOLO rol actual (sin plan/estado/desde) */}
       <View style={styles.card}>
-        <Text style={styles.sectionHeading}>Plan y suscripci\u00F3n</Text>
+        <Text style={styles.sectionHeading}>Plan y suscripción</Text>
         <View style={styles.roleRow}>
           <Text style={styles.label}>Rol actual</Text>
           <View style={[styles.rolePill, roleChip.pill]}>
             <Text style={[styles.roleText, { color: roleChip.text }]}>{roleChip.label}</Text>
           </View>
         </View>
-        <Text style={styles.label}>
-          Plan actual: {currentPlan?.plan ? PLAN_LABEL[currentPlan.plan] ?? currentPlan.plan : 'Free'}
-        </Text>
-        <Text style={styles.label}>Estado: {currentPlan?.status ?? (profile.role === 'premium' ? 'Activo' : 'Free')}</Text>
-        <Text style={styles.label}>Desde: {formatDate(currentPlan?.effectiveAt)}</Text>
-        {currentPlan?.expiresAt ? <Text style={styles.label}>Vence: {formatDate(currentPlan.expiresAt)}</Text> : null}
       </View>
 
       <View style={styles.card}>
@@ -329,7 +412,7 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.notificationTitle}>Ver notificaciones</Text>
               <Text style={styles.helper}>
-                {unreadCount > 0 ? `${unreadCount} pendientes` : 'Est\u00E1s al d\u00EDa'}
+                {unreadCount > 0 ? `${unreadCount} pendientes` : 'Estás al día'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.accent} />
@@ -338,17 +421,23 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionHeading}>m\u00E9todos de pago</Text>
+        <Text style={styles.sectionHeading}>Métodos de pago</Text>
         {(paymentMethods ?? []).length === 0 ? (
-          <Text style={styles.label}>No tienes m\u00E9todos guardados.</Text>
+          <Text style={styles.label}>No tienes métodos guardados.</Text>
         ) : (
           (paymentMethods ?? []).map((pm: any) => (
             <View key={String(pm._id)} style={styles.paymentRow}>
               <View style={styles.paymentIcon}>
-                <Text style={{ color: colors.accent, fontWeight: '700' }}>{(pm.brand || '??').slice(0, 2).toUpperCase()}</Text>
+                <Text style={{ color: colors.accent, fontWeight: '700' }}>
+                  {(pm.brand || '??').slice(0, 2).toUpperCase()}
+                </Text>
               </View>
-              <Text style={styles.label}>{pm.brand?.toUpperCase()} \u00B7 **** {pm.last4}</Text>
-              <Text style={styles.helper}>Exp {String(pm.expMonth).padStart(2, '0')}/{pm.expYear}</Text>
+              <Text style={styles.label}>
+                {pm.brand?.toUpperCase()} - **** {pm.last4}
+              </Text>
+              <Text style={styles.helper}>
+                Exp {String(pm.expMonth).padStart(2, '0')}/{pm.expYear}
+              </Text>
             </View>
           ))
         )}
@@ -358,11 +447,17 @@ export default function ProfileScreen() {
         <Text style={styles.sectionHeading}>Historial de pagos</Text>
         {(payments ?? []).slice(0, 5).map((pay: any) => (
           <View key={String(pay._id)} style={styles.paymentRow}>
-            <Text style={styles.label}>${pay.amount.toFixed(2)} \u00B7 {pay.currency?.toUpperCase?.() ?? 'USD'}</Text>
-            <Text style={styles.helper}>{formatDate(pay.createdAt)}</Text>
+            <Text style={styles.label}>
+              ${pay.amount.toFixed(2)} - {pay.currency?.toUpperCase?.() ?? 'USD'}
+            </Text>
+            <Text style={styles.helper}>
+              {new Date(pay.createdAt).toLocaleDateString?.() ?? '-'}
+            </Text>
           </View>
         ))}
-        {(payments ?? []).length === 0 ? <Text style={styles.label}>Aun sin movimientos.</Text> : null}
+        {(payments ?? []).length === 0 ? (
+          <Text style={styles.label}>Aún sin movimientos.</Text>
+        ) : null}
       </View>
 
       <View style={styles.listRow}>
@@ -373,7 +468,7 @@ export default function ProfileScreen() {
               key={String(row._id)}
               title={row.title || row.game?.title}
               cover={row.cover_url || row.game?.cover_url}
-              note={`Comprado el ${formatDate(row.createdAt)}`}
+              note={`Comprado el ${new Date(row.createdAt).toLocaleDateString?.() ?? '-'}`}
             />
           ))}
           {(purchases ?? []).length === 0 ? <Text style={styles.label}>Sin compras.</Text> : null}
@@ -386,7 +481,7 @@ export default function ProfileScreen() {
               key={String(row._id)}
               title={row.title || row.game?.title}
               cover={row.cover_url || row.game?.cover_url}
-              note={row.expiresAt ? `Expira ${formatDate(row.expiresAt)}` : ''}
+              note={row.expiresAt ? `Expira ${new Date(row.expiresAt).toLocaleDateString?.() ?? '-'}` : ''}
             />
           ))}
           {(rentals ?? []).length === 0 ? <Text style={styles.label}>Sin alquileres.</Text> : null}
@@ -394,6 +489,24 @@ export default function ProfileScreen() {
       </View>
 
       <FAQ />
+
+      {/* Modal de avatar grande */}
+      <Modal visible={avatarModal} animationType="fade" transparent onRequestClose={() => setAvatarModal(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setAvatarModal(false)}>
+          <View style={styles.modalCard}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.bigAvatar} />
+            ) : (
+              <View style={[styles.bigAvatar, styles.coverFallback]}>
+                <Text style={{ color: colors.accent, fontWeight: '900', fontSize: 28 }}>PV</Text>
+              </View>
+            )}
+            <Pressable style={styles.modalClose} onPress={() => setAvatarModal(false)}>
+              <Ionicons name="close" size={20} color="#0B2430" />
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -402,7 +515,11 @@ function GameRow({ title, cover, note }: { title?: string; cover?: string; note?
   const uri = resolveAssetUrl(cover);
   return (
     <View style={styles.gameRow}>
-      {uri ? <Image source={{ uri }} style={styles.gameCover} /> : <View style={[styles.gameCover, styles.coverFallback]} />}
+      {uri ? (
+        <Image source={{ uri }} style={styles.gameCover} />
+      ) : (
+        <View style={[styles.gameCover, styles.coverFallback]} />
+      )}
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.gameTitle}>{title || 'Juego'}</Text>
         {note ? <Text style={styles.helper}>{note}</Text> : null}
@@ -415,39 +532,64 @@ function FAQ() {
   return (
     <View style={styles.card}>
       <Text style={styles.sectionHeading}>Preguntas frecuentes</Text>
-      <Text style={styles.label}>\u00BFC\u00F3mo funciona el alquiler de juegos?</Text>
-      <Text style={styles.label}>\u00BFQu\u00E9 incluye la membres\u00EDa Premium?</Text>
-      <Text style={styles.label}>\u00BFPuedo cancelar mi suscripci\u00F3n?</Text>
+      <Text style={styles.label}>¿Cómo funciona el alquiler de juegos?</Text>
+      <Text style={styles.label}>¿Qué incluye la membresía Premium?</Text>
+      <Text style={styles.label}>¿Puedo cancelar mi suscripción?</Text>
       <Button title="Contacto" variant="ghost" style={{ alignSelf: 'flex-start', marginTop: spacing.md }} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  authContainer: {
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  profileContainer: {
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  branding: {
+  root: { flex: 1, backgroundColor: colors.background },
+  authContainer: { paddingBottom: spacing.xxl, gap: spacing.md },
+  profileContainer: { paddingBottom: spacing.xxl, gap: spacing.md },
+
+  /* HEADER COMÚN */
+  headerBar: {
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
+    backgroundColor: '#072633',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceBorder,
   },
-  title: {
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    backgroundColor: '#0F2D3A',
+  },
+  centerLogoWrap: { flex: 1, alignItems: 'center', gap: 4 },
+  centerLogo: { height: 28, width: 120 },
+  headerTitle: {
+    textAlign: 'center',
     color: colors.accent,
-    fontSize: typography.h1,
+    fontSize: typography.h3,
     fontWeight: '900',
+    letterSpacing: 0.8,
   },
-  subtitle: {
-    color: colors.accent,
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+
+  branding: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
+  heroTitle: { color: colors.accent, fontSize: typography.h1, fontWeight: '900', textAlign: 'center' },
+
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.surfaceBorder,
@@ -455,19 +597,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.xl,
     gap: spacing.sm,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
   },
-  fieldGroup: {
-    gap: 6,
-  },
-  label: {
-    color: colors.accent,
-    fontSize: typography.body,
-  },
-  value: {
-    color: colors.accent,
-    fontSize: typography.h3,
-    fontWeight: '700',
-  },
+  fieldGroup: { gap: 6, marginTop: 2 },
+  label: { color: colors.accent, fontSize: typography.body },
+  value: { color: colors.accent, fontSize: typography.h3, fontWeight: '700' },
   input: {
     backgroundColor: '#0B2430',
     borderWidth: 1,
@@ -477,27 +612,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
   },
-  error: {
-    color: '#ff7675',
-  },
-  switchButton: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-  },
-  sectionHeading: {
-    color: colors.accent,
-    fontWeight: '800',
-    fontSize: typography.h3,
-  },
-  helper: {
-    color: colors.accent,
-    fontSize: typography.caption,
-  },
-  roleRow: {
-    flexDirection: 'row',
+  error: { color: '#ff7675' },
+  fieldError: { color: '#ff9191', fontSize: typography.caption, marginTop: 4 },
+  switchButton: { alignSelf: 'flex-start', marginTop: spacing.sm },
+
+  sectionHeading: { color: colors.accent, fontWeight: '800', fontSize: typography.h3 },
+  helper: { color: colors.accent, fontSize: typography.caption },
+
+  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#0B2430',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#0ea5b5',
+    shadowColor: '#0ea5b5',
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
   },
+  avatarImage: { width: '100%', height: '100%' },
+
+  roleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rolePill: {
     borderRadius: radius.pill,
     borderWidth: 1,
@@ -506,12 +646,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#1B2F3B',
     borderColor: '#A4C9D3',
   },
-  roleText: {
-    fontSize: typography.caption,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
+  roleText: { fontSize: typography.caption, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
+
   notificationButton: {
     marginTop: spacing.sm,
     borderRadius: radius.lg,
@@ -521,28 +657,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: '#F2B70522',
   },
-  notificationTitle: {
-    color: colors.accent,
-    fontWeight: '700',
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#0B2430',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
+  notificationTitle: { color: colors.accent, fontWeight: '700' },
+
   paymentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -557,30 +673,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  listRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    flexWrap: 'wrap',
-  },
-  listCol: {
-    flex: 1,
-    minWidth: 280,
-  },
-  gameRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    alignItems: 'center',
-  },
-  gameCover: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-    backgroundColor: '#0F2D3A',
-  },
-  coverFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
+  listRow: { flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' },
+  listCol: { flex: 1, minWidth: 280 },
+  gameRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  gameCover: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: '#0F2D3A' },
+  coverFallback: { alignItems: 'center', justifyContent: 'center' },
   gameTitle: {
     color: colors.accent,
     fontSize: typography.body,
@@ -588,30 +686,33 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
+
+  /* Modal avatar grande */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  modalCard: {
+    backgroundColor: '#0B2430',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#0ea5b5',
+    shadowColor: '#0ea5b5',
+    shadowOpacity: 0.7,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  bigAvatar: { width: 240, height: 240, borderRadius: 120 },
+  modalClose: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#F2B705',
+    borderRadius: 14,
+    padding: 6,
+  },
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

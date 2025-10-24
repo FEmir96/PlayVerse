@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, radius, spacing, typography, shadows } from '../styles/theme';
@@ -17,15 +17,19 @@ export default function PremiumBanner({ onPress }: Props) {
       end={{ x: 1, y: 1 }}
       style={styles.wrap}
     >
-      <View style={{ gap: 6 }}>
-        <Text style={styles.title}>\u00BFListo para una experiencia premium?</Text>
-        <Text style={styles.body}>
-          Cat\u00E1logo ilimitado, descuentos exclusivos, cero publicidad y mucho m\u00E1s.
-        </Text>
-        <Text onPress={onPress} style={styles.cta}>
-          Hazte Premium \u2192
-        </Text>
-      </View>
+      <Pressable
+        style={({ pressed }) => [styles.content, pressed && styles.pressed]}
+        onPress={onPress}
+        disabled={!onPress}
+      >
+        <View style={styles.textStack}>
+          <Text style={styles.title}>¿Listo para una experiencia premium?</Text>
+          <Text style={styles.body}>
+            Catálogo ilimitado, descuentos exclusivos, cero publicidad y mucho más.
+          </Text>
+          <Text style={styles.cta}>Hazte Premium</Text>
+        </View>
+      </Pressable>
     </LinearGradient>
   );
 }
@@ -35,6 +39,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.xl,
     ...shadows.card,
+    overflow: 'hidden',
+  },
+  content: {
+    flex: 1,
+  },
+  pressed: {
+    opacity: 0.92,
+  },
+  textStack: {
+    gap: spacing.xs,
   },
   title: {
     color: colors.accent,
@@ -50,5 +64,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     color: colors.accent,
     fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
 });

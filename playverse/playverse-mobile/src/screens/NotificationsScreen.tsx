@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { RectButton, Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import Button from '../components/Button';
@@ -39,7 +39,7 @@ const BADGE_STYLES: Record<string, BadgeStyle> = {
   discount: { label: 'Promo', background: '#2F1E19', color: colors.accentAlt },
   'new-game': { label: 'Nuevo juego', background: '#13263D', color: '#7BD4FF' },
   achievement: { label: 'Logro', background: '#1E2D4C', color: '#AFB7FF' },
-  'game-update': { label: 'Actualizaci\u00F3n', background: '#1B2538', color: '#A4C9D3' },
+  'game-update': { label: 'Actualización', background: '#1B2538', color: '#A4C9D3' },
   default: { label: 'Aviso', background: '#1B2F3B', color: colors.textPrimary },
 };
 
@@ -64,7 +64,16 @@ export default function NotificationsScreen() {
   const { data, loading, refetch } = useConvexQuery<NotificationDoc[]>(
     'notifications:getForUser',
     profile?._id ? { userId: profile._id, limit: 100 } : ({} as any),
-    { enabled: !!profile, refreshMs: 25000 }
+    { enabled: !!profile, refreshMs: 5000 }
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile?._id) {
+        return;
+      }
+      refetch();
+    }, [profile?._id, refetch])
   );
 
   const notifications = data ?? [];
@@ -121,9 +130,9 @@ export default function NotificationsScreen() {
         </Pressable>
         <Text style={styles.title}>Notificaciones</Text>
         <Text style={styles.subtitle}>
-          Inicia sesi\u00F3n para ver tus alertas personalizadas.
+          Inicia sesión para ver tus alertas personalizadas.
         </Text>
-        <Button title="Iniciar sesi\u00F3n" onPress={goProfile} style={styles.loginButton} />
+        <Button title="Iniciar sesión" onPress={goProfile} style={styles.loginButton} />
       </View>
     );
   }
@@ -138,7 +147,7 @@ export default function NotificationsScreen() {
         <View style={styles.topMeta}>
           <Text style={styles.title}>Notificaciones</Text>
           <Text style={styles.subtitle}>
-            {unread > 0 ? `Tienes ${unread} sin leer` : 'Est\u00E1s al d\u00EDa'}
+            {unread > 0 ? `Tienes ${unread} sin leer` : 'Estás al día'}
           </Text>
         </View>
         <Pressable
@@ -215,7 +224,7 @@ export default function NotificationsScreen() {
                   </View>
                   {!item.isRead ? <View style={styles.unreadDot} /> : null}
                 </View>
-                <Text style={styles.cardTitle}>{item.title ?? 'Notificaci\u00F3n PlayVerse'}</Text>
+                <Text style={styles.cardTitle}>{item.title ?? 'Notificación PlayVerse'}</Text>
                 {item.message ? (
                   <Text style={styles.cardBody}>{item.message}</Text>
                 ) : null}

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { View, Text } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
-// Permite que expo-auth-session complete el flujo en la web y cierre la pesta\u00F1a cuando corresponde.
+// Permite que expo-auth-session complete el flujo en la web y cierre la pestaña cuando corresponde.
 WebBrowser.maybeCompleteAuthSession();
 
 export default function OAuthCallback() {
@@ -19,7 +19,7 @@ export default function OAuthCallback() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ fontSize: 16, textAlign: 'center' }}>
-        Volviendo a PlayVerse\u2026 ya pod\u00E9s cerrar esta pesta\u00F1a.
+        Volviendo a PlayVerse… ya podés cerrar esta pestaña.
       </Text>
     </View>
   );

@@ -1,54 +1,94 @@
-import { useCallback, useEffect, useState } from 'react';
+// playverse/playverse-mobile/src/lib/useConvexQuery.ts
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { convexHttp } from './convexClient';
 
-// Ultra-simple data hook for Convex HTTP queries.
-// It polls on an interval to simulate near real-time updates without codegen.
-// When you enable `api` codegen usage, you can swap this by `useQuery(api.x.y)`.
+type Options = { enabled?: boolean; refreshMs?: number };
 
-type Options = {
-  // Re-polling interval in ms (0 disables polling)
-  refreshMs?: number;
-  // Start disabled (until you call refetch)
-  enabled?: boolean;
-};
+const DISABLED_UNTIL = new Map<string, number>();
+const IN_FLIGHT = new Map<string, Promise<any>>();
 
-export function useConvexQuery<T>(path: string, args: Record<string, any> = {}, opts: Options = {}) {
-  const { refreshMs = 10000, enabled = true } = opts;
-  const [data, setData] = useState<T | undefined>();
-  const [loading, setLoading] = useState<boolean>(!!enabled);
-  const [error, setError] = useState<Error | undefined>();
-
-  const fetchOnce = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await convexHttp.query(path as any, args as any);
-      setData(res as T);
-      setError(undefined);
-    } catch (e: any) {
-      setError(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [path, JSON.stringify(args)]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let disposed = false;
-    let timer: any;
-    const run = async () => {
-      if (disposed) return;
-      await fetchOnce();
-      if (refreshMs > 0) {
-        timer = setTimeout(run, refreshMs);
-      }
-    };
-    run();
-    return () => {
-      disposed = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [enabled, refreshMs, fetchOnce]);
-
-  return { data, loading, error, refetch: fetchOnce };
+function keyFor(name: string, args: any) {
+  return `${name}::${JSON.stringify(args ?? {})}`;
 }
 
+/**
+ * nameOrNames: string o array de rutas de función Convex (intenta en orden).
+ * Maneja endpoints inexistentes sin spamear errores y con “fallback”.
+ */
+export function useConvexQuery<T>(
+  nameOrNames: string | string[],
+  args: any,
+  opts?: Options
+) {
+  const names = useMemo(
+    () => (Array.isArray(nameOrNames) ? nameOrNames : [nameOrNames]).filter(Boolean),
+    [nameOrNames]
+  );
+  const enabled = opts?.enabled ?? true;
+
+  const [data, setData] = useState<T | undefined>(undefined);
+  const [error, setError] = useState<any>(undefined);
+  const [loading, setLoading] = useState<boolean>(!!enabled);
+
+  const workingNameRef = useRef<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchOnce = async (): Promise<void> => {
+    if (!enabled || names.length === 0) return;
+
+    setLoading(true);
+    setError(undefined);
+
+    const now = Date.now();
+    const candidates = workingNameRef.current ? [workingNameRef.current] : names;
+
+    let lastErr: any;
+    for (const n of candidates) {
+      const disabledUntil = DISABLED_UNTIL.get(n) ?? 0;
+      if (disabledUntil > now) continue;
+
+      const k = keyFor(n, args);
+      try {
+        const existing = IN_FLIGHT.get(k);
+        // 🔒 A partir de aquí p SIEMPRE es Promise<any> (no union)
+        const p: Promise<any> =
+          existing ?? (convexHttp as any).query(n as any, args ?? {});
+        if (!existing) IN_FLIGHT.set(k, p);
+
+        const res = await p;
+        IN_FLIGHT.delete(k);
+
+        workingNameRef.current = n;
+        setData(res as T);
+        setLoading(false);
+        return;
+      } catch (e: any) {
+        IN_FLIGHT.delete(k);
+        lastErr = e;
+        const msg = String(e?.message ?? '');
+        if (/Could not find public function/i.test(msg)) {
+          // deshabilitar este nombre por 60s para no insistir
+          DISABLED_UNTIL.set(n, now + 60_000);
+        }
+        // probar siguiente candidato
+      }
+    }
+
+    setError(lastErr || new Error('All query candidates failed'));
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchOnce();
+
+    if (enabled && opts?.refreshMs) {
+      timerRef.current = setInterval(fetchOnce, opts.refreshMs);
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, opts?.refreshMs, JSON.stringify(args), names.join('|')]);
+
+  return { data: data as T | undefined, loading, error, refetch: fetchOnce };
+}

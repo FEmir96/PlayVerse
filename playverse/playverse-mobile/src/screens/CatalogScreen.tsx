@@ -1,35 +1,40 @@
+// playverse/playverse-mobile/src/screens/CatalogScreen.tsx
 import React, { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 
-import { spacing } from '../styles/theme';
+import { spacing, colors, typography } from '../styles/theme';
 import { Button, Chip, GameCard, SearchBar } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
-import type { Game } from '../types/game';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { Game } from '../types/game';
 
 const PAGE_SIZE = 10;
 const CATEGORIES = ['Todos', 'Accion', 'RPG', 'Carreras'];
-const TABLET_BREAKPOINT = 768;
+
 const LAPTOP_BREAKPOINT = 1024;
 const TWO_COLUMN_BREAKPOINT = 360;
 const MIN_CARD_WIDTH = 160;
 
+const ALL_GAMES_NAMES = [
+  'queries/getGames:getGames',
+  'queries/getAllGames:getAllGames',
+  'queries/getGames',
+  'queries/getAllGames',
+];
+
 export default function CatalogScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+
   const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
   const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
   const rawCardWidth = (width - horizontalSpace) / columns;
-  const cardWidth = Math.max(
-    MIN_CARD_WIDTH,
-    Math.min(columns === 1 ? 320 : 220, rawCardWidth)
-  );
+  const cardWidth = Math.max(MIN_CARD_WIDTH, Math.min(columns === 1 ? 320 : 220, rawCardWidth));
 
   const { data: allGames, loading, refetch } = useConvexQuery<Game[]>(
-    'queries/getGames:getGames',
+    ALL_GAMES_NAMES,
     {},
     { refreshMs: 20000 }
   );
@@ -42,53 +47,34 @@ export default function CatalogScreen() {
     let list = (allGames ?? []).slice();
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter((game) => game.title?.toLowerCase().includes(q));
+      list = list.filter((g) => g.title?.toLowerCase().includes(q));
     }
     if (cat !== 'Todos') {
-      list = list.filter((game) =>
-        (game.genres || []).some((g) => g?.toLowerCase().includes(cat.toLowerCase()))
-      );
+      list = list.filter((g) => (g.genres || []).some((x) => x?.toLowerCase().includes(cat.toLowerCase())));
     }
-    list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    list.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     return list;
   }, [allGames, search, cat]);
 
   const visible = filtered.slice(0, page * PAGE_SIZE);
   const hasMore = visible.length < filtered.length;
 
-  const gridJustify = columns === 1 ? 'justify-center' : 'justify-start';
+  const gridJustify = columns === 1 ? 'center' : 'flex-start';
 
   return (
     <ScrollView
-      className="flex-1 bg-background"
+      style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={
-        <RefreshControl
-          refreshing={!!loading}
-          onRefresh={refetch}
-          tintColor="#F2B705"
-        />
+        <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor="#F2B705" />
       }
     >
-      <Pressable
-        onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as any)}
-        className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95 ml-xl mt-xl"
-      >
-        <View className="flex-row items-center gap-[6px]">
-          <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
-          <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">
-            Volver
-          </Text>
-        </View>
-      </Pressable>
-      <View className="gap-sm px-xl pt-xl tablet:px-[80px]">
-        <Text className="text-h1 font-black text-accent">CATALOGO DE JUEGOS</Text>
-        <Text className="max-w-[560px] text-body text-accent">
-          Sumergete en PlayVerse. Encuentra tu proximo juego favorito.
-        </Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>CATÁLOGO DE JUEGOS</Text>
+        <Text style={styles.subtitle}>Sumérgete en PlayVerse. Encontrá tu próximo juego.</Text>
       </View>
 
-      <View className="gap-md px-xl pt-md tablet:px-[80px] tablet:pt-lg">
+      <View style={styles.filters}>
         <SearchBar
           value={search}
           onChangeText={(text) => {
@@ -96,7 +82,7 @@ export default function CatalogScreen() {
             setPage(1);
           }}
         />
-        <View className="flex-row flex-wrap gap-sm">
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
           {CATEGORIES.map((category) => (
             <Chip
               key={category}
@@ -112,34 +98,37 @@ export default function CatalogScreen() {
       </View>
 
       {loading && visible.length === 0 ? (
-        <View className={`flex-row flex-wrap gap-md px-xl pt-md ${gridJustify}`}>
-          {Array.from({ length: PAGE_SIZE }).map((_, index) => (
-            <View
-              key={index}
-              className="h-[320px] rounded-lg bg-[#143547] opacity-40"
-              style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
-            />
+        <View style={[styles.grid, { justifyContent: gridJustify }]}>
+          {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+            <View key={i} style={[styles.skeleton, { width: cardWidth }]} />
           ))}
         </View>
       ) : visible.length === 0 ? (
-        <View className="px-xl pt-xl tablet:px-[80px]">
-          <Text className="text-body text-accent">No se encontraron juegos.</Text>
+        <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.xl }}>
+          <Text style={styles.subtitle}>No se encontraron juegos.</Text>
         </View>
       ) : (
-        <View className={`flex-row flex-wrap gap-md px-xl pt-md ${gridJustify}`}>
-          {visible.map((game: any, index) => {
-            const gameId = game._id ?? game.id ?? game.gameId ?? null;
+        <View style={[styles.grid, { justifyContent: gridJustify }]}>
+          {visible.map((row: any, i: number) => {
+            const gameId = row._id ?? row.id ?? row.gameId ?? null;
             return (
               <GameCard
-                key={String(gameId ?? index)}
-                game={{ ...game, id: String(gameId ?? index) }}
+                key={String(gameId ?? i)}
+                game={{
+                  id: String(gameId ?? i),
+                  title: row.title ?? 'Juego',
+                  cover_url: row.cover_url ?? row.coverUrl,
+                  gameId: row._id ? String(row._id) : undefined,
+                  purchasePrice: row.purchasePrice,
+                  weeklyPrice: row.weeklyPrice,
+                  igdbRating: row.igdbRating,
+                  plan: row.plan,
+                  // ❌ NO pasar firstReleaseDate: rompía el tipo de GameCard
+                }}
                 style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
                 onPress={() =>
                   gameId &&
-                  navigation.navigate('GameDetail', {
-                    gameId: String(gameId),
-                    initial: game,
-                  })
+                  navigation.navigate('GameDetail', { gameId: String(gameId), initial: row })
                 }
               />
             );
@@ -148,9 +137,9 @@ export default function CatalogScreen() {
       )}
 
       {filtered.length > 0 ? (
-        <View className="items-center px-xl py-xl tablet:px-[80px]">
+        <View style={{ alignItems: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.xl }}>
           <Button
-            title={hasMore ? 'Cargar mas' : 'No hay mas juegos'}
+            title={hasMore ? 'Cargar más' : 'No hay más juegos'}
             variant={hasMore ? 'ghost' : 'primary'}
             onPress={() => hasMore && setPage(page + 1)}
             style={{ opacity: hasMore ? 1 : 0.6 }}
@@ -161,8 +150,35 @@ export default function CatalogScreen() {
   );
 }
 
-
-
-
-
-
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    gap: spacing.xs,
+  },
+  title: {
+    color: colors.accent,
+    fontSize: typography.h1,
+    fontWeight: '900',
+  },
+  subtitle: { color: colors.accent, opacity: 0.9 },
+  filters: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  skeleton: {
+    height: 320,
+    borderRadius: 12,
+    backgroundColor: '#143547',
+    opacity: 0.4,
+  },
+});

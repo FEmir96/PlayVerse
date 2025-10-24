@@ -7,6 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "playverse",
     "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["assets/**"],
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",

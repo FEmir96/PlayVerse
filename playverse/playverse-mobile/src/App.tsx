@@ -1,3 +1,4 @@
+// playverse/playverse-mobile/src/App.tsx
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
@@ -8,22 +9,17 @@ import { ConvexProvider } from 'convex/react';
 import { convex } from './lib/convexClient';
 import { AuthProvider } from './context/AuthContext';
 import AppNavigator from './navigation/AppNavigator';
+import { FavoritesProvider } from './context/FavoritesContext';
 import type { RootStackParamList } from './navigation/AppNavigator';
 
 export default function MainApp() {
-  // Ensures AuthSession can close browser tabs after redirect
   try { WebBrowser.maybeCompleteAuthSession(); } catch {}
   const linking: LinkingOptions<RootStackParamList> = {
     prefixes: [Linking.createURL('/'), 'playverse://'],
     config: {
       screens: {
-        AuthCallback: 'auth',
-        GameDetail: {
-          path: 'GameDetail/:gameId?',
-          parse: {
-            gameId: (value: string) => value,
-          },
-        },
+        AuthCallback: 'auth/callback', // 👈 Asegurá este path
+        GameDetail: { path: 'GameDetail/:gameId?', parse: { gameId: (v: string) => v } },
         Tabs: {
           screens: {
             Home: 'home',
@@ -40,13 +36,14 @@ export default function MainApp() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ConvexProvider client={convex}>
         <AuthProvider>
-          <NavigationContainer linking={linking}>
-            <AppNavigator />
-            <StatusBar style="light" />
-          </NavigationContainer>
+          <FavoritesProvider>
+            <NavigationContainer linking={linking}>
+              <AppNavigator />
+              <StatusBar style="light" />
+            </NavigationContainer>
+          </FavoritesProvider>
         </AuthProvider>
       </ConvexProvider>
     </GestureHandlerRootView>
   );
 }
-
