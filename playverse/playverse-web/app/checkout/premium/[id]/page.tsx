@@ -285,7 +285,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         <Button
           variant="outline"
           onClick={() => router.back()}
-          className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+          className="border-orange-400 text-orange-400 bg-transparent hover:bg-orange-400 hover:text-slate-900"
         >
           <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path
@@ -347,7 +347,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
               </div>
 
               <div className="text-sm text-slate-400">
-                Tu suscripción se renovará automáticamente (excepto Lifetime). Podés cancelarla en cualquier momento desde tu perfil.
+                Tu suscripción se renovará automáticamente. Podés cancelarla en cualquier momento desde tu perfil.
               </div>
             </div>
 

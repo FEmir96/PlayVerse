@@ -612,11 +612,7 @@ export default function ProfilePage() {
                       Pasate a Premium para desbloquear la biblioteca completa, sin anuncios y con descuentos.
                     </p>
                     <Link
-                      href={
-                        convexProfile?._id
-                          ? `/checkout/premium/${convexProfile._id}?plan=monthly`
-                          : "/premium"
-                      }
+                      href="/premium"
                     >
                       <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900">
                         Suscribirme ahora

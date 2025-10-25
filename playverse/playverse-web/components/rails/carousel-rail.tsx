@@ -9,14 +9,14 @@ import GameCard from "@/components/game-card";
 type Props = {
   title: string;
   items: Doc<"games">[];
-  autoplayMs?: number;   // default 4500
+  autoplayMs?: number;   // undefined = no autoplay
   itemMinW?: string;     // tailwind (ej: "min-w-[280px]")
 };
 
 export default function CarouselRail({
   title,
   items,
-  autoplayMs = 4500,
+  autoplayMs,
   itemMinW = "min-w-[280px] sm:min-w-[300px] lg:min-w-[320px]",
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);

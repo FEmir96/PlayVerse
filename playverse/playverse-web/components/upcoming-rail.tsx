@@ -69,7 +69,7 @@ function UpcomingCard({ item }: { item: UpcomingItem }) {
   const cover = item.cover_url || "/placeholder_game.jpg";
 
   return (
-    <Card className="bg-slate-800 border-slate-700 overflow-hidden">
+    <Card className="bg-slate-800 border-slate-700 overflow-hidden p-0 gap-0">
       <div className="relative">
         {item.genre && (
           <Badge className="absolute top-3 left-3 bg-orange-400 text-slate-900 font-semibold z-10">

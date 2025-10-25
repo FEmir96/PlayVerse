@@ -14,8 +14,8 @@ export type HouseAdPayload = {
   imageUrl?: string;
   videoUrl?: string;
   theme?: "dark" | "light";
-  skipAfterSec: number;      // 5–10
-  dismissible: boolean;      // si false, no aparece botón de cerrar
+  skipAfterSec: number; // 5–10
+  dismissible: boolean; // si false, no aparece botón de cerrar
   featuredGames?: Array<{ _id: string; title: string; cover_url?: string }>;
 };
 
@@ -86,7 +86,7 @@ export default function HouseAdModal({ open, ad, onSkip, onCta }: Props) {
               disabled={!canSkip}
               onClick={() => canSkip && onSkip()}
               className={[
-                "px-3 py-1 rounded-full text-sm font-semibold transition-colors",
+                "px-3 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer",
                 isDark
                   ? "bg-slate-800/70 hover:bg-slate-700 disabled:bg-slate-800/40"
                   : "bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100/60",
@@ -138,12 +138,22 @@ export default function HouseAdModal({ open, ad, onSkip, onCta }: Props) {
                 {ad.title || "¡Pasate a Premium!"}
               </h2>
               {ad.subtitle ? (
-                <p className={["text-lg", isDark ? "text-slate-300" : "text-slate-600"].join(" ")}>
+                <p
+                  className={[
+                    "text-lg",
+                    isDark ? "text-slate-300" : "text-slate-600",
+                  ].join(" ")}
+                >
                   {ad.subtitle}
                 </p>
               ) : null}
               {ad.body ? (
-                <p className={["text-base", isDark ? "text-slate-400" : "text-slate-600"].join(" ")}>
+                <p
+                  className={[
+                    "text-base",
+                    isDark ? "text-slate-400" : "text-slate-600",
+                  ].join(" ")}
+                >
                   {ad.body}
                 </p>
               ) : null}
@@ -152,7 +162,7 @@ export default function HouseAdModal({ open, ad, onSkip, onCta }: Props) {
             <div className="mt-1 flex items-center gap-4">
               <button
                 onClick={onCta}
-                className="px-6 py-3.5 rounded-2xl font-semibold shadow-md transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-violet-400 bg-violet-600 text-white"
+                className="px-6 py-3.5 rounded-2xl font-semibold shadow-md transition-transform hover:scale-[1.02] hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-violet-400 bg-violet-600 text-white cursor-pointer"
               >
                 {ad.ctaLabel || "Suscribirme"}
               </button>
@@ -162,7 +172,7 @@ export default function HouseAdModal({ open, ad, onSkip, onCta }: Props) {
                   onClick={() => canSkip && onSkip()}
                   disabled={!canSkip}
                   className={[
-                    "px-6 py-3.5 rounded-2xl font-semibold transition-colors",
+                    "px-6 py-3.5 rounded-2xl font-semibold transition-colors cursor-pointer",
                     isDark
                       ? "bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:bg-slate-800/60"
                       : "bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:bg-slate-100/60",
@@ -173,7 +183,12 @@ export default function HouseAdModal({ open, ad, onSkip, onCta }: Props) {
               ) : null}
             </div>
 
-            <p className={["mt-2 text-xs", isDark ? "text-slate-500" : "text-slate-500"].join(" ")}>
+            <p
+              className={[
+                "mt-2 text-xs",
+                isDark ? "text-slate-500" : "text-slate-500",
+              ].join(" ")}
+            >
               Este anuncio solo se muestra a cuentas Free.
             </p>
           </div>

@@ -24,5 +24,5 @@ export default function HypeRail() {
   const selected = WANTED.map((t) => byTitle.get(t.toLowerCase().trim())).filter(Boolean) as Doc<"games">[];
   if (!selected.length) return null;
 
-  return <CarouselRail title="Los más esperados" items={selected} autoplayMs={5200} />;
+  return <CarouselRail title="Los más esperados" items={selected} />;
 }
