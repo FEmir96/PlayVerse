@@ -568,12 +568,12 @@ export default function GameDetailPage() {
       toast({ title: "Ya lo tienes", description: "Este juego ya está en tu biblioteca." });
       return;
     }
-    if (isPremiumPlan && profile?.role === "free") {
-      router.push(`/checkout/compra/${gid}?pricing=flat_premium`);
-      return;
-    }
     if (requiresPremium) {
       setShowPremiumModal(true);
+      return;
+    }
+    if (isPremiumPlan && profile?.role === "free") {
+      router.push(`/checkout/compra/${gid}?pricing=flat_premium`);
       return;
     }
     router.push(`/checkout/compra/${gid}`);
@@ -871,60 +871,62 @@ export default function GameDetailPage() {
 
                 {/* ====== Precios ====== */}
                 {(typeof baseBuy === "number" || typeof baseRent === "number") && (
-                  <div className="mb-4 rounded-lg border border-orange-400/30 bg-slate-900/40 p-4">
-                    <h4 className="text-sm font-semibold text-orange-400 mb-3">
+                  <div className="mb-6 rounded-xl border border-orange-400/30 bg-gradient-to-br from-slate-900/60 to-slate-800/40 p-6 shadow-lg">
+                    <h4 className="text-xl font-bold text-orange-400 mb-6 text-center">
                       Precios
                     </h4>
 
-                    {typeof baseBuy === "number" && (
-                      <div className="flex items-center justify-between py-1">
-                        <span className="text-slate-300">Comprar</span>
-                        <div className="flex items-center gap-2">
-                          {isPremiumViewer ? (
-                            <>
-                              <span className="text-slate-400 line-through text-sm">
+                    <div className="space-y-4">
+                      {typeof baseBuy === "number" && (
+                        <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-800/50 border border-cyan-400/20">
+                          <span className="text-slate-300 font-medium">Comprar</span>
+                          <div className="flex items-center gap-3">
+                            {isPremiumViewer ? (
+                              <>
+                                <span className="text-slate-400 line-through text-sm">
+                                  {formatMoney(baseBuy, currency)}
+                                </span>
+                                <span className="text-cyan-400 font-bold text-lg">
+                                  {formatMoney(buyFinal!, currency)}
+                                </span>
+                                <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                  -10% Premium
+                                </Badge>
+                              </>
+                            ) : (
+                              <span className="text-cyan-400 font-bold text-lg">
                                 {formatMoney(baseBuy, currency)}
                               </span>
-                              <span className="text-white font-semibold">
-                                {formatMoney(buyFinal!, currency)}
-                              </span>
-                              <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                                -10% Premium
-                              </Badge>
-                            </>
-                          ) : (
-                            <span className="text-white font-semibold">
-                              {formatMoney(baseBuy, currency)}
-                            </span>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {typeof baseRent === "number" && (
-                      <div className="flex items-center justify-between py-1">
-                        <span className="text-slate-300">Alquiler (semana)</span>
-                        <div className="flex items-center gap-2">
-                          {isPremiumViewer ? (
-                            <>
-                              <span className="text-slate-400 line-through text-sm">
+                      {typeof baseRent === "number" && (
+                        <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-800/50 border border-emerald-400/20">
+                          <span className="text-slate-300 font-medium">Alquiler semanal</span>
+                          <div className="flex items-center gap-3">
+                            {isPremiumViewer ? (
+                              <>
+                                <span className="text-slate-400 line-through text-sm">
+                                  {formatMoney(baseRent, currency)}
+                                </span>
+                                <span className="text-emerald-400 font-bold text-lg">
+                                  {formatMoney(rentFinal!, currency)}
+                                </span>
+                                <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                  -10% Premium
+                                </Badge>
+                              </>
+                            ) : (
+                              <span className="text-emerald-400 font-bold text-lg">
                                 {formatMoney(baseRent, currency)}
                               </span>
-                              <span className="text-white font-semibold">
-                                {formatMoney(rentFinal!, currency)}
-                              </span>
-                              <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                                -10% Premium
-                              </Badge>
-                            </>
-                          ) : (
-                            <span className="text-white font-semibold">
-                              {formatMoney(baseRent, currency)}
-                            </span>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
                 {/* ====== fin precios ====== */}
@@ -979,14 +981,13 @@ export default function GameDetailPage() {
                         <>
                           <Button
                             onClick={handlePurchase}
-                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                            className="w-full bg-cyan-400 hover:bg-cyan-500 text-slate-900 font-semibold shadow-lg shadow-cyan-400/25"
                           >
                             Comprar ahora
                           </Button>
                           <Button
                             onClick={handleRental}
-                            variant="outline"
-                            className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                            className="w-full bg-emerald-400 hover:bg-emerald-500 text-slate-900 font-semibold shadow-lg shadow-emerald-400/25"
                           >
                             Alquilar
                           </Button>
@@ -1006,14 +1007,13 @@ export default function GameDetailPage() {
                         <>
                           <Button
                             onClick={handlePurchase}
-                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold"
+                            className="w-full bg-cyan-400 hover:bg-cyan-500 text-slate-900 font-semibold shadow-lg shadow-cyan-400/25"
                           >
                             Comprar ahora
                           </Button>
                           <Button
                             onClick={handleRental}
-                            variant="outline"
-                            className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                            className="w-full bg-emerald-400 hover:bg-emerald-500 text-slate-900 font-semibold shadow-lg shadow-emerald-400/25"
                           >
                             Alquilar
                           </Button>
@@ -1026,6 +1026,10 @@ export default function GameDetailPage() {
                           onClick={async () => {
                             if (!isLogged || !profile?._id || !game?._id) {
                               setShowAuthAction(true);
+                              return;
+                            }
+                            if (requiresPremium) {
+                              setShowPremiumModal(true);
                               return;
                             }
                             const prev = cartMarked;
@@ -1060,8 +1064,8 @@ export default function GameDetailPage() {
                           }}
                           className={`w-full font-semibold ${
                             cartMarked
-                              ? "bg-slate-900 border border-amber-400 text-amber-300 hover:bg-slate-800"
-                              : "bg-amber-400 hover:bg-amber-500 text-slate-900"
+                              ? "bg-slate-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+                              : "bg-orange-400 hover:bg-orange-500 text-slate-900"
                           }`}
                         >
                           <ShoppingCart className="w-4 h-4 mr-2" />
@@ -1095,12 +1099,6 @@ export default function GameDetailPage() {
                       </Button>
                     )}
                   </div>
-
-                  {cartMarked && (
-                    <Link href="/checkout/carrito" className="block text-center text-amber-300 text-sm hover:underline">
-                      Ver carrito
-                    </Link>
-                  )}
                 </div>
               </div>
 
@@ -1181,21 +1179,21 @@ export default function GameDetailPage() {
 
       {/* Share Modal */}
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
-        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md">
+        <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md w-full">
           <DialogHeader>
             <DialogTitle className="text-orange-400 text-xl font-semibold">
               ¡Comparte este juego!
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-hidden">
             <p className="text-slate-300 text-center">
               Comparte este increíble juego con tus amigos y que también disfruten de esta aventura épica.
             </p>
             <div className="bg-slate-700/50 rounded-lg p-4 border border-orange-400/20">
               <div className="flex items-center gap-3">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-400 mb-1">Link del juego:</p>
-                  <p className="text-white text-sm font-mono bg-slate-900/50 p-2 rounded border truncate">
+                  <p className="text-white text-sm font-mono bg-slate-900/50 p-2 rounded border break-all">
                     {typeof window !== "undefined" ? window.location.href : ""}
                   </p>
                 </div>
@@ -1218,9 +1216,6 @@ export default function GameDetailPage() {
                 </>
               )}
             </Button>
-            <p className="text-xs text-slate-400 text-center">
-              El link se copió a tu portapapeles
-            </p>
           </div>
         </DialogContent>
       </Dialog>
@@ -1331,7 +1326,7 @@ export default function GameDetailPage() {
 
               <Button
                 onClick={() => {
-                  window.location.href = "/checkout/premium?plan=monthly";
+                  window.location.href = "/premium";
                 }}
                 className="rounded-xl px-5 py-2.5
                            bg-orange-400 text-slate-900 font-semibold

@@ -166,7 +166,7 @@ export default function PlayEmbeddedPage() {
             <Button
               variant="outline"
               onClick={() => router.push(`/juego/${gameId}`)}
-              className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+              className="border-orange-400 text-orange-400 bg-transparent hover:bg-orange-400 hover:text-slate-900"
             >
               Volver
             </Button>
@@ -221,7 +221,7 @@ export default function PlayEmbeddedPage() {
             <Button
               variant="outline"
               onClick={() => router.push(`/juego/${gameId}`)}
-              className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+              className="border-orange-400 text-orange-400 bg-transparent hover:bg-orange-400 hover:text-slate-900"
             >
               Volver
             </Button>

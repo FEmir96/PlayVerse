@@ -211,16 +211,15 @@ export default function GameCard({
 
   return (
     <Link href={`/juego/${game._id}`} className="block h-full cursor-pointer">
-      <Card
-        className="
-          relative
-          h-full flex flex-col bg-slate-800 border-slate-700
-          transition duration-300 ease-out cursor-pointer
-          hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-400/40
-          group hover:-translate-y-0.5
-          /* Importante: NO overflow-hidden aquí para que el glow no se recorte */
-        "
-      >
+        <Card
+          className="
+            relative h-full flex flex-col bg-slate-800 border-slate-700
+            transition duration-300 ease-out cursor-pointer
+            hover:shadow-lg hover:shadow-amber-500/5 hover:border-amber-400/40
+            group
+            rounded-2xl p-0 gap-0
+          "
+        >
         {/* ===== header (cover + overlay limpio) ===== */}
         <div className={`relative w-full ${ASPECT} overflow-hidden bg-slate-900 rounded-t-2xl`}>
           {/* Fondo blur para rellenar sin bandas */}
@@ -241,9 +240,9 @@ export default function GameCard({
             className="
               absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
               min-w-full min-h-full w-auto h-auto object-cover
-              [transform-origin:center] scale-[1.02]
+              [transform-origin:center] scale-[1.01]
               transition-transform duration-300 ease-out
-              group-hover:scale-[1.04]
+              group-hover:scale-[1.02]
               pointer-events-none
             "
           />
@@ -293,7 +292,8 @@ export default function GameCard({
         </div>
 
         {/* ===== body ===== */}
-        <CardContent className="p-0 flex-1 flex flex-col overflow-hidden rounded-b-2xl">
+        <CardContent className="p-0 flex-1 flex flex-col rounded-b-2xl bg-[#161f2e]">
+
           <div className="h-[1px] w-full bg-slate-700" />
 
           <div className="p-4 flex-1 flex flex-col">
