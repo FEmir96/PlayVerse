@@ -28,7 +28,7 @@ export default function FavoritesScreen() {
   const { profile } = useAuth();
   const { favorites, loading, refetch } = useFavorites();
 
-  // Oculta el header del Stack (evita el título duplicado)
+  // Oculta el header del Stack (usamos header propio sin texto)
   useLayoutEffect(() => {
     nav.setOptions({ headerShown: false });
   }, [nav]);
@@ -47,7 +47,7 @@ export default function FavoritesScreen() {
         <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />
       }
     >
-      {/* Header propio */}
+      {/* Header propio (logo PV centrado, SIN título) */}
       <View style={styles.headerBar}>
         <Pressable
           onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -62,7 +62,6 @@ export default function FavoritesScreen() {
             style={styles.centerLogo}
             resizeMode="contain"
           />
-          <Text style={styles.headerTitle}>FAVORITOS</Text>
         </View>
 
         <Pressable onPress={() => nav.navigate('Notifications')} style={styles.iconButton}>
@@ -72,7 +71,7 @@ export default function FavoritesScreen() {
 
       {!profile ? (
         <View style={styles.center}>
-          <Text style={styles.title}>Inicia sesión</Text>
+          <Text style={styles.title}>Inicia sesión</text>
           <Text style={styles.subtitleCenter}>
             Inicia sesión para ver tus juegos favoritos y seguir sus novedades.
           </Text>
@@ -150,18 +149,10 @@ const styles = StyleSheet.create({
   centerLogoWrap: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
   },
   centerLogo: {
     height: 28,
     width: 120,
-  },
-  headerTitle: {
-    textAlign: 'center',
-    color: colors.accent,
-    fontSize: typography.h3,
-    fontWeight: '900',
-    letterSpacing: 0.8,
   },
   sectionHead: {
     paddingHorizontal: spacing.xl,

@@ -57,7 +57,7 @@ export default function ProfileScreen() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [avatarModal, setAvatarModal] = useState(false);
 
-  // 🔕 Oculta el header del Stack para no duplicar títulos
+  // Oculta el header del Stack para no duplicar nada (usamos header propio sin texto)
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -166,7 +166,7 @@ export default function ProfileScreen() {
     if (ok) setPassword('');
   }, [loading, mode, validateForm, loginEmail, register]);
 
-  // Mantiene profile actualizado si llega un fullProfile del usuario actual
+  // Mantén el perfil del contexto alineado con el fullProfile cuando llegue
   useEffect(() => {
     if (!profile || !fullProfile?._id) return;
     if (String(fullProfile._id) !== profile._id) return;
@@ -195,7 +195,7 @@ export default function ProfileScreen() {
   const avatarUri = resolveAssetUrl((fullProfile as any)?.avatarUrl || (profile as any)?.avatarUrl);
   const roleChip = ROLE_CHIP_STYLES[profile?.role ?? 'free'];
 
-  // Header común (logo centrado + back + campana)
+  // Header propio (logo PV centrado, SIN título)
   const HeaderBar = (
     <View style={styles.headerBar}>
       <Pressable
@@ -211,7 +211,6 @@ export default function ProfileScreen() {
           style={styles.centerLogo}
           resizeMode="contain"
         />
-        <Text style={styles.headerTitle}>PERFIL</Text>
       </View>
 
       <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.iconButton}>
@@ -304,7 +303,7 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <View style={styles.card}>
+        <View className="card">
           <Text style={styles.sectionHeading}>Ingresar con</Text>
           <SocialButton
             provider="google"
@@ -393,7 +392,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Plan y rol: SOLO rol actual (sin plan/estado/desde) */}
+      {/* Plan y suscripción (solo rol actual) */}
       <View style={styles.card}>
         <Text style={styles.sectionHeading}>Plan y suscripción</Text>
         <View style={styles.roleRow}>
@@ -441,23 +440,6 @@ export default function ProfileScreen() {
             </View>
           ))
         )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionHeading}>Historial de pagos</Text>
-        {(payments ?? []).slice(0, 5).map((pay: any) => (
-          <View key={String(pay._id)} style={styles.paymentRow}>
-            <Text style={styles.label}>
-              ${pay.amount.toFixed(2)} - {pay.currency?.toUpperCase?.() ?? 'USD'}
-            </Text>
-            <Text style={styles.helper}>
-              {new Date(pay.createdAt).toLocaleDateString?.() ?? '-'}
-            </Text>
-          </View>
-        ))}
-        {(payments ?? []).length === 0 ? (
-          <Text style={styles.label}>Aún sin movimientos.</Text>
-        ) : null}
       </View>
 
       <View style={styles.listRow}>
@@ -545,7 +527,7 @@ const styles = StyleSheet.create({
   authContainer: { paddingBottom: spacing.xxl, gap: spacing.md },
   profileContainer: { paddingBottom: spacing.xxl, gap: spacing.md },
 
-  /* HEADER COMÚN */
+  /* HEADER PROPIO (sin título, solo logo PV centrado) */
   headerBar: {
     paddingTop: spacing.xl,
     paddingHorizontal: spacing.xl,
@@ -567,15 +549,9 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceBorder,
     backgroundColor: '#0F2D3A',
   },
-  centerLogoWrap: { flex: 1, alignItems: 'center', gap: 4 },
+  centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
-  headerTitle: {
-    textAlign: 'center',
-    color: colors.accent,
-    fontSize: typography.h3,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
+
   badge: {
     position: 'absolute',
     right: -4,

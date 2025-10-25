@@ -7,8 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, radius } from '../styles/theme';
 
 type TabKey = 'Home' | 'Catalog' | 'MyGames' | 'Favorites' | 'Profile';
+type IconName = keyof typeof Ionicons.glyphMap;
 
-const ICONS: Record<TabKey, { focused: any; unfocused: any; label: string }> = {
+const ICONS: Record<TabKey, { focused: IconName; unfocused: IconName; label: string }> = {
   Home: { focused: 'home', unfocused: 'home-outline', label: 'Inicio' },
   Catalog: { focused: 'grid', unfocused: 'grid-outline', label: 'Catálogo' },
   MyGames: { focused: 'albums', unfocused: 'albums-outline', label: 'Mis juegos' },
@@ -16,178 +17,145 @@ const ICONS: Record<TabKey, { focused: any; unfocused: any; label: string }> = {
   Profile: { focused: 'person', unfocused: 'person-outline', label: 'Perfil' },
 };
 
+const BAR_H = 64;       // alto de barra
+const FAB_SIZE = 64;    // diámetro del botón central
+const FAB_R = FAB_SIZE / 2;
+
 export default function BottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const order: TabKey[] = ['Catalog', 'MyGames', 'Home', 'Favorites', 'Profile'];
 
-  const currentRoute = state.routes[state.index];
-  const currentName = currentRoute.name as TabKey;
+  const current = state.routes[state.index];
+  const currentName = (current?.name as TabKey) ?? 'Home';
 
-  const goTo = (name: string, index: number) => {
+  const goTo = (name: TabKey) => {
+    const idx = state.routes.findIndex(r => r.name === name);
+    if (idx < 0) return;
     const event = navigation.emit({
       type: 'tabPress',
-      target: state.routes[index].key,
+      target: state.routes[idx].key,
       canPreventDefault: true,
     });
     if (!event.defaultPrevented) navigation.navigate(name as never);
+  };
+
+  // Izquierda — Centro (Home FAB) — Derecha
+  const left: TabKey[] = ['MyGames', 'Catalog'];
+  const right: TabKey[] = ['Favorites', 'Profile'];
+
+  const Item = ({ name }: { name: TabKey }) => {
+    const isFocused = currentName === name;
+    const icon = ICONS[name];
+    return (
+      <Pressable
+        onPress={() => goTo(name)}
+        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+      >
+        <Ionicons
+          name={isFocused ? icon.focused : icon.unfocused}
+          size={22}
+          color={isFocused ? colors.accent : '#9AB7C3'}
+        />
+        <Text style={[styles.label, isFocused && styles.labelFocused]} numberOfLines={1}>
+          {icon.label}
+        </Text>
+      </Pressable>
+    );
   };
 
   return (
     <View
       style={[
         styles.container,
-        { paddingBottom: Math.max(insets.bottom, 8) },
-        Platform.OS === 'web' && styles.webShadow,
+        { paddingBottom: Math.max(insets.bottom, 6) },
+        Platform.OS === 'web' && (styles.webShadow as any),
       ]}
     >
       <View style={styles.row}>
-        {/* Izquierda */}
+        {/* Grupo izquierdo */}
         <View style={styles.sideGroup}>
-          {order.slice(0, 2).map((name) => {
-            const routeIndex = state.routes.findIndex((r) => r.name === name);
-            if (routeIndex === -1) return null;
-            const focused = currentName === name;
-            const iconSet = ICONS[name];
-            return (
-              <Pressable
-                key={name}
-                onPress={() => goTo(name, routeIndex)}
-                style={({ pressed }) => [
-                  styles.sideBtn,
-                  focused && styles.sideBtnFocused,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name={focused ? iconSet.focused : iconSet.unfocused}
-                  size={18}
-                  color={focused ? colors.accent : '#9AB7C3'}
-                />
-                <Text style={[styles.sideLabel, focused && styles.sideLabelFocused]}>
-                  {iconSet.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {left.map(k => <Item key={k} name={k} />)}
         </View>
 
-        {/* Centro (CTA) */}
-        {(() => {
-          const name: TabKey = 'Home';
-          const routeIndex = state.routes.findIndex((r) => r.name === name);
-          const focused = currentName === name;
-          const iconSet = ICONS[name];
-          return (
-            <Pressable
-              key="HOME_CTA"
-              onPress={() => goTo(name, routeIndex)}
-              style={({ pressed }) => [
-                styles.fab,
-                { backgroundColor: colors.accent, borderColor: colors.accent },
-                pressed && { transform: [{ scale: 0.98 }] },
-              ]}
-            >
-              <Ionicons name={focused ? iconSet.focused : iconSet.unfocused} size={22} color="#1B1B1B" />
-              <Text style={styles.fabLabel}>{iconSet.label}</Text>
-            </Pressable>
-          );
-        })()}
+        {/* Centro: slot del FAB con ancho fijo => FAB SIEMPRE CENTRADO */}
+        <View style={styles.centerSlot}>
+          <Pressable
+            onPress={() => goTo('Home')}
+            style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.98 }] }]}
+          >
+            <Ionicons
+              name={currentName === 'Home' ? 'home' : 'home-outline'}
+              size={28}
+              color="#1B1B1B"
+            />
+          </Pressable>
+        </View>
 
-        {/* Derecha */}
+        {/* Grupo derecho */}
         <View style={styles.sideGroup}>
-          {order.slice(3).map((name) => {
-            const routeIndex = state.routes.findIndex((r) => r.name === name);
-            if (routeIndex === -1) return null;
-            const focused = currentName === name;
-            const iconSet = ICONS[name];
-            return (
-              <Pressable
-                key={name}
-                onPress={() => goTo(name, routeIndex)}
-                style={({ pressed }) => [
-                  styles.sideBtn,
-                  focused && styles.sideBtnFocused,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name={focused ? iconSet.focused : iconSet.unfocused}
-                  size={18}
-                  color={focused ? colors.accent : '#9AB7C3'}
-                />
-                <Text style={[styles.sideLabel, focused && styles.sideLabelFocused]}>
-                  {iconSet.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {right.map(k => <Item key={k} name={k} />)}
         </View>
       </View>
     </View>
   );
 }
 
-const FAB_W = 120;
-const FAB_H = 44;
-
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#072633',
     borderTopWidth: 1,
     borderTopColor: '#103949',
-    paddingTop: 8,
+    paddingTop: FAB_R - 8, // hace que el FAB “muerda” la línea superior
   },
-  webShadow: { boxShadow: '0 -6px 22px rgba(0,0,0,0.22)' } as any,
+  webShadow: {
+    boxShadow: '0 -6px 22px rgba(0,0,0,0.18)',
+  },
   row: {
-    height: 64,
+    height: BAR_H,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
   },
   sideGroup: {
-    width: FAB_W / 2 + 120,
+    flex: 1,
     flexDirection: 'row',
-    gap: spacing.md,
+    justifyContent: 'space-evenly',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.lg,
   },
-  sideBtn: {
-    flexDirection: 'row',
+  item: {
+    minWidth: 86,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    justifyContent: 'center',
+    paddingVertical: 2,
   },
-  sideBtnFocused: {
-    borderColor: '#1F546B',
-    backgroundColor: '#0F2D3A',
+  label: {
+    marginTop: 4,
+    color: '#9AB7C3',
+    fontSize: 12,
+    fontWeight: '700',
   },
-  sideLabel: { color: '#9AB7C3', fontSize: 12, fontWeight: '700' },
-  sideLabelFocused: { color: colors.accent },
+  labelFocused: { color: colors.accent },
+  centerSlot: {
+    width: FAB_SIZE,               // fija el ancho del slot central
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
   fab: {
-    width: FAB_W,
-    height: FAB_H,
-    borderRadius: FAB_H / 2,
+    marginTop: -FAB_R,             // sube el botón para centrarlo visualmente
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_R,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
-    elevation: 8,
-  },
-  fabLabel: {
-    color: '#1B1B1B',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    elevation: 10,
   },
   pressed: { opacity: 0.85 },
 });

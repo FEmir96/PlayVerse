@@ -1,212 +1,258 @@
-// playverse/playverse-mobile/src/navigation/BottomTabBar.tsx
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// playverse/playverse-mobile/src/screens/HomeScreen.tsx
+import React, { useMemo } from 'react';
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Image,
+  useWindowDimensions,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { colors, spacing, radius } from '../styles/theme';
+import { spacing, colors, typography } from '../styles/theme';
+import { Button, GameCard, PremiumBanner } from '../components';
+import { useConvexQuery } from '../lib/useConvexQuery';
+import type { Game, UpcomingGame } from '../types/game';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import { useAuth } from '../context/AuthContext';
 
-type TabKey = 'Home' | 'Catalog' | 'MyGames' | 'Favorites' | 'Profile';
+const heroLogo = require('../../assets/images/playverse-logo.png');
 
-const ICONS: Record<TabKey, { focused: any; unfocused: any; label: string }> = {
-  Home: { focused: 'home', unfocused: 'home-outline', label: 'Inicio' },
-  Catalog: { focused: 'grid', unfocused: 'grid-outline', label: 'Catálogo' },
-  MyGames: { focused: 'albums', unfocused: 'albums-outline', label: 'Mis juegos' },
-  Favorites: { focused: 'heart', unfocused: 'heart-outline', label: 'Favoritos' },
-  Profile: { focused: 'person', unfocused: 'person-outline', label: 'Perfil' },
-};
+const MIN_CARD_WIDTH = 150;  // asegura 2 col en A33
+const GAP = spacing.md;
+const PADDING_H = spacing.xl;
 
-export default function BottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets();
+const ALL_GAMES_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'];
+const UPCOMING_NAMES = [
+  'queries/getUpcomingGames:getUpcomingGames',
+  'queries/getUpcomingGames',
+  'getUpcomingGames',
+  'queries/getComingSoon:getComingSoon',
+];
 
-  // Esperamos 5 tabs y ponemos Home en el centro
-  // Izquierda: Catalog, MyGames — Centro: Home — Derecha: Favorites, Profile
-  const order: TabKey[] = ['Catalog', 'MyGames', 'Home', 'Favorites', 'Profile'];
+export default function HomeScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { width } = useWindowDimensions();
 
-  const currentRoute = state.routes[state.index];
-  const currentName = currentRoute.name as TabKey;
+  // Auth tolerante
+  const auth: any = (useAuth?.() as any) ?? {};
+  const roleOrPlan = String(
+    auth?.user?.role ?? auth?.role ?? auth?.plan ?? auth?.user?.plan ?? auth?.profile?.plan ?? ''
+  ).toLowerCase();
+  const isPremium =
+    roleOrPlan === 'admin' ||
+    roleOrPlan === 'premium' ||
+    Boolean(auth?.isPremium ?? auth?.user?.isPremium ?? auth?.profile?.isPremium);
 
-  const goTo = (name: string, index: number) => {
-    const event = navigation.emit({
-      type: 'tabPress',
-      target: state.routes[index].key,
-      canPreventDefault: true,
+  // columnas máximas posibles por ancho disponible
+  const maxByWidth = Math.max(
+    1,
+    Math.min(
+      3,
+      Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP))
+    )
+  );
+  const columns = width >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
+
+  const cardWidth = useMemo(() => {
+    const available = width - PADDING_H * 2 - GAP * (columns - 1);
+    return Math.floor(available / columns);
+  }, [width, columns]);
+
+  // datos
+  const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
+    ALL_GAMES_NAMES,
+    {},
+    { refreshMs: 15000 }
+  );
+  const {
+    data: upcomingRaw,
+    loading: loadingUpcoming,
+    refetch: refetchUpcoming,
+  } = useConvexQuery<UpcomingGame[]>(UPCOMING_NAMES, { limit: 6 }, { refreshMs: 30000 });
+
+  const newest = useMemo(() => {
+    const list = (allGames ?? []).slice();
+    list.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    return list.slice(0, 6);
+  }, [allGames]);
+
+  const upcoming = useMemo(() => {
+    if (Array.isArray(upcomingRaw) && upcomingRaw.length) return upcomingRaw;
+    const now = Date.now();
+    const list = (allGames ?? []).filter((g: any) => {
+      const d = Number(g?.releaseAt ?? g?.release_at ?? g?.firstReleaseDate ?? 0);
+      return d > now;
     });
-    if (!event.defaultPrevented) navigation.navigate(name);
+    list.sort(
+      (a: any, b: any) =>
+        Number(a?.releaseAt ?? a?.release_at ?? a?.firstReleaseDate ?? 0) -
+        Number(b?.releaseAt ?? b?.release_at ?? b?.firstReleaseDate ?? 0)
+    );
+    return list.slice(0, 6);
+  }, [upcomingRaw, allGames]);
+
+  const discount = (p?: number | null) =>
+    p && isFinite(Number(p)) ? Math.round(Number(p) * 0.9) : p ?? undefined;
+
+  const mapGame = (row: any, idx: number) => ({
+    id: String(row?._id ?? row?.id ?? row?.gameId ?? idx),
+    title: row?.title ?? 'Juego',
+    cover_url: row?.cover_url ?? row?.coverUrl,
+    gameId: row?._id ? String(row._id) : undefined,
+    purchasePrice: isPremium ? discount(row?.purchasePrice) : row?.purchasePrice,
+    weeklyPrice: isPremium ? discount(row?.weeklyPrice) : row?.weeklyPrice,
+    igdbRating: row?.igdbRating,
+    plan: row?.plan,
+  });
+
+  const refreshing = !!(loadingAll || loadingUpcoming);
+  const onRefresh = () => {
+    refetchAll();
+    refetchUpcoming();
   };
 
+  const wmSize = Math.max(220, Math.min(360, Math.floor(width * 0.55)));
+  const goToCatalog = () => navigation.navigate('Tabs' as any, { screen: 'Catalog' } as any);
+
   return (
-    <View
-      style={[
-        styles.container,
-        { paddingBottom: Math.max(insets.bottom, 8) },
-        Platform.OS === 'web' && styles.webShadow,
-      ]}
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={{ paddingBottom: spacing.xxl }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F2B705" />}
     >
-      <View style={styles.row}>
-        {/* Grupo izquierdo */}
-        <View style={styles.sideGroup}>
-          {order.slice(0, 2).map((name) => {
-            const routeIndex = state.routes.findIndex((r) => r.name === name);
-            if (routeIndex === -1) return null;
-            const focused = currentName === name;
-            const iconSet = ICONS[name];
-            return (
-              <Pressable
-                key={name}
-                onPress={() => goTo(name, routeIndex)}
-                style={({ pressed }) => [
-                  styles.sideBtn,
-                  focused && styles.sideBtnFocused,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name={focused ? iconSet.focused : iconSet.unfocused}
-                  size={18}
-                  color={focused ? colors.accent : '#9AB7C3'}
-                />
-                <Text style={[styles.sideLabel, focused && styles.sideLabelFocused]}>
-                  {iconSet.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Botón central grande (Inicio) */}
-        {(() => {
-          const name: TabKey = 'Home';
-          const routeIndex = state.routes.findIndex((r) => r.name === name);
-          const focused = currentName === name;
-          const iconSet = ICONS[name];
-          return (
-            <Pressable
-              key="HOME_CTA"
-              onPress={() => goTo(name, routeIndex)}
-              style={({ pressed }) => [
-                styles.fab,
-                { backgroundColor: colors.accent, borderColor: colors.accent },
-                pressed && { transform: [{ scale: 0.98 }] },
-              ]}
-            >
-              <Ionicons
-                name={focused ? iconSet.focused : iconSet.unfocused}
-                size={22}
-                color="#1B1B1B"
-              />
-              <Text style={styles.fabLabel}>{iconSet.label}</Text>
-            </Pressable>
-          );
-        })()}
-
-        {/* Grupo derecho */}
-        <View style={styles.sideGroup}>
-          {order.slice(3).map((name) => {
-            const routeIndex = state.routes.findIndex((r) => r.name === name);
-            if (routeIndex === -1) return null;
-            const focused = currentName === name;
-            const iconSet = ICONS[name];
-            return (
-              <Pressable
-                key={name}
-                onPress={() => goTo(name, routeIndex)}
-                style={({ pressed }) => [
-                  styles.sideBtn,
-                  focused && styles.sideBtnFocused,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name={focused ? iconSet.focused : iconSet.unfocused}
-                  size={18}
-                  color={focused ? colors.accent : '#9AB7C3'}
-                />
-                <Text style={[styles.sideLabel, focused && styles.sideLabelFocused]}>
-                  {iconSet.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      {/* Marca de agua */}
+      <View style={[styles.watermark, { width: wmSize, height: wmSize, left: (width - wmSize) / 2 }]}>
+        <Image source={heroLogo} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
       </View>
+
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>INICIO</Text>
+        <Text style={styles.subtitle}>
+          Descubrí qué hay de nuevo en PlayVerse{isPremium ? ' — descuento 10% activo.' : '.'}
+        </Text>
+      </View>
+
+      {/* Nuevos juegos */}
+      <Section title="Nuevos juegos" subtitle="Explorá la colección y encontrá tu próxima aventura.">
+        <View style={styles.grid}>
+          {newest.map((g: any, i: number) => {
+            const game = mapGame(g, i);
+            const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
+            return (
+              <View
+                key={game.id}
+                style={{
+                  width: cardWidth,
+                  marginRight: mr,
+                  marginBottom: GAP,
+                }}
+              >
+                <GameCard
+                  game={game as any}
+                  tag={isPremium ? '-10%' : i < 2 ? 'Acción' : undefined}
+                  onPress={() =>
+                    (g?._id || g?.id || g?.gameId) &&
+                    navigation.navigate('GameDetail', {
+                      gameId: String(g?._id ?? g?.id ?? g?.gameId),
+                      initial: g,
+                    })
+                  }
+                />
+              </View>
+            );
+          })}
+        </View>
+        <View style={styles.center}>
+          <Button title="Ver todo" variant="ghost" onPress={goToCatalog} />
+        </View>
+      </Section>
+
+      {/* Próximamente */}
+      <Section title="Próximamente">
+        <View style={[styles.grid, styles.topBorder]}>
+          {(upcoming ?? []).map((item: any, i: number) => {
+            const game = mapGame(item, i);
+            const releaseAt =
+              item?.releaseAt ?? item?.release_at ?? item?.launchDate ?? item?.firstReleaseDate;
+            const releaseLabel = releaseAt
+              ? `Próximamente en ${new Date(Number(releaseAt)).getFullYear()}`
+              : 'Próximamente';
+            const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
+            return (
+              <View
+                key={game.id}
+                style={{
+                  width: cardWidth,
+                  marginRight: mr,
+                  marginBottom: GAP,
+                }}
+              >
+                <GameCard game={game as any} disabled overlayLabel={releaseLabel} />
+              </View>
+            );
+          })}
+        </View>
+      </Section>
+
+      <View style={{ paddingHorizontal: PADDING_H }}>
+        <PremiumBanner />
+      </View>
+    </ScrollView>
+  );
+}
+
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
+      <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900' }}>{title}</Text>
+      {subtitle ? <Text style={{ color: colors.accent, opacity: 0.9 }}>{subtitle}</Text> : null}
+      {children}
     </View>
   );
 }
 
-const H = 64; // alto de barra
-const FAB_W = 120; // ancho del botón central
-const FAB_H = 44;
-
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#072633',
+  root: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingHorizontal: PADDING_H,
+    paddingTop: spacing.xl,
+    gap: spacing.xs,
+  },
+  title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
+  subtitle: { color: colors.accent, opacity: 0.9 },
+
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: PADDING_H,
+    paddingTop: spacing.md,
+    alignItems: 'flex-start',
+  },
+  topBorder: {
     borderTopWidth: 1,
-    borderTopColor: '#103949',
-    paddingTop: 8,
+    borderTopColor: '#1c3b49',
+    marginTop: spacing.xl,
+    paddingTop: spacing.xl,
   },
-  webShadow: {
-    boxShadow: '0 -6px 22px rgba(0,0,0,0.22)',
-  } as any,
-  row: {
-    height: H,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between', // balancea lados
-    paddingHorizontal: spacing.xl,
-  },
-  sideGroup: {
-    width: (FAB_W / 2) + 120, // deja espacio para centrar visualmente con el FAB
-    flexDirection: 'row',
-    gap: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sideBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  sideBtnFocused: {
-    borderColor: '#1F546B',
-    backgroundColor: '#0F2D3A',
-  },
-  sideLabel: {
-    color: '#9AB7C3',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  sideLabelFocused: {
-    color: colors.accent,
-  },
-  fab: {
-    width: FAB_W,
-    height: FAB_H,
-    borderRadius: FAB_H / 2,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  fabLabel: {
-    color: '#1B1B1B',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  pressed: {
-    opacity: 0.85,
+  center: { alignItems: 'center', paddingTop: spacing.md },
+
+  watermark: {
+    position: 'absolute',
+    top: spacing.lg,
+    opacity: 0.06,
+    pointerEvents: 'none',
   },
 });

@@ -13,25 +13,26 @@ import type { Game } from '../types/game';
 const PAGE_SIZE = 10;
 const CATEGORIES = ['Todos', 'Accion', 'RPG', 'Carreras'];
 
-const LAPTOP_BREAKPOINT = 1024;
-const TWO_COLUMN_BREAKPOINT = 360;
-const MIN_CARD_WIDTH = 160;
+const MIN_CARD_WIDTH = 150;
+const GAP = spacing.md;
+const PADDING_H = spacing.xl;
 
-const ALL_GAMES_NAMES = [
-  'queries/getGames:getGames',
-  'queries/getAllGames:getAllGames',
-  'queries/getGames',
-  'queries/getAllGames',
-];
+const ALL_GAMES_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'];
 
 export default function CatalogScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
 
-  const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
-  const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
-  const rawCardWidth = (width - horizontalSpace) / columns;
-  const cardWidth = Math.max(MIN_CARD_WIDTH, Math.min(columns === 1 ? 320 : 220, rawCardWidth));
+  const maxByWidth = Math.max(
+    1,
+    Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP)))
+  );
+  const columns = width >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
+
+  const cardWidth = useMemo(() => {
+    const available = width - PADDING_H * 2 - GAP * (columns - 1);
+    return Math.floor(available / columns);
+  }, [width, columns]);
 
   const { data: allGames, loading, refetch } = useConvexQuery<Game[]>(
     ALL_GAMES_NAMES,
@@ -59,15 +60,11 @@ export default function CatalogScreen() {
   const visible = filtered.slice(0, page * PAGE_SIZE);
   const hasMore = visible.length < filtered.length;
 
-  const gridJustify = columns === 1 ? 'center' : 'flex-start';
-
   return (
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={
-        <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor="#F2B705" />
-      }
+      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor="#F2B705" />}
     >
       <View style={styles.header}>
         <Text style={styles.title}>CATÁLOGO DE JUEGOS</Text>
@@ -82,62 +79,78 @@ export default function CatalogScreen() {
             setPage(1);
           }}
         />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {CATEGORIES.map((category) => (
-            <Chip
-              key={category}
-              label={category}
-              selected={category === cat}
-              onPress={() => {
-                setCat(category);
-                setPage(1);
-              }}
-            />
+            <View key={category} style={{ marginRight: spacing.sm, marginBottom: spacing.sm }}>
+              <Chip
+                label={category}
+                selected={category === cat}
+                onPress={() => {
+                  setCat(category);
+                  setPage(1);
+                }}
+              />
+            </View>
           ))}
         </View>
       </View>
 
       {loading && visible.length === 0 ? (
-        <View style={[styles.grid, { justifyContent: gridJustify }]}>
+        <View style={styles.grid}>
           {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-            <View key={i} style={[styles.skeleton, { width: cardWidth }]} />
+            <View
+              key={i}
+              style={[
+                styles.skeleton,
+                {
+                  width: cardWidth,
+                  marginRight: i % columns !== columns - 1 ? GAP : 0,
+                  marginBottom: GAP,
+                },
+              ]}
+            />
           ))}
         </View>
       ) : visible.length === 0 ? (
-        <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.xl }}>
+        <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
           <Text style={styles.subtitle}>No se encontraron juegos.</Text>
         </View>
       ) : (
-        <View style={[styles.grid, { justifyContent: gridJustify }]}>
+        <View style={styles.grid}>
           {visible.map((row: any, i: number) => {
-            const gameId = row._id ?? row.id ?? row.gameId ?? null;
+            const gameId = row._id ?? row.id ?? row.gameId ?? i;
             return (
-              <GameCard
-                key={String(gameId ?? i)}
-                game={{
-                  id: String(gameId ?? i),
-                  title: row.title ?? 'Juego',
-                  cover_url: row.cover_url ?? row.coverUrl,
-                  gameId: row._id ? String(row._id) : undefined,
-                  purchasePrice: row.purchasePrice,
-                  weeklyPrice: row.weeklyPrice,
-                  igdbRating: row.igdbRating,
-                  plan: row.plan,
-                  // ❌ NO pasar firstReleaseDate: rompía el tipo de GameCard
+              <View
+                key={String(gameId)}
+                style={{
+                  width: cardWidth,
+                  marginRight: i % columns !== columns - 1 ? GAP : 0,
+                  marginBottom: GAP,
                 }}
-                style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
-                onPress={() =>
-                  gameId &&
-                  navigation.navigate('GameDetail', { gameId: String(gameId), initial: row })
-                }
-              />
+              >
+                <GameCard
+                  game={{
+                    id: String(gameId),
+                    title: row.title ?? 'Juego',
+                    cover_url: row.cover_url ?? row.coverUrl,
+                    gameId: row._id ? String(row._id) : undefined,
+                    purchasePrice: row.purchasePrice,
+                    weeklyPrice: row.weeklyPrice,
+                    igdbRating: row.igdbRating,
+                    plan: row.plan,
+                  }}
+                  onPress={() =>
+                    gameId && navigation.navigate('GameDetail', { gameId: String(gameId), initial: row })
+                  }
+                />
+              </View>
             );
           })}
         </View>
       )}
 
       {filtered.length > 0 ? (
-        <View style={{ alignItems: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.xl }}>
+        <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingVertical: spacing.xl }}>
           <Button
             title={hasMore ? 'Cargar más' : 'No hay más juegos'}
             variant={hasMore ? 'ghost' : 'primary'}
@@ -153,32 +166,27 @@ export default function CatalogScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   header: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PADDING_H,
     paddingTop: spacing.xl,
     gap: spacing.xs,
   },
-  title: {
-    color: colors.accent,
-    fontSize: typography.h1,
-    fontWeight: '900',
-  },
+  title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },
   filters: {
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PADDING_H,
     paddingTop: spacing.md,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PADDING_H,
     paddingTop: spacing.md,
+    alignItems: 'flex-start',
   },
   skeleton: {
     height: 320,
     borderRadius: 12,
     backgroundColor: '#143547',
-    opacity: 0.4,
+    opacity: 0.35,
   },
 });

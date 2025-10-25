@@ -1,281 +1,234 @@
-import React, { useMemo, useState } from 'react';
+// playverse/playverse-mobile/src/components/GameCard.tsx
+import React from 'react';
 import {
   Image,
-  Modal,
   Pressable,
+  StyleProp,
   StyleSheet,
   Text,
   View,
   ViewStyle,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { colors, spacing, typography } from '../styles/theme';
+import type { Game as GameType } from '../types/game';
 
-import { colors, spacing, radius } from '../styles/theme';
-import type { Game, UpcomingGame } from '../types/game';
-import { resolveAssetUrl } from '../lib/asset';
-import { useFavorites } from '../context/FavoritesContext';
-import { useAuth } from '../context/AuthContext';
-
-type Props = {
-  game: Partial<Game> | UpcomingGame;
-  style?: ViewStyle;
-  tag?: string;
-  rightBadge?: React.ReactNode;
-  overlayLabel?: string;
-  disabled?: boolean;
-  hideFavorite?: boolean;            // 👈 nuevo: permite ocultar el corazón
+export type GameCardProps = {
+  game: GameType & {
+    title?: string;
+    cover_url?: string | null;
+    gameId?: string;
+    purchasePrice?: number | null;
+    weeklyPrice?: number | null;
+    igdbRating?: number | null;
+    plan?: any;
+  };
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
+  tag?: string;
+  overlayLabel?: string;
+  showPrices?: boolean; // default true
+  disabled?: boolean;
 };
 
-export default function GameCard({
-  game,
-  style,
-  tag,
-  rightBadge,
-  overlayLabel,
-  disabled,
-  hideFavorite,
-  onPress,
-}: Props) {
-  const nav = useNavigation<any>();
-  const { profile } = useAuth();
+function formatPrice(n?: number | null) {
+  if (n == null || !isFinite(Number(n))) return undefined;
+  try {
+    return Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      maximumFractionDigits: 0,
+    }).format(Number(n));
+  } catch {
+    return `$${Math.round(Number(n))}`;
+  }
+}
 
-  const imageUri = resolveAssetUrl((game as any).cover_url as string | undefined);
-  const title = game.title || 'Juego';
-  const summary = (game as any).description as string | undefined;
-  const weekly = (game as any).weeklyPrice as number | undefined;
-  const buy = (game as any).purchasePrice as number | undefined;
-  const rating = (game as any).igdbRating as number | undefined;
+export default function GameCard(props: GameCardProps) {
+  const { game, style, onPress, tag, overlayLabel, disabled } = props;
+  const showPrices = props.showPrices ?? true;
 
-  const isDisabled = disabled || !onPress;
-  const { favoriteIds, toggleFavorite } = useFavorites();
-  const [toggling, setToggling] = useState(false);
-  const [authModal, setAuthModal] = useState(false);
+  const title = game.title ?? 'Juego';
+  const cover = game.cover_url || undefined;
 
-  const gameId = useMemo(() => {
-    const raw =
-      (game as any)._id ??
-      (game as any).gameId ??
-      (game as any).convexId;
-    return raw ? String(raw) : undefined;
-  }, [game]);
-
-  const isFavorite = !!(gameId && favoriteIds.has(gameId));
-  // 👇 mostramos el botón SIEMPRE (salvo que se pida ocultarlo explícitamente)
-  const showFavoriteButton = !hideFavorite && !!gameId && !disabled;
-
-  const handleToggleFavorite = async () => {
-    if (!showFavoriteButton || !gameId || toggling) return;
-
-    // Si no hay sesión, abrimos el modal de login
-    if (!profile) {
-      setAuthModal(true);
-      return;
-    }
-
-    setToggling(true);
-    try {
-      await toggleFavorite(gameId);
-    } finally {
-      setToggling(false);
-    }
-  };
+  const priceBuy = formatPrice(game.purchasePrice ?? undefined);
+  const priceWeek = formatPrice(game.weeklyPrice ?? undefined);
+  const showAnyPrice = showPrices && (!!priceBuy || !!priceWeek);
 
   return (
-    <>
-      <Pressable
-        onPress={onPress}
-        disabled={isDisabled}
-        className={`overflow-hidden rounded-lg border border-surfaceBorder bg-surface shadow-card transition-transform duration-150 ${isDisabled ? 'opacity-80' : 'active:scale-97 active:bg-surface/90'}`}
-        style={[styles.shadow, style]}
-      >
-        <View className="relative">
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} className="aspect-[0.68] w-full" />
-          ) : (
-            <View className="aspect-[0.68] w-full items-center justify-center bg-[#0F2D3A]">
-              <Ionicons name="game-controller" size={36} color={colors.textSecondary} />
-            </View>
-          )}
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.card,
+        style,
+        pressed && { transform: [{ scale: 0.995 }], opacity: 0.95 },
+        disabled && { opacity: 0.85 },
+      ]}
+    >
+      <View style={styles.mediaWrap}>
+        {cover ? (
+          <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" />
+        ) : (
+          <View style={[styles.cover, styles.coverPlaceholder]}>
+            <Text style={styles.coverPlaceholderText}>Sin imagen</Text>
+          </View>
+        )}
 
-          {tag ? (
-            <View className="absolute left-sm top-sm rounded-pill bg-accent px-sm py-[4px]">
-              <Text className="text-caption font-extrabold text-[#1B1B1B]">{tag}</Text>
-            </View>
-          ) : null}
+        {/* Tag (esquina sup. izq.) */}
+        {!!tag && (
+          <View style={styles.tag}>
+            <Text style={styles.tagText}>{tag}</Text>
+          </View>
+        )}
 
-          {overlayLabel ? (
-            <View className="absolute left-0 top-0 rounded-br-lg bg-[#22d3eecc] px-sm py-[4px]">
-              <Text className="text-[11px] font-extrabold uppercase tracking-[0.8px] text-[#0b2530]">
-                {overlayLabel}
-              </Text>
-            </View>
-          ) : null}
+        {/* Overlay label (esquina sup. der. / info) */}
+        {!!overlayLabel && (
+          <View style={styles.overlay}>
+            <Text style={styles.overlayText}>{overlayLabel}</Text>
+          </View>
+        )}
+      </View>
 
-          {(rightBadge || showFavoriteButton) ? (
-            <View className="absolute right-sm top-sm items-end gap-sm">
-              {showFavoriteButton ? (
-                <Pressable
-                  onPress={handleToggleFavorite}
-                  style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
-                  disabled={toggling}
-                >
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={18}
-                    color={isFavorite ? '#FF6B9A' : colors.accent}
-                  />
-                </Pressable>
-              ) : null}
-              {rightBadge ? <View>{rightBadge}</View> : null}
-            </View>
-          ) : null}
-        </View>
+      <View style={styles.body}>
+        <Text style={styles.title} numberOfLines={2}>
+          {title}
+        </Text>
 
-        <View className="min-h-[110px] gap-xs px-md py-md">
-          <Text className="text-h3 font-bold text-accent" numberOfLines={2}>
-            {title}
-          </Text>
-          {summary ? (
-            <Text className="text-caption text-textSecondary" numberOfLines={2}>
-              {summary}
-            </Text>
-          ) : null}
+        {typeof game.igdbRating === 'number' && isFinite(game.igdbRating) && (
+          <Text style={styles.meta}>⭐ {Math.round(game.igdbRating)}/100</Text>
+        )}
 
-          <View className="flex-row flex-wrap items-center gap-xs">
-            {typeof rating === 'number' ? (
-              <View className="flex-row items-center gap-[4px] rounded-pill bg-[#244552] px-2 py-[2px]">
-                <Ionicons name="star" size={12} color="#FFD166" />
-                <Text className="text-[12px] font-bold text-accent">{rating.toFixed(1)}</Text>
+        {showAnyPrice ? (
+          <View style={styles.pricesRow}>
+            {priceWeek ? (
+              <View style={styles.pricePill}>
+                <Text style={styles.pricePillText}>{priceWeek}/sem</Text>
               </View>
             ) : null}
-            {typeof weekly === 'number' ? (
-              <Text className="text-[12px] font-semibold text-accent">Alquiler ${weekly.toFixed(2)}/sem</Text>
-            ) : null}
-            {typeof buy === 'number' ? (
-              <Text className="text-[12px] font-semibold text-accent">Compra ${buy.toFixed(2)}</Text>
+            {priceBuy ? (
+              <View style={[styles.pricePill, styles.pricePillAlt]}>
+                <Text style={[styles.pricePillText, styles.pricePillTextAlt]}>
+                  {priceBuy}
+                </Text>
+              </View>
             ) : null}
           </View>
-        </View>
-      </Pressable>
-
-      {/* Modal de “debes iniciar sesión” */}
-      <Modal
-        visible={authModal}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setAuthModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.backdrop} onPress={() => setAuthModal(false)} />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Para continuar debes iniciar sesión</Text>
-            <Text style={styles.modalBody}>
-              Inicia sesión para agregar juegos a Favoritos.
-            </Text>
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.actionBtn, styles.btnGhost]}
-                onPress={() => setAuthModal(false)}
-              >
-                <Text style={styles.btnGhostText}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.actionBtn, styles.btnPrimary]}
-                onPress={() => {
-                  setAuthModal(false);
-                  nav.navigate('Profile' as any); // lleva al flujo de login
-                }}
-              >
-                <Text style={styles.btnPrimaryText}>Iniciar sesión</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
+const RADIUS = 14;
+
 const styles = StyleSheet.create({
-  shadow: {
-    elevation: 8,
-    shadowColor: 'rgba(0,0,0,0.35)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-  },
-  favoriteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#1B2F3Bcc',
-    alignItems: 'center',
-    justifyContent: 'center',
+  card: {
+    backgroundColor: '#0F2D3A',
+    borderRadius: RADIUS,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#1F546B',
+    overflow: 'hidden',
+
+    // Sombra/elevación sutil
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
-  favoriteButtonActive: {
-    borderColor: '#FF6B9A',
-    backgroundColor: '#331728',
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  modalCard: {
+
+  mediaWrap: {
+    position: 'relative',
     width: '100%',
-    maxWidth: 420,
-    backgroundColor: colors.surface,
-    borderColor: colors.surfaceBorder,
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
+    aspectRatio: 9 / 13, // cover “vertical”
+    backgroundColor: '#0B2330',
   },
-  modalTitle: {
-    color: colors.accent,
-    fontSize: 18,
+  cover: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverPlaceholderText: {
+    color: '#7fa9b8',
+    fontSize: typography.body,
+    opacity: 0.7,
+  },
+
+  tag: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  tagText: {
+    fontSize: 11,
     fontWeight: '800',
-    marginBottom: spacing.xs,
+    color: '#1B1B1B',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
-  modalBody: {
-    color: colors.accent,
-    opacity: 0.9,
-    marginBottom: spacing.lg,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end', // 👉 botones “bien en la esquina”
-    gap: spacing.sm,
-  },
-  actionBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    borderRadius: radius.pill,
+
+  overlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
+    borderColor: '#1F546B',
   },
-  btnGhost: {
-    backgroundColor: 'transparent',
-    borderColor: colors.surfaceBorder,
-  },
-  btnGhostText: {
-    color: colors.accent,
+  overlayText: {
+    color: '#EAF6FB',
+    fontSize: 11,
     fontWeight: '700',
   },
-  btnPrimary: {
+
+  body: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: 6,
+  },
+  title: {
+    color: colors.accent,
+    fontSize: typography.body,
+    fontWeight: '800',
+  },
+  meta: {
+    color: '#9AB7C3',
+    fontSize: 12,
+  },
+
+  pricesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 2,
+  },
+  pricePill: {
+    backgroundColor: '#133445',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F546B',
+  },
+  pricePillAlt: {
     backgroundColor: colors.accent,
     borderColor: colors.accent,
   },
-  btnPrimaryText: {
-    color: '#1B1B1B',
+  pricePillText: {
+    color: '#9ED3E6',
+    fontSize: 12,
     fontWeight: '800',
+  },
+  pricePillTextAlt: {
+    color: '#1B1B1B',
   },
 });

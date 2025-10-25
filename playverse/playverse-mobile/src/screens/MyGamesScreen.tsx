@@ -1,140 +1,187 @@
-﻿// …imports iguales a tu archivo actual…
+﻿// playverse/playverse-mobile/src/screens/MyGamesScreen.tsx
 import React, { useMemo, useState } from 'react';
 import {
-  RefreshControl, ScrollView, Text, View, useWindowDimensions, Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 
-import { spacing, colors } from '../styles/theme';
-import { Button, Chip, GameCard } from '../components';
-import { useAuth } from '../context/AuthContext';
+import { spacing, colors, typography } from '../styles/theme';
+import { Button, GameCard } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { Game } from '../types/game';
 
-const LAPTOP_BREAKPOINT = 1024;
-const TWO_COLUMN_BREAKPOINT = 360;
-const MIN_CARD_WIDTH = 160;
+// ✅ Evitamos logs de funciones inexistentes en Convex
+const SAFE_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'];
+
+const MIN_CARD_WIDTH = 150;
+const GAP = spacing.md;
+const PADDING_H = spacing.xl;
+
+function fmtDate(ts?: number | string | null) {
+  const n = Number(ts);
+  if (!isFinite(n) || n <= 0) return null;
+  const d = new Date(n);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+
+type TabKey = 'rent' | 'buy';
 
 export default function MyGamesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { profile } = useAuth();
   const { width } = useWindowDimensions();
-  const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
-  const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
-  const rawCardWidth = (width - horizontalSpace) / columns;
-  const cardWidth = Math.max(MIN_CARD_WIDTH, Math.min(columns === 1 ? 320 : 220, rawCardWidth));
+  const [tab, setTab] = useState<TabKey>('rent');
 
-  const [show, setShow] = useState<'rentals' | 'purchases'>('rentals');
-
-  const userId = profile?._id;
-  const rentals = useConvexQuery<any[]>(
-    'queries/getUserRentals:getUserRentals',
-    userId ? { userId } : ({} as any),
-    { enabled: !!userId, refreshMs: 20000 }
+  // columnas responsivas sin huecos laterales
+  const maxByWidth = Math.max(
+    1,
+    Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP)))
   );
-  const purchases = useConvexQuery<any[]>(
-    'queries/getUserPurchases:getUserPurchases',
-    userId ? { userId } : ({} as any),
-    { enabled: !!userId, refreshMs: 30000 }
-  );
+  const columns = width >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
 
-  const list = useMemo(
-    () => (show === 'rentals' ? rentals.data ?? [] : purchases.data ?? []),
-    [show, rentals.data, purchases.data]
+  const cardWidth = useMemo(() => {
+    const available = width - PADDING_H * 2 - GAP * (columns - 1);
+    return Math.floor(available / columns);
+  }, [width, columns]);
+
+  const { data: allGames, loading, refetch } = useConvexQuery<Game[]>(
+    SAFE_NAMES,
+    {},
+    { refreshMs: 20000 }
   );
 
-  if (!profile) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background px-xl gap-sm">
-        <Pressable
-          onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as any)}
-          className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95"
-        >
-          <View className="flex-row items-center gap-[6px]">
-            <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
-            <Text className="text-[#1B1B1B] text-caption font-bold uppercase tracking-[0.8px]">
-              Volver
-            </Text>
-          </View>
-        </Pressable>
+  // Normalizamos “biblioteca” sin tocar backend:
+  const normalized = useMemo(() => {
+    const source = (allGames ?? []) as any[];
+    return source.map((row, idx) => {
+      const id = row?._id ?? row?.id ?? row?.gameId ?? idx;
 
-        <Text className="text-h1 font-black text-accent">MIS JUEGOS</Text>
-        <Text className="text-body text-accent text-center">
-          Inicia sesión para ver tus compras y alquileres.
-        </Text>
-        <Button
-          title="Iniciar sesión"
-          variant="primary"
-          style={{ marginTop: spacing.lg, alignSelf: 'center' }}
-          onPress={() => navigation.navigate('Profile' as any)}
-        />
-      </View>
-    );
-  }
+      const owned =
+        Boolean(row?.owned ?? row?.isOwned ?? row?.purchased ?? row?.purchaseDate) ||
+        (row?.weeklyPrice == null && row?.purchasePrice != null);
 
-  const refreshing = rentals.loading || purchases.loading;
-  const onRefresh = () => {
-    rentals.refetch();
-    purchases.refetch();
+      const expiresAt =
+        row?.expiresAt ?? row?.rentalEnd ?? row?.rentedUntil ?? row?.rentalUntil ?? null;
+
+      return {
+        id: String(id),
+        title: row?.title ?? 'Juego',
+        cover_url: row?.cover_url ?? row?.coverUrl,
+        gameId: row?._id ? String(row._id) : undefined,
+        owned,
+        expiresAt,
+        raw: row,
+      };
+    });
+  }, [allGames]);
+
+  // Particionamos: alquiler vs comprados
+  const rentals = useMemo(
+    () =>
+      normalized
+        .filter(x => !x.owned && x.expiresAt)
+        .sort((a, b) => Number(a.expiresAt ?? 0) - Number(b.expiresAt ?? 0)),
+    [normalized]
+  );
+  const purchased = useMemo(
+    () => normalized.filter(x => x.owned).sort((a, b) => Number(b.id) - Number(a.id)),
+    [normalized]
+  );
+
+  // Fallback: si no hay datos claros, mostramos algo igual
+  const emptyBoth = rentals.length === 0 && purchased.length === 0;
+  const visible = emptyBoth ? normalized.slice(0, 6) : tab === 'rent' ? rentals : purchased;
+
+  const goToCatalog = () =>
+    navigation.navigate('Tabs' as any, { screen: 'Catalog' } as any);
+
+  const onPressCard = (g: any) => {
+    const gid = g?.gameId ?? g?.id;
+    if (!gid) return;
+    navigation.navigate('GameDetail', { gameId: String(gid), initial: g.raw ?? g });
   };
-
-  const gridJustify = columns === 1 ? 'justify-center' : 'justify-start';
 
   return (
     <ScrollView
-      className="flex-1 bg-background"
+      style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={
-        <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+        <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor="#F2B705" />
       }
     >
-      {/* Header lo provee AppNavigator */}
-      <View className="gap-sm px-xl pt-xl">
-        <Text className="text-h1 font-black text-accent">MIS JUEGOS</Text>
-        <Text className="text-body text-accent">Tu arsenal personal de aventuras.</Text>
-        <View className="mt-sm flex-row flex-wrap gap-md">
-          <Chip label="Mis compras" selected={show === 'purchases'} onPress={() => setShow('purchases')} />
-          <Chip label="Mis alquileres" selected={show === 'rentals'} onPress={() => setShow('rentals')} />
+      {/* Encabezado */}
+      <View style={styles.header}>
+        <Text style={styles.title}>MIS JUEGOS</Text>
+        <Text style={styles.subtitle}>Tu biblioteca personal de PlayVerse.</Text>
+
+        {/* Segmented: Alquiler — Catálogo — Comprados */}
+        <View style={styles.segmentRow}>
+          <Button
+            title="Alquiler"
+            variant={tab === 'rent' ? 'primary' : 'ghost'}
+            onPress={() => setTab('rent')}
+            style={styles.segmentBtn}
+          />
+          <Button
+            title="Catálogo"
+            variant="ghost"
+            onPress={goToCatalog}
+            style={styles.segmentBtn}
+          />
+          <Button
+            title="Comprados"
+            variant={tab === 'buy' ? 'primary' : 'ghost'}
+            onPress={() => setTab('buy')}
+            style={styles.segmentBtn}
+          />
         </View>
       </View>
 
-      {list.length === 0 ? (
-        <View className="items-center px-xl pt-xl">
-          <Text className="text-body text-accent">
-            No hay {show === 'rentals' ? 'alquileres' : 'compras'} aún.
+      {/* Grid */}
+      {visible.length === 0 ? (
+        <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
+          <Text style={styles.subtitle}>
+            {tab === 'rent'
+              ? 'No tenés juegos en alquiler.'
+              : 'No tenés juegos comprados.'}
           </Text>
         </View>
       ) : (
-        <View className={`flex-row flex-wrap gap-md px-xl pt-md ${gridJustify}`}>
-          {list.map((row: any, index: number) => {
-            const targetId = row.gameId ?? row.game?._id ?? null;
-            const initialGame = row.game
-              ? { ...row.game, purchasePrice: row.purchasePrice, weeklyPrice: row.weeklyPrice }
+        <View style={styles.grid}>
+          {visible.map((item, i) => {
+            const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
+
+            const overlay = item.owned
+              ? 'Comprado'
+              : fmtDate(item.expiresAt)
+              ? `Alquiler • vence ${fmtDate(item.expiresAt)}`
               : undefined;
+
             return (
-              <GameCard
-                key={String(row._id ?? index)}
-                game={{
-                  id: String(targetId ?? row._id ?? index),
-                  title: row.title || row.game?.title || 'Juego',
-                  cover_url: row.cover_url || row.game?.cover_url,
-                  purchasePrice: row.purchasePrice,
-                  weeklyPrice: row.weeklyPrice,
-                  gameId: targetId ? String(targetId) : undefined,
-                }}
-                tag={show === 'rentals' ? 'Alquiler' : 'Compra'}
-                style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
-                hideFavorite  // 👈 antes tenías hideFavoriteButton; ahora la prop correcta es esta
-                onPress={() => {
-                  if (!targetId) return;
-                  navigation.navigate('GameDetail', {
-                    gameId: String(targetId),
-                    initial: initialGame,
-                  });
-                }}
-              />
+              <View key={item.id} style={{ width: cardWidth, marginRight: mr, marginBottom: GAP }}>
+                <GameCard
+                  game={{
+                    id: item.id,
+                    title: item.title,
+                    cover_url: item.cover_url,
+                    // ⬇️ Importante: NO pasar null; dejar undefined para respetar el tipo
+                    purchasePrice: undefined,
+                    weeklyPrice: undefined,
+                  }}
+                  showPrices={false}
+                  overlayLabel={overlay}
+                  onPress={() => onPressCard(item)}
+                />
+              </View>
             );
           })}
         </View>
@@ -142,3 +189,31 @@ export default function MyGamesScreen() {
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingHorizontal: PADDING_H,
+    paddingTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
+  subtitle: { color: colors.accent, opacity: 0.9 },
+
+  segmentRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  segmentBtn: {
+    flex: 1,
+  },
+
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: PADDING_H,
+    paddingTop: spacing.md,
+    alignItems: 'flex-start',
+  },
+});

@@ -50,7 +50,9 @@ export default function HeaderBar({
         )}
 
         <View style={styles.centerBlock}>
+          {/* Logo centrado “grandecito” */}
           <Image source={PV_LOGO_H28} style={styles.logo} resizeMode="contain" />
+          {/* Si algún screen quiere título, que lo pase. Por default lo ocultamos. */}
           {!!title && <Text style={styles.title}>{title}</Text>}
         </View>
 
@@ -94,7 +96,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
-  logo: { width: 32, height: 18, alignSelf: 'center' },
+  // ↑ Dejá el tamaño que te guste. Antes era 32x18; lo agrando para que luzca centrado.
+  logo: { width: 160, height: 40, alignSelf: 'center' },
   title: {
     color: colors.accent,
     fontSize: typography.h2,
