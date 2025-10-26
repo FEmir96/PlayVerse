@@ -208,6 +208,7 @@ function pickCurrency(game: any): string {
 }
 
 function formatMoney(value: number, currency = "ARS", locale = "es-AR") {
+  if (value === 0) return "Gratis";
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
@@ -441,7 +442,7 @@ export default function GameDetailPage() {
 
   const canPlayBySubscription = isPremiumPlan && (isPremiumSub || isAdmin);
   const canPlayEffective =
-    canPlayBySubscription || hasPurchased || hasActiveRental || isAdmin;
+    canPlayBySubscription || hasPurchased || hasActiveRental;
 
   const canExtend = !hasPurchased && hasActiveRental;
   const requiresPremium =
@@ -549,7 +550,9 @@ export default function GameDetailPage() {
   const currency = pickCurrency(game);
   const baseBuy = pickBuyPrice(game);
   const baseRent = pickRentPrice(game);
+  const isFreeToPlay = (baseBuy === 0 || baseBuy === undefined) && (baseRent === 0 || baseRent === undefined);
   const isPremiumViewer = isPremiumSub || isAdmin;
+
   const discountRate = isPremiumViewer ? 0.10 : 0;
   const buyFinal =
     typeof baseBuy === "number" ? baseBuy * (1 - discountRate) : undefined;
@@ -737,6 +740,25 @@ export default function GameDetailPage() {
 
   const showShareButton = !hasActiveRental;
 
+  // Nueva lógica para determinar qué botones mostrar
+  const shouldShowPlayButton = () => {
+    // Si es free to play y plan free, siempre mostrar jugar
+    if (isFreeToPlay && isFreePlan) return true;
+    
+    // Si es free to play pero plan premium, mostrar jugar solo si es premium
+    if (isFreeToPlay && isPremiumPlan) return isPremiumSub || isAdmin;
+    
+    // Si es juego pago, solo mostrar jugar si está comprado/alquilado
+    if (!isFreeToPlay) return hasPurchased || hasActiveRental;
+    
+    return false;
+  };
+
+  const shouldShowUpgradeModal = () => {
+    // Mostrar modal de upgrade si es free to play de plan premium pero usuario no es premium
+    return isFreeToPlay && isPremiumPlan && !isPremiumSub && !isAdmin;
+  };
+
   /* ======================= RENDER ======================= */
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -866,7 +888,11 @@ export default function GameDetailPage() {
               {/* Acciones */}
               <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
                 <div className="text-center mb-4">
-                  <p className="text-orange-400 text-sm">¡Suscribite a premium para más ventajas!</p>
+                  {isPremiumSub || isAdmin ? (
+                    <p className="text-orange-400 text-sm">¡Felicidades! Estás aprovechando tu 10% de descuento por usar PlayVerse Premium</p>
+                  ) : (
+                    <p className="text-orange-400 text-sm">¡Suscribite a premium para obtener descuento en todos los títulos!</p>
+                  )}
                 </div>
 
                 {/* ====== Precios ====== */}
@@ -881,7 +907,7 @@ export default function GameDetailPage() {
                         <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-800/50 border border-cyan-400/20">
                           <span className="text-slate-300 font-medium">Comprar</span>
                           <div className="flex items-center gap-3">
-                            {isPremiumViewer ? (
+                            {isPremiumViewer && baseBuy > 0 ? (
                               <>
                                 <span className="text-slate-400 line-through text-sm">
                                   {formatMoney(baseBuy, currency)}
@@ -889,9 +915,6 @@ export default function GameDetailPage() {
                                 <span className="text-cyan-400 font-bold text-lg">
                                   {formatMoney(buyFinal!, currency)}
                                 </span>
-                                <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                                  -10% Premium
-                                </Badge>
                               </>
                             ) : (
                               <span className="text-cyan-400 font-bold text-lg">
@@ -906,7 +929,7 @@ export default function GameDetailPage() {
                         <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-800/50 border border-emerald-400/20">
                           <span className="text-slate-300 font-medium">Alquiler semanal</span>
                           <div className="flex items-center gap-3">
-                            {isPremiumViewer ? (
+                            {isPremiumViewer && baseRent > 0 ? (
                               <>
                                 <span className="text-slate-400 line-through text-sm">
                                   {formatMoney(baseRent, currency)}
@@ -914,9 +937,6 @@ export default function GameDetailPage() {
                                 <span className="text-emerald-400 font-bold text-lg">
                                   {formatMoney(rentFinal!, currency)}
                                 </span>
-                                <Badge className="bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                                  -10% Premium
-                                </Badge>
                               </>
                             ) : (
                               <span className="text-emerald-400 font-bold text-lg">
@@ -952,12 +972,12 @@ export default function GameDetailPage() {
                     </>
                   ) : isEmbeddable ? (
                     <>
-                      {isFreePlan ? (
+                      {shouldShowPlayButton() ? (
                         <Button
-                          onClick={handlePlay}
+                          onClick={shouldShowUpgradeModal() ? () => setShowPremiumModal(true) : handlePlay}
                           className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
                         >
-                          Jugar gratis
+                          Jugar
                         </Button>
                       ) : canPlayEffective ? (
                         <>
@@ -981,18 +1001,69 @@ export default function GameDetailPage() {
                         <>
                           <Button
                             onClick={handlePurchase}
-                            className="w-full bg-cyan-400 hover:bg-cyan-500 text-slate-900 font-semibold shadow-lg shadow-cyan-400/25"
+                            variant="outline"
+                            className="w-full border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-slate-900 bg-transparent font-semibold"
                           >
                             Comprar ahora
                           </Button>
                           <Button
                             onClick={handleRental}
-                            className="w-full bg-emerald-400 hover:bg-emerald-500 text-slate-900 font-semibold shadow-lg shadow-emerald-400/25"
+                            variant="outline"
+                            className="w-full border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-slate-900 bg-transparent font-semibold"
                           >
                             Alquilar
                           </Button>
                         </>
                       )}
+                      {/* 🛒 Toggle carrito (para embebibles también) */}
+                      {!hasPurchased && !hasActiveRental && !isFreeToPlay && (
+                        <Button
+                          onClick={async () => {
+                            if (!isLogged || !profile?._id || !game?._id) {
+                              setShowAuthAction(true);
+                              return;
+                            }
+                            if (requiresPremium) {
+                              setShowPremiumModal(true);
+                              return;
+                            }
+                            const prev = cartMarked;
+                            setCartMarked(!prev);
+                            try {
+                              if (cartToggle) {
+                                const res = await cartToggle({
+                                  userId: profile._id,
+                                  gameId: game._id,
+                                } as any);
+                                const added = !!(res as any)?.added;
+                                if (added !== !prev) setCartMarked(added);
+                                toast({
+                                  title: added ? "Añadido al carrito" : "Quitado del carrito",
+                                  description: `${game.title} ${added ? "se agregó" : "se quitó"} del carrito.`,
+                                });
+                              } else if (prev) {
+                                await cartRemove?.({ userId: profile._id, gameId: game._id } as any);
+                                toast({ title: "Quitado del carrito", description: `${game.title} se quitó del carrito.` });
+                              } else {
+                                await cartAdd?.({ userId: profile._id, gameId: game._id } as any);
+                                toast({ title: "Añadido al carrito", description: `${game.title} se agregó al carrito.` });
+                              }
+                            } catch {
+                              setCartMarked(prev);
+                              toast({
+                                title: "No se pudo actualizar el carrito",
+                                description: "Inténtalo nuevamente.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                          className="w-full font-semibold bg-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-2" />
+                          {cartMarked ? "Quitar del carrito" : "Añadir al carrito"}
+                        </Button>
+                      )}
+
                     </>
                   ) : (
                     <>
@@ -1007,13 +1078,15 @@ export default function GameDetailPage() {
                         <>
                           <Button
                             onClick={handlePurchase}
-                            className="w-full bg-cyan-400 hover:bg-cyan-500 text-slate-900 font-semibold shadow-lg shadow-cyan-400/25"
+                            variant="outline"
+                            className="w-full border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-slate-900 bg-transparent font-semibold"
                           >
                             Comprar ahora
                           </Button>
                           <Button
                             onClick={handleRental}
-                            className="w-full bg-emerald-400 hover:bg-emerald-500 text-slate-900 font-semibold shadow-lg shadow-emerald-400/25"
+                            variant="outline"
+                            className="w-full border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-slate-900 bg-transparent font-semibold"
                           >
                             Alquilar
                           </Button>
@@ -1062,11 +1135,7 @@ export default function GameDetailPage() {
                               });
                             }
                           }}
-                          className={`w-full font-semibold ${
-                            cartMarked
-                              ? "bg-slate-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
-                              : "bg-orange-400 hover:bg-orange-500 text-slate-900"
-                          }`}
+                          className="w-full font-semibold bg-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
                         >
                           <ShoppingCart className="w-4 h-4 mr-2" />
                           {cartMarked ? "Quitar del carrito" : "Añadir al carrito"}

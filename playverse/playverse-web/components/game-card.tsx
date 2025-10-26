@@ -253,23 +253,12 @@ export default function GameCard({
           {/* Barra de controles sobre el cover */}
           <div className="absolute inset-x-0 top-0 p-2 sm:p-3">
             <div className="flex items-start justify-between gap-2">
-              {/* Badges a la izquierda */}
-              <div className="flex items-center gap-2">
-                <Badge className="bg-amber-400 text-slate-900 font-semibold px-2 py-0.5">
-                  {primaryGenre}
-                </Badge>
-                {isPremiumUser && (
-                  <span
-                    className="
-                      rounded-full px-2 py-0.5 text-[11px] font-bold
-                      bg-amber-500/95 text-black ring-1 ring-black/10 shadow
-                    "
-                    title="Descuento Premium activo"
-                  >
-                    −10% Premium
-                  </span>
-                )}
-              </div>
+                             {/* Badges a la izquierda */}
+               <div className="flex items-center gap-2">
+                 <Badge className="bg-amber-400 text-slate-900 font-semibold px-2 py-0.5">
+                   {primaryGenre}
+                 </Badge>
+               </div>
 
               {/* Corazón a la derecha */}
               <button
@@ -297,23 +286,37 @@ export default function GameCard({
           <div className="h-[1px] w-full bg-slate-700" />
 
           <div className="p-4 flex-1 flex flex-col">
-            {/* rating */}
-            {typeof userStars === "number" && userStars > 0 && (
-              <div
-                className="
-                  inline-flex items-center gap-1 rounded-md bg-slate-900/70 ring-1 ring-slate-600
-                  px-2 py-1 text-xs w-fit mb-2
-                  transition-colors group-hover:ring-amber-400/50
-                  cursor-default
-                "
-                title={`User rating: ${userStars.toFixed(1)}/5`}
-              >
-                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                <span className="text-slate-200 font-semibold">
-                  {userStars.toFixed(1)}
-                </span>
-              </div>
-            )}
+            {/* rating y plan */}
+            <div className="flex items-center justify-between mb-2">
+              {/* rating */}
+              {typeof userStars === "number" && userStars > 0 ? (
+                <div
+                  className="
+                    inline-flex items-center gap-1 rounded-md bg-slate-900/70 ring-1 ring-slate-600
+                    px-2 py-1 text-xs w-fit
+                    transition-colors group-hover:ring-amber-400/50
+                    cursor-default
+                  "
+                  title={`User rating: ${userStars.toFixed(1)}/5`}
+                >
+                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <span className="text-slate-200 font-semibold">
+                    {userStars.toFixed(1)}
+                  </span>
+                </div>
+              ) : (
+                <div></div>
+              )}
+
+              {/* Badge del plan */}
+                <Badge className={`font-semibold px-2 py-0.5 text-xs ${
+                  isPremiumPlan 
+                    ? "bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-600 text-slate-900" 
+                    : "bg-teal-400 text-slate-900"
+                }`}>
+                {isPremiumPlan ? "Premium" : "Free"}
+              </Badge>
+            </div>
 
             <h3 className="text-slate-100 font-semibold text-lg mb-1 line-clamp-1">
               {game.title}
@@ -324,73 +327,87 @@ export default function GameCard({
             </p>
 
             {/* ======= PRECIOS ======= */}
-            <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
-              {/* Alquiler */}
-              <div className="flex min-w-0 flex-col items-start">
-                <span className="text-slate-300">Alquiler</span>
-                {typeof rent === "number" ? (
-                  showRentDiscount ? (
-                    <div className="flex flex-col items-start space-y-0.5">
-                      <span className="text-slate-400 line-through text-[12px] leading-4 whitespace-nowrap tabular-nums">
+            {((typeof rent === "number" && rent > 0) || (typeof buy === "number" && buy > 0)) ? (
+              <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
+                {/* Alquiler */}
+                <div className="flex min-w-0 flex-col items-start">
+                  <span className="text-slate-300">Alquiler</span>
+                  {typeof rent === "number" && rent > 0 ? (
+                    showRentDiscount ? (
+                      <div className="flex flex-col items-start space-y-0.5">
+                        <span className="text-slate-400 line-through text-[12px] leading-4 whitespace-nowrap tabular-nums">
+                          {formatCurrency(rent, currency)}
+                          {rentSuffix && <span className="font-normal">{rentSuffix}</span>}
+                        </span>
+                        <span className="text-white font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
+                          {formatCurrency(rentFinal!, currency)}
+                          {rentSuffix && <span className="font-semibold">{rentSuffix}</span>}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-white font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
                         {formatCurrency(rent, currency)}
-                        {rentSuffix && <span className="font-normal">{rentSuffix}</span>}
-                      </span>
-                      <span className="text-emerald-300 font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
-                        {formatCurrency(rentFinal!, currency)}
                         {rentSuffix && <span className="font-semibold">{rentSuffix}</span>}
                       </span>
-                    </div>
+                    )
                   ) : (
-                    <span className="text-emerald-300 font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
-                      {formatCurrency(rent, currency)}
-                      {rentSuffix && <span className="font-semibold">{rentSuffix}</span>}
-                    </span>
-                  )
-                ) : (
-                  <span className="text-slate-500">—</span>
-                )}
-              </div>
+                    <span className="text-slate-500">—</span>
+                  )}
+                </div>
 
-              {/* Compra */}
-              <div className="flex min-w-0 flex-col items-end text-right">
-                <span className="text-slate-300">Compra</span>
-                {typeof buy === "number" ? (
-                  showBuyDiscount ? (
-                    <div className="flex flex-col items-end space-y-0.5">
-                      <span className="text-slate-400 line-through text-[12px] leading-4 whitespace-nowrap tabular-nums">
+                {/* Compra */}
+                <div className="flex min-w-0 flex-col items-end text-right">
+                  <span className="text-slate-300">Compra</span>
+                  {typeof buy === "number" && buy > 0 ? (
+                    showBuyDiscount ? (
+                      <div className="flex flex-col items-end space-y-0.5">
+                        <span className="text-slate-400 line-through text-[12px] leading-4 whitespace-nowrap tabular-nums">
+                          {formatCurrency(buy, currency)}
+                        </span>
+                        <span className="text-slate-100 font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
+                          {formatCurrency(buyFinal!, currency)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-100 font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
                         {formatCurrency(buy, currency)}
                       </span>
-                      <span className="text-slate-100 font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
-                        {formatCurrency(buyFinal!, currency)}
-                      </span>
-                    </div>
+                    )
                   ) : (
-                    <span className="text-slate-100 font-bold text-[15px] leading-5 whitespace-nowrap tabular-nums">
-                      {formatCurrency(buy, currency)}
-                    </span>
-                  )
-                ) : (
-                  <span className="text-slate-500">—</span>
-                )}
+                    <span className="text-slate-500">—</span>
+                  )}
+                </div>
               </div>
-            </div>
-            {/* ======= /PRECIOS ======= */}
+            ) : ((typeof rent === "number" && rent === 0) || (typeof buy === "number" && buy === 0)) ? (
+              <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
+                {/* Juego Free to Play */}
+                <div className="flex min-w-0 flex-col items-start">
+                  <span className="text-slate-300">Juego Free to Play</span>
+                  <span className="text-emerald-300 font-bold text-[15px] leading-5 whitespace-nowrap">
+                    Gratis
+                  </span>
+                </div>
 
-            {/* leyendas */}
-            <p
-              className={`mt-3 text-[11px] ${
-                isPremiumUser ? "text-amber-300" : "text-slate-400"
-              }`}
-            >
-              10% de descuento con PlayVerse premium
-            </p>
+                {/* Espacio vacío para mantener el layout */}
+                <div className="flex min-w-0 flex-col items-end text-right">
+                </div>
+              </div>
+            ) : null}
+                         {/* ======= /PRECIOS ======= */}
 
-            <div className="mt-2 text-[11px] text-slate-400">
-              Plan:{" "}
-              <span className={isPremiumPlan ? "text-yellow-300" : "text-teal-300"}>
-                {isPremiumPlan ? "Premium" : "Free"}
-              </span>
-            </div>
+                           {/* leyendas */}
+              {((typeof rent === "number" && rent > 0) || (typeof buy === "number" && buy > 0)) && (
+                <p
+                  className={`mt-3 text-[11px] ${
+                    isPremiumUser ? "text-amber-300" : "text-slate-400"
+                  }`}
+                >
+                  {isPremiumUser 
+                    ? "Estas usando 10% de descuento de PlayVerse Premium" 
+                    : "Aprovecha 10% de descuento suscribiéntode a premium"}
+                </p>
+              )}
+
           </div>
         </CardContent>
       </Card>

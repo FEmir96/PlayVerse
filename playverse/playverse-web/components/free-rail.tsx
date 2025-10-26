@@ -19,5 +19,5 @@ export default function FreeRail() {
   const free = (list ?? []).filter(isFree).slice(0, 12);
 
   if (!free.length) return null; // si no hay, no mostramos nada
-  return <CarouselRail title="Más populares gratuitos" items={free} />;
+  return <CarouselRail title="Más populares del plan Free" items={free} />;
 }
