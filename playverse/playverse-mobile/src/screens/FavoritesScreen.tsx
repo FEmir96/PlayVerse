@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useLayoutEffect, useMemo, useCallback } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -28,7 +28,6 @@ export default function FavoritesScreen() {
   const { profile } = useAuth();
   const { favorites, loading, refetch } = useFavorites();
 
-  // Oculta el header del Stack (usamos header propio sin texto)
   useLayoutEffect(() => {
     nav.setOptions({ headerShown: false });
   }, [nav]);
@@ -39,12 +38,21 @@ export default function FavoritesScreen() {
   const rawCardWidth = (width - horizontalSpace) / columns;
   const cardWidth = Math.max(MIN_CARD_WIDTH, Math.min(columns === 1 ? 320 : 220, rawCardWidth));
 
+  // Null-safety: evitamos favorites.length si viene indefinido
+  const safeFavorites = useMemo(() => Array.isArray(favorites) ? favorites : [], [favorites]);
+
+  const onRefresh = useCallback(() => {
+    try {
+      refetch?.();
+    } catch {}
+  }, [refetch]);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={
-        <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />
+        <RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />
       }
     >
       {/* Header propio (logo PV centrado, SIN título) */}
@@ -52,6 +60,8 @@ export default function FavoritesScreen() {
         <Pressable
           onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
           style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Volver al inicio"
         >
           <Ionicons name="arrow-back" size={18} color={colors.accent} />
         </Pressable>
@@ -64,20 +74,27 @@ export default function FavoritesScreen() {
           />
         </View>
 
-        <Pressable onPress={() => nav.navigate('Notifications')} style={styles.iconButton}>
+        <Pressable
+          onPress={() => nav.navigate('Notifications' as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Ir a notificaciones"
+        >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
         </Pressable>
       </View>
 
       {!profile ? (
         <View style={styles.center}>
-          <Text style={styles.title}>Inicia sesión</text>
+          <Text style={styles.title}>Inicia sesión</Text>
           <Text style={styles.subtitleCenter}>
             Inicia sesión para ver tus juegos favoritos y seguir sus novedades.
           </Text>
           <Pressable
             onPress={() => nav.navigate('Profile' as any)}
             style={[styles.cta, { marginTop: spacing.md }]}
+            accessibilityRole="button"
+            accessibilityLabel="Ir a iniciar sesión"
           >
             <Text style={styles.ctaText}>Iniciar sesión</Text>
           </Pressable>
@@ -88,7 +105,7 @@ export default function FavoritesScreen() {
             <Text style={styles.sectionTitle}>Tu radar personal de juegos imperdibles</Text>
           </View>
 
-          {favorites.length === 0 ? (
+          {safeFavorites.length === 0 ? (
             <View style={styles.center}>
               <Text style={styles.subtitleCenter}>Aún no tienes favoritos.</Text>
             </View>
@@ -99,7 +116,7 @@ export default function FavoritesScreen() {
                 { justifyContent: columns === 1 ? 'center' : 'flex-start' },
               ]}
             >
-              {favorites.map((row, i) => {
+              {safeFavorites.map((row, i) => {
                 const gameId = row.game?._id ?? row.gameId;
                 return (
                   <GameCard
@@ -112,7 +129,7 @@ export default function FavoritesScreen() {
                     }}
                     style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
                     tag="Favorito"
-                    onPress={() => gameId && nav.navigate('GameDetail', { gameId: String(gameId) })}
+                    onPress={() => gameId && nav.navigate('GameDetail' as any, { gameId: String(gameId) } as any)}
                   />
                 );
               })}

@@ -9,6 +9,7 @@ import {
   Image,
   Pressable,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +21,7 @@ import SocialButton from '../components/SocialButton';
 import { useAuth } from '../context/AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import { resolveAssetUrl } from '../lib/asset';
+import { convexHttp } from '../lib/convexClient';
 import { signInWithGoogleNative, signInWithMicrosoftNative } from '../auth/nativeOAuth';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -56,8 +58,9 @@ export default function ProfileScreen() {
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [avatarModal, setAvatarModal] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<'google' | 'microsoft' | null>(null);
 
-  // Oculta el header del Stack para no duplicar nada (usamos header propio sin texto)
+  // Header propio
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -74,12 +77,6 @@ export default function ProfileScreen() {
     'queries/getPaymentMethods:getPaymentMethods',
     { userId },
     { enabled: !!userId, refreshMs: 45000 }
-  );
-
-  const { data: payments } = useConvexQuery<any[]>(
-    'queries/getUserPayments:getUserPayments',
-    userId ? { userId } : ({} as any),
-    { enabled: !!userId, refreshMs: 60000 }
   );
 
   const { data: purchases } = useConvexQuery<any[]>(
@@ -112,13 +109,12 @@ export default function ProfileScreen() {
   const validateForm = useCallback(() => {
     const errors: FieldErrors = {};
     const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    const normalizedEmail = trimmedEmail.toLowerCase();
+    const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
 
     if (!trimmedEmail) {
       errors.email = 'Ingresa tu email.';
-    } else if (!EMAIL_REGEX.test(normalizedEmail)) {
+    } else if (!EMAIL_REGEX.test(trimmedEmail)) {
       errors.email = 'Ingresa un email válido.';
     }
 
@@ -140,7 +136,7 @@ export default function ProfileScreen() {
       errors,
       values: {
         name: trimmedName,
-        email: normalizedEmail,
+        email: trimmedEmail,
         password: trimmedPassword,
       },
     };
@@ -149,8 +145,7 @@ export default function ProfileScreen() {
   const handleSubmit = useCallback(async () => {
     if (loading) return;
     const { errors, values } = validateForm();
-    const hasErrors = Object.values(errors).some(Boolean);
-    if (hasErrors) {
+    if (Object.values(errors).some(Boolean)) {
       setFieldErrors(errors);
       return;
     }
@@ -166,7 +161,7 @@ export default function ProfileScreen() {
     if (ok) setPassword('');
   }, [loading, mode, validateForm, loginEmail, register]);
 
-  // Mantén el perfil del contexto alineado con el fullProfile cuando llegue
+  // Mantener contexto alineado con fullProfile
   useEffect(() => {
     if (!profile || !fullProfile?._id) return;
     if (String(fullProfile._id) !== profile._id) return;
@@ -195,12 +190,14 @@ export default function ProfileScreen() {
   const avatarUri = resolveAssetUrl((fullProfile as any)?.avatarUrl || (profile as any)?.avatarUrl);
   const roleChip = ROLE_CHIP_STYLES[profile?.role ?? 'free'];
 
-  // Header propio (logo PV centrado, SIN título)
+  // Header PV
   const HeaderBar = (
     <View style={styles.headerBar}>
       <Pressable
         onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
         style={styles.iconButton}
+        accessibilityRole="button"
+        accessibilityLabel="Volver al inicio"
       >
         <Ionicons name="arrow-back" size={18} color={colors.accent} />
       </Pressable>
@@ -213,7 +210,12 @@ export default function ProfileScreen() {
         />
       </View>
 
-      <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.iconButton}>
+      <Pressable
+        onPress={() => navigation.navigate('Notifications' as any)}
+        style={styles.iconButton}
+        accessibilityRole="button"
+        accessibilityLabel="Ir a notificaciones"
+      >
         <Ionicons name="notifications-outline" size={18} color={colors.accent} />
         {unreadCount > 0 ? (
           <View style={styles.badge}>
@@ -224,8 +226,70 @@ export default function ProfileScreen() {
     </View>
   );
 
+  // ====== OAuth helpers ======
+  const finishLoginWithEmail = async (email: string, name?: string) => {
+    try {
+      const prof: any = await (convexHttp as any).query(
+        'queries/getUserByEmail:getUserByEmail',
+        { email }
+      );
+      if (prof) {
+        setFromProfile({
+          _id: String(prof._id),
+          name: prof.name || name || '',
+          email: prof.email,
+          role: prof.role || 'free',
+          createdAt: prof.createdAt ?? Date.now(),
+        });
+      } else {
+        // sesión local de cortesía (ajusta con tu mutation de alta si corresponde)
+        setFromProfile({
+          _id: `local:${email}`,
+          name: name || email.split('@')[0],
+          email,
+          role: 'free' as any,
+          createdAt: Date.now(),
+        });
+      }
+      navigation.navigate('Tabs' as any, { screen: 'Home' } as any);
+    } catch (e: any) {
+      Alert.alert('Autenticación', e?.message || 'No se pudo sincronizar el perfil.');
+    }
+  };
+
+  const handleGoogle = async () => {
+    if (oauthLoading) return;
+    setOauthLoading('google');
+    try {
+      const res = await signInWithGoogleNative();
+      if (!res?.ok || !res.email) {
+        Alert.alert('Google', res?.error || 'No se pudo completar la autorización.');
+        return;
+      }
+      await finishLoginWithEmail(res.email, res.name);
+    } finally {
+      setOauthLoading(null);
+    }
+  };
+
+  const handleMicrosoft = async () => {
+    if (oauthLoading) return;
+    setOauthLoading('microsoft');
+    try {
+      const res = await signInWithMicrosoftNative();
+      if (!res?.ok || !res.email) {
+        Alert.alert('Microsoft', res?.error || 'No se pudo completar la autorización.');
+        return;
+      }
+      await finishLoginWithEmail(res.email, res.name);
+    } finally {
+      setOauthLoading(null);
+    }
+  };
+
   // ----- SIN SESIÓN -----
   if (!profile) {
+    const leftOpacity = oauthLoading ? 0.6 : 1;
     return (
       <ScrollView style={styles.root} contentContainerStyle={styles.authContainer}>
         {HeaderBar}
@@ -245,7 +309,7 @@ export default function ProfileScreen() {
                   if (fieldErrors.name) setFieldErrors((p) => ({ ...p, name: undefined }));
                 }}
                 placeholder="Tu nombre"
-                placeholderTextColor={colors.accent}
+                placeholderTextColor="#9AB7C3"
                 style={styles.input}
               />
               {fieldErrors.name ? <Text style={styles.fieldError}>{fieldErrors.name}</Text> : null}
@@ -264,7 +328,7 @@ export default function ProfileScreen() {
               autoCorrect={false}
               keyboardType="email-address"
               placeholder="tu@email.com"
-              placeholderTextColor={colors.accent}
+              placeholderTextColor="#9AB7C3"
               style={styles.input}
             />
             {fieldErrors.email ? <Text style={styles.fieldError}>{fieldErrors.email}</Text> : null}
@@ -280,7 +344,7 @@ export default function ProfileScreen() {
               }}
               secureTextEntry
               placeholder="Tu contraseña"
-              placeholderTextColor={colors.accent}
+              placeholderTextColor="#9AB7C3"
               style={styles.input}
             />
             {fieldErrors.password ? (
@@ -290,78 +354,57 @@ export default function ProfileScreen() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Button
-            title={mode === 'login' ? (loading ? 'Ingresando...' : 'Ingresar') : loading ? 'Registrando...' : 'Registrarse'}
-            onPress={handleSubmit}
-          />
-
-          <Button
-            title={mode === 'login' ? 'Ir a registro' : 'Ir a login'}
-            variant="ghost"
-            style={styles.switchButton}
-            onPress={() => setMode(mode === 'login' ? 'register' : 'login')}
-          />
+          {/* Acciones: izquierda/derecha */}
+          <View style={styles.actionsRow}>
+            <View style={{ flex: 1 }}>
+              <Button
+                title={mode === 'login' ? (loading ? 'Ingresando...' : 'Ingresar') : loading ? 'Registrando...' : 'Registrarse'}
+                onPress={handleSubmit}
+                style={{ width: '100%' }}
+              />
+            </View>
+            <View style={{ width: spacing.sm }} />
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Button
+                title={mode === 'login' ? 'Ir a registro' : 'Ir a login'}
+                variant="ghost"
+                style={{ width: '100%' }}
+                onPress={() => setMode(mode === 'login' ? 'register' : 'login')}
+              />
+            </View>
+          </View>
         </View>
 
-        <View className="card">
+        {/* Social login */}
+        <View style={styles.card}>
           <Text style={styles.sectionHeading}>Ingresar con</Text>
-          <SocialButton
-            provider="google"
-            onPress={async () => {
-              const res = await signInWithGoogleNative();
-              if (!res.ok || !res.email) {
-                Alert.alert('Login con Google', res.error || 'No se pudo completar.');
-                return;
-              }
-              try {
-                const { convexHttp } = require('../lib/convexClient');
-                const prof: any = await (convexHttp as any).query(
-                  'queries/getUserByEmail:getUserByEmail',
-                  { email: res.email }
-                );
-                if (prof) {
-                  setFromProfile({
-                    _id: String(prof._id),
-                    name: prof.name || '',
-                    email: prof.email,
-                    role: prof.role,
-                    createdAt: prof.createdAt,
-                  });
-                }
-              } catch (e: any) {
-                Alert.alert('Convex', e?.message || 'No se pudo actualizar el perfil.');
-              }
-            }}
-          />
+
+          <View style={{ opacity: oauthLoading === 'google' ? 0.6 : 1 }}>
+            <SocialButton
+              provider="google"
+              onPress={handleGoogle}
+            />
+            {oauthLoading === 'google' ? (
+              <View style={{ marginTop: spacing.xs }}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : null}
+          </View>
+
           <View style={{ height: spacing.sm }} />
-          <SocialButton
-            provider="microsoft"
-            onPress={async () => {
-              const res = await signInWithMicrosoftNative();
-              if (!res.ok || !res.email) {
-                Alert.alert('Login con Microsoft', res.error || 'No se pudo completar.');
-                return;
-              }
-              try {
-                const { convexHttp } = require('../lib/convexClient');
-                const prof: any = await (convexHttp as any).query(
-                  'queries/getUserByEmail:getUserByEmail',
-                  { email: res.email }
-                );
-                if (prof) {
-                  setFromProfile({
-                    _id: String(prof._id),
-                    name: prof.name || '',
-                    email: prof.email,
-                    role: prof.role,
-                    createdAt: prof.createdAt,
-                  });
-                }
-              } catch (e: any) {
-                Alert.alert('Convex', e?.message || 'No se pudo actualizar el perfil.');
-              }
-            }}
-          />
+
+          <View style={{ opacity: oauthLoading === 'microsoft' ? 0.6 : 1 }}>
+            <SocialButton
+              provider="microsoft"
+              onPress={handleMicrosoft}
+            />
+            {oauthLoading === 'microsoft' ? (
+              <View style={{ marginTop: spacing.xs }}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : null}
+          </View>
+
           <Text style={styles.helper}>Autenticación nativa sin abrir la web.</Text>
         </View>
 
@@ -392,54 +435,39 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Plan y suscripción (solo rol actual) */}
       <View style={styles.card}>
         <Text style={styles.sectionHeading}>Plan y suscripción</Text>
         <View style={styles.roleRow}>
           <Text style={styles.label}>Rol actual</Text>
-          <View style={[styles.rolePill, roleChip.pill]}>
-            <Text style={[styles.roleText, { color: roleChip.text }]}>{roleChip.label}</Text>
+          <View style={[styles.rolePill, ROLE_CHIP_STYLES[profile?.role ?? 'free'].pill]}>
+            <Text
+              style={[
+                styles.roleText,
+                { color: ROLE_CHIP_STYLES[profile?.role ?? 'free'].text },
+              ]}
+            >
+              {ROLE_CHIP_STYLES[profile?.role ?? 'free'].label}
+            </Text>
           </View>
         </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.sectionHeading}>Alertas</Text>
-        <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.notificationButton}>
+        <Pressable onPress={() => navigation.navigate('Notifications' as any)} style={styles.notificationButton}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
             <Ionicons name="notifications" size={20} color={colors.accent} />
             <View style={{ flex: 1 }}>
               <Text style={styles.notificationTitle}>Ver notificaciones</Text>
               <Text style={styles.helper}>
-                {unreadCount > 0 ? `${unreadCount} pendientes` : 'Estás al día'}
+                {(notifications ?? []).filter((n: any) => !n?.isRead).length > 0
+                  ? `${(notifications ?? []).filter((n: any) => !n?.isRead).length} pendientes`
+                  : 'Estás al día'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.accent} />
           </View>
         </Pressable>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionHeading}>Métodos de pago</Text>
-        {(paymentMethods ?? []).length === 0 ? (
-          <Text style={styles.label}>No tienes métodos guardados.</Text>
-        ) : (
-          (paymentMethods ?? []).map((pm: any) => (
-            <View key={String(pm._id)} style={styles.paymentRow}>
-              <View style={styles.paymentIcon}>
-                <Text style={{ color: colors.accent, fontWeight: '700' }}>
-                  {(pm.brand || '??').slice(0, 2).toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.label}>
-                {pm.brand?.toUpperCase()} - **** {pm.last4}
-              </Text>
-              <Text style={styles.helper}>
-                Exp {String(pm.expMonth).padStart(2, '0')}/{pm.expYear}
-              </Text>
-            </View>
-          ))
-        )}
       </View>
 
       <View style={styles.listRow}>
@@ -472,7 +500,7 @@ export default function ProfileScreen() {
 
       <FAQ />
 
-      {/* Modal de avatar grande */}
+      {/* Modal avatar grande */}
       <Modal visible={avatarModal} animationType="fade" transparent onRequestClose={() => setAvatarModal(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setAvatarModal(false)}>
           <View style={styles.modalCard}>
@@ -527,7 +555,7 @@ const styles = StyleSheet.create({
   authContainer: { paddingBottom: spacing.xxl, gap: spacing.md },
   profileContainer: { paddingBottom: spacing.xxl, gap: spacing.md },
 
-  /* HEADER PROPIO (sin título, solo logo PV centrado) */
+  /* Header propio (logo centrado) */
   headerBar: {
     paddingTop: spacing.xl,
     paddingHorizontal: spacing.xl,
@@ -576,6 +604,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.xl,
     marginTop: spacing.md,
   },
+
   fieldGroup: { gap: 6, marginTop: 2 },
   label: { color: colors.accent, fontSize: typography.body },
   value: { color: colors.accent, fontSize: typography.h3, fontWeight: '700' },
@@ -590,7 +619,14 @@ const styles = StyleSheet.create({
   },
   error: { color: '#ff7675' },
   fieldError: { color: '#ff9191', fontSize: typography.caption, marginTop: 4 },
-  switchButton: { alignSelf: 'flex-start', marginTop: spacing.sm },
+
+  /* Acciones opuestas en el card */
+  actionsRow: {
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 
   sectionHeading: { color: colors.accent, fontWeight: '800', fontSize: typography.h3 },
   helper: { color: colors.accent, fontSize: typography.caption },
@@ -634,21 +670,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2B70522',
   },
   notificationTitle: { color: colors.accent, fontWeight: '700' },
-
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    justifyContent: 'space-between',
-  },
-  paymentIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#0F2D3A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   listRow: { flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' },
   listCol: { flex: 1, minWidth: 280 },

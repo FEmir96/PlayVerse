@@ -25,13 +25,17 @@ export type RootStackParamList = {
   Notifications: undefined;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
-// Stacks anidados para PERFIL y FAVORITOS
-const ProfileStack = createNativeStackNavigator();
+// Stacks anidados para TODOS los tabs (header unificado)
+const HomeStack = createNativeStackNavigator();
+const CatalogStack = createNativeStackNavigator();
+const MyGamesStack = createNativeStackNavigator();
 const FavoritesStack = createNativeStackNavigator();
+const ProfileStack = createNativeStackNavigator();
 
+// Header unificado (igual al de Favoritos/Perfil)
 function withPVHeader() {
   return {
     headerShown: true,
@@ -48,67 +52,62 @@ function withPVHeader() {
   };
 }
 
-function ProfileStackNavigator(): React.ReactElement {
+// ===== Stacks por tab (cada uno con HeaderBar unificado) =====
+function HomeStackNavigator(): React.ReactElement {
   return (
-    <ProfileStack.Navigator screenOptions={withPVHeader()}>
-      <ProfileStack.Screen
-        name="ProfileHome"
-        component={ProfileScreen}
-        options={{ title: '', headerTitle: '' }}
-      />
-    </ProfileStack.Navigator>
+    <HomeStack.Navigator screenOptions={withPVHeader()}>
+      <HomeStack.Screen name="HomeRoot" component={HomeScreen} options={{ title: '' }} />
+    </HomeStack.Navigator>
+  );
+}
+
+function CatalogStackNavigator(): React.ReactElement {
+  return (
+    <CatalogStack.Navigator screenOptions={withPVHeader()}>
+      <CatalogStack.Screen name="CatalogRoot" component={CatalogScreen} options={{ title: '' }} />
+    </CatalogStack.Navigator>
+  );
+}
+
+function MyGamesStackNavigator(): React.ReactElement {
+  return (
+    <MyGamesStack.Navigator screenOptions={withPVHeader()}>
+      <MyGamesStack.Screen name="MyGamesRoot" component={MyGamesScreen} options={{ title: '' }} />
+    </MyGamesStack.Navigator>
   );
 }
 
 function FavoritesStackNavigator(): React.ReactElement {
   return (
     <FavoritesStack.Navigator screenOptions={withPVHeader()}>
-      <FavoritesStack.Screen
-        name="FavoritesHome"
-        component={FavoritesScreen}
-        options={{ title: '', headerTitle: '' }}
-      />
+      <FavoritesStack.Screen name="FavoritesHome" component={FavoritesScreen} options={{ title: '' }} />
     </FavoritesStack.Navigator>
   );
 }
 
-// ----------------- Tabs -----------------
-type TabBarFn = (props: any) => React.ReactNode;
-const renderTabBar: TabBarFn = (props) => <BottomTabBar {...props} />;
+function ProfileStackNavigator(): React.ReactElement {
+  return (
+    <ProfileStack.Navigator screenOptions={withPVHeader()}>
+      <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: '' }} />
+    </ProfileStack.Navigator>
+  );
+}
 
+// ----------------- Tabs -----------------
 function Tabs(): React.ReactElement {
   return (
     <Tab.Navigator
       initialRouteName="Home"
-      tabBar={renderTabBar}
-      screenOptions={({ navigation }) => ({
-        headerShown: true,
-        title: '',
-        headerTitle: '',
-        header: () => (
-          <HeaderBar
-            showBack={false}
-            showBell
-            onBellPress={() => navigation.navigate('Notifications' as never)}
-          />
-        ),
-      })}
+      // ✅ tabBar debe ser función
+      tabBar={(props) => <BottomTabBar {...props} />}
+      // ✅ el header lo ponen LOS STACKS internos
+      screenOptions={{ headerShown: false, tabBarHideOnKeyboard: true }}
     >
-      <Tab.Screen name="MyGames" component={MyGamesScreen} options={{ title: '', headerTitle: '' }} />
-      <Tab.Screen name="Catalog" component={CatalogScreen} options={{ title: '', headerTitle: '' }} />
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: '', headerTitle: '' }} />
-
-      {/* Estas usan su propio stack con el mismo header PV */}
-      <Tab.Screen
-        name="Favorites"
-        component={FavoritesStackNavigator}
-        options={{ headerShown: false, title: '', headerTitle: '' }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileStackNavigator}
-        options={{ headerShown: false, title: '', headerTitle: '' }}
-      />
+      <Tab.Screen name="MyGames" component={MyGamesStackNavigator} options={{ headerShown: false }} />
+      <Tab.Screen name="Catalog" component={CatalogStackNavigator} options={{ headerShown: false }} />
+      <Tab.Screen name="Home" component={HomeStackNavigator} options={{ headerShown: false }} />
+      <Tab.Screen name="Favorites" component={FavoritesStackNavigator} options={{ headerShown: false }} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} options={{ headerShown: false }} />
     </Tab.Navigator>
   );
 }
@@ -116,7 +115,7 @@ function Tabs(): React.ReactElement {
 // ----------------- Stack raíz -----------------
 export default function AppNavigator(): React.ReactElement {
   return (
-    <Stack.Navigator
+    <RootStack.Navigator
       initialRouteName="Tabs"
       screenOptions={{
         headerShown: true,
@@ -132,11 +131,12 @@ export default function AppNavigator(): React.ReactElement {
         ),
       }}
     >
-      <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="GameDetail" component={GameDetailScreen} />
-      <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
-    </Stack.Navigator>
+      {/* Tabs NO muestra header: lo manejan sus Stacks internos */}
+      <RootStack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+      <RootStack.Screen name="Login" component={LoginScreen} />
+      <RootStack.Screen name="GameDetail" component={GameDetailScreen} />
+      <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} />
+      <RootStack.Screen name="Notifications" component={NotificationsScreen} />
+    </RootStack.Navigator>
   );
 }

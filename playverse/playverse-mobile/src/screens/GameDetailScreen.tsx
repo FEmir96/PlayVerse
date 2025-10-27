@@ -1,5 +1,4 @@
-// playverse/playverse-mobile/src/screens/GameDetailScreen.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useLayoutEffect } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -30,6 +29,11 @@ export default function GameDetailScreen() {
   const params = (route.params ?? {}) as Partial<RootStackParamList['GameDetail']>;
   const linkingUrl = Linking.useURL();
 
+  // Header propio (ocultamos el del stack)
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   const resolvedGameId = useMemo(() => {
     if (params.gameId) return params.gameId;
     if (!linkingUrl) return undefined;
@@ -40,9 +44,7 @@ export default function GameDetailScreen() {
       const segments = parsed.pathname.split('/').filter(Boolean);
       const last = segments[segments.length - 1];
       if (last && last !== 'GameDetail') return decodeURIComponent(last);
-    } catch {
-      /* ignore */
-    }
+    } catch {}
     return undefined;
   }, [linkingUrl, params.gameId]);
 
@@ -127,59 +129,94 @@ export default function GameDetailScreen() {
       .filter(Boolean) as string[];
   }, [game, initial, igdbShots]);
 
+  // ---------- Trailer robusto ----------
   const trailerRaw =
     (game as any)?.trailer_url ||
     (game as any)?.extraTrailerUrl ||
     (initial as any)?.trailer_url ||
     (initial as any)?.extraTrailerUrl ||
-    (game as any)?.trailerUrl;
+    (game as any)?.trailerUrl ||
+    (initial as any)?.trailerUrl;
+
+  function normalizeHttps(u: string) {
+    if (/^https?:\/\//i.test(u)) return u;
+    if (/^\/\//.test(u)) return `https:${u}`;
+    return `https://${u}`;
+  }
+  function isLikelyYouTubeId(s: string) {
+    return /^[a-zA-Z0-9_-]{6,}$/.test(s);
+  }
+  function extractYouTubeId(u: string) {
+    if (!u) return undefined;
+    const raw = u.startsWith('youtube:') ? u.slice('youtube:'.length) : u;
+    if (!/^https?:\/\//i.test(raw) && isLikelyYouTubeId(raw)) return raw;
+
+    const url = new URL(normalizeHttps(raw));
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname || '';
+    const seg = path.split('/').filter(Boolean);
+    const qsV = url.searchParams.get('v');
+    if (qsV) return qsV.replace(/[^a-zA-Z0-9_-]/g, '');
+
+    if (host.includes('youtu.be')) {
+      return (seg[0] || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    }
+    if (host.includes('youtube.com') || host.includes('youtube-nocookie.com') || host.startsWith('m.youtube.')) {
+      const mapIdx: Record<string, number> = { embed: 1, shorts: 1, live: 1, v: 1 };
+      if (seg.length >= 2 && mapIdx[seg[0]] === 1) {
+        return seg[1].replace(/[^a-zA-Z0-9_-]/g, '');
+      }
+      const uParam = url.searchParams.get('u');
+      if (uParam) {
+        try {
+          const inner = new URL('https://youtube.com' + uParam);
+          const innerV = inner.searchParams.get('v');
+          if (innerV) return innerV.replace(/[^a-zA-Z0-9_-]/g, '');
+        } catch {}
+      }
+      const last = seg[seg.length - 1];
+      if (last && isLikelyYouTubeId(last)) return last;
+    }
+    return undefined;
+  }
+  function extractVimeoId(u: string) {
+    if (!u) return undefined;
+    const raw = u.startsWith('vimeo:') ? u.slice('vimeo:'.length) : u;
+    if (!/^https?:\/\//i.test(raw) && /^\d{6,}$/.test(raw)) return raw;
+    const url = new URL(normalizeHttps(raw));
+    const host = url.hostname.toLowerCase();
+    const seg = url.pathname.split('/').filter(Boolean);
+    if (host.includes('vimeo.com')) {
+      const last = seg[seg.length - 1];
+      if (/^\d{6,}$/.test(last || '')) return last!;
+    }
+    return undefined;
+  }
 
   const trailerInfo = useMemo(() => {
     const raw = trailerRaw ? resolveAssetUrl(trailerRaw) || trailerRaw : undefined;
     if (!raw) return { kind: 'none' as const };
 
-    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/\//, '')}`;
-    const buildYouTubeEmbed = (id: string) =>
-      `https://www.youtube-nocookie.com/embed/${id}?controls=1&modestbranding=1&rel=0`;
-
     try {
-      const url = new URL(normalized);
-      const host = url.hostname.toLowerCase();
-      const segments = url.pathname.split('/').filter(Boolean);
-
-      const cleanId = (value?: string | null) => (value ? value.replace(/[^a-zA-Z0-9_-]/g, '') : undefined);
-
-      const extractYouTubeId = () => {
-        if (host === 'youtu.be') return cleanId(segments[0]);
-        const queryId = url.searchParams.get('v');
-        if (queryId) return cleanId(queryId);
-        if (segments.length >= 2 && ['embed', 'shorts', 'live'].includes(segments[0])) {
-          return cleanId(segments[1]);
-        }
-        if (segments.length >= 1) {
-          const last = segments[segments.length - 1];
-          if (!['watch', 'channel', 'user'].includes(last)) return cleanId(last);
-        }
-        return undefined;
-      };
-
-      if (host.includes('youtube.com') || host.endsWith('.youtube.com') || host === 'youtu.be') {
-        const youtubeId = extractYouTubeId();
-        if (youtubeId) {
-          return { kind: 'web' as const, url: buildYouTubeEmbed(youtubeId) };
-        }
+      const ytId = extractYouTubeId(raw);
+      if (ytId) {
+        const src = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=0&playsinline=1&modestbranding=1&rel=0&showinfo=0`;
+        return { kind: 'web' as const, url: src };
       }
-
-      if (host.includes('vimeo.com')) {
-        const videoId = segments.pop();
-        if (videoId) {
-          return { kind: 'web' as const, url: `https://player.vimeo.com/video/${videoId}` };
-        }
+      const vmId = extractVimeoId(raw);
+      if (vmId) {
+        return { kind: 'web' as const, url: `https://player.vimeo.com/video/${vmId}` };
       }
-
-      return { kind: 'video' as const, url: normalized };
+      const url = new URL(normalizeHttps(raw));
+      if (/\.(mp4|webm|mov|m3u8)(\?|#|$)/i.test(url.pathname)) {
+        return { kind: 'video' as const, url: url.toString() };
+      }
+      return { kind: 'web' as const, url: url.toString() };
     } catch {
-      return { kind: 'video' as const, url: normalized };
+      if (isLikelyYouTubeId(raw)) {
+        return { kind: 'web' as const, url: `https://www.youtube-nocookie.com/embed/${raw}` };
+      }
+      return { kind: 'none' as const };
     }
   }, [trailerRaw]);
 
@@ -214,13 +251,6 @@ export default function GameDetailScreen() {
 
   const igdbScore =
     typeof (game as any)?.igdbRating === 'number' ? (game as any).igdbRating : undefined;
-
-  const planLabel =
-    (game as any)?.plan === 'premium'
-      ? 'Premium'
-      : (game as any)?.plan === 'free'
-      ? 'Gratis'
-      : undefined;
 
   const { profile } = useAuth();
   const isLoading = loadingRemote && !game;
@@ -257,32 +287,45 @@ export default function GameDetailScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
     >
-      <Pressable
-        onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as any)}
-        className="self-start rounded-pill bg-accent px-md py-[6px] active:scale-95 ml-xl mt-xl"
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Ionicons name="arrow-back" size={16} color="#1B1B1B" />
-          <Text
-            style={{
-              color: '#1B1B1B',
-              fontSize: typography.caption,
-              fontWeight: '700',
-              letterSpacing: 0.8,
-              textTransform: 'uppercase',
-            }}
-          >
-            Volver
-          </Text>
+      {/* ===== Header propio ===== */}
+      <View style={styles.headerBar}>
+        <Pressable
+          onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Volver al inicio"
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.accent} />
+        </Pressable>
+
+        <View style={styles.centerLogoWrap}>
+          <Image
+            source={require('../../assets/branding/pv-logo-h28.png')}
+            style={styles.centerLogo}
+            resizeMode="contain"
+          />
         </View>
-      </Pressable>
+
+        <Pressable
+          onPress={() => navigation.navigate('Notifications' as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Ir a notificaciones"
+        >
+          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+        </Pressable>
+      </View>
 
       {/* HERO */}
       <View style={styles.header}>
         <Text style={styles.title}>{game?.title || 'Juego'}</Text>
         {genres ? <Text style={styles.subtitle}>{genres}</Text> : null}
         <View style={styles.metaRow}>
-          {planLabel ? <Text style={[styles.metaPill, styles.metaPlan]}>{planLabel}</Text> : null}
+          {(game as any)?.plan === 'premium' ? (
+            <Text style={[styles.metaPill, styles.metaPlan]}>Premium</Text>
+          ) : (game as any)?.plan === 'free' ? (
+            <Text style={[styles.metaPill]}>Gratis</Text>
+          ) : null}
           {releaseDate ? <Text style={styles.metaPill}>Estreno {releaseDate}</Text> : null}
           {typeof igdbScore === 'number' ? (
             <Text style={[styles.metaPill, styles.metaScore]}>IGDB {igdbScore.toFixed(1)}/5</Text>
@@ -327,20 +370,27 @@ export default function GameDetailScreen() {
             nativeControls
           />
         </View>
-      ) : null}
-
-      {trailerInfo.kind === 'web' ? (
+      ) : trailerInfo.kind === 'web' ? (
         <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
           <View style={[styles.embedContainer, { width: slideWidth }]}>
             <WebView
               source={{ uri: trailerInfo.url }}
+              originWhitelist={['*']}
+              javaScriptEnabled
+              domStorageEnabled
+              allowsInlineMediaPlayback
               allowsFullscreenVideo
               mediaPlaybackRequiresUserAction={false}
               style={{ flex: 1, backgroundColor: '#000' }}
             />
           </View>
         </View>
-      ) : null}
+      ) : (
+        <View style={[styles.card, { marginTop: spacing.lg }]}>
+          <Text style={styles.sectionLabel}>Trailer</Text>
+          <Text style={styles.helper}>Este juego no tiene trailer disponible por ahora.</Text>
+        </View>
+      )}
 
       {/* PRICES */}
       <View style={styles.card}>
@@ -404,6 +454,31 @@ export default function GameDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  /* Header propio */
+  headerBar: {
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#072633',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceBorder,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    backgroundColor: '#0F2D3A',
+  },
+  centerLogoWrap: { flex: 1, alignItems: 'center' },
+  centerLogo: { height: 28, width: 120 },
+
   // HERO
   header: {
     paddingHorizontal: spacing.xl,
@@ -502,7 +577,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
 
-  // CARD (glass / glow)
+  // CARD
   card: {
     backgroundColor: 'rgba(16, 36, 52, 0.65)',
     borderColor: '#1C4252',
@@ -516,6 +591,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 24,
+  },
+
+  // TEXT HELPERS
+  helper: {
+    color: '#98B8C6',
+    fontSize: typography.body,
   },
 
   // PRICES

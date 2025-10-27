@@ -1,6 +1,16 @@
 // playverse/playverse-mobile/src/screens/CatalogScreen.tsx
-import React, { useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useMemo, useState, useLayoutEffect } from 'react';
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  Pressable,
+  Image,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -20,8 +30,13 @@ const PADDING_H = spacing.xl;
 const ALL_GAMES_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'];
 
 export default function CatalogScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+
+  // ⚠️ Usamos header propio
+  useLayoutEffect(() => {
+    nav.setOptions({ headerShown: false });
+  }, [nav]);
 
   const maxByWidth = Math.max(
     1,
@@ -64,8 +79,38 @@ export default function CatalogScreen() {
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor="#F2B705" />}
+      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />}
     >
+      {/* Header propio (logo PV centrado, SIN título) */}
+      <View style={styles.headerBar}>
+        <Pressable
+          onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Volver al inicio"
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.accent} />
+        </Pressable>
+
+        <View style={styles.centerLogoWrap}>
+          <Image
+            source={require('../../assets/branding/pv-logo-h28.png')}
+            style={styles.centerLogo}
+            resizeMode="contain"
+          />
+        </View>
+
+        <Pressable
+          onPress={() => nav.navigate('Notifications' as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Ir a notificaciones"
+        >
+          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+        </Pressable>
+      </View>
+
+      {/* Encabezado */}
       <View style={styles.header}>
         <Text style={styles.title}>CATÁLOGO DE JUEGOS</Text>
         <Text style={styles.subtitle}>Sumérgete en PlayVerse. Encontrá tu próximo juego.</Text>
@@ -140,7 +185,7 @@ export default function CatalogScreen() {
                     plan: row.plan,
                   }}
                   onPress={() =>
-                    gameId && navigation.navigate('GameDetail', { gameId: String(gameId), initial: row })
+                    gameId && nav.navigate('GameDetail', { gameId: String(gameId), initial: row })
                   }
                 />
               </View>
@@ -165,17 +210,39 @@ export default function CatalogScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingHorizontal: PADDING_H,
+
+  /* ===== Header propio (igual a Favoritos/Login) ===== */
+  headerBar: {
     paddingTop: spacing.xl,
-    gap: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#072633',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceBorder,
   },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    backgroundColor: '#0F2D3A',
+  },
+  centerLogoWrap: { flex: 1, alignItems: 'center' },
+  centerLogo: { height: 28, width: 120 },
+
+  /* ===== Contenido ===== */
+  header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.xs },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },
-  filters: {
-    paddingHorizontal: PADDING_H,
-    paddingTop: spacing.md,
-  },
+
+  filters: { paddingHorizontal: PADDING_H, paddingTop: spacing.md },
+
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

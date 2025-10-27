@@ -1,5 +1,5 @@
 // playverse/playverse-mobile/src/screens/HomeScreen.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useLayoutEffect, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -8,7 +8,10 @@ import {
   View,
   Image,
   useWindowDimensions,
+  Pressable,
+  LayoutChangeEvent,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -21,23 +24,21 @@ import { useAuth } from '../context/AuthContext';
 
 const heroLogo = require('../../assets/images/playverse-logo.png');
 
-const MIN_CARD_WIDTH = 150;  // asegura 2 col en A33
+const MIN_CARD_WIDTH = 150;   // igual que Catálogo
 const GAP = spacing.md;
 const PADDING_H = spacing.xl;
 
-const ALL_GAMES_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'];
-const UPCOMING_NAMES = [
-  'queries/getUpcomingGames:getUpcomingGames',
-  'queries/getUpcomingGames',
-  'getUpcomingGames',
-  'queries/getComingSoon:getComingSoon',
-];
-
 export default function HomeScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { width } = useWindowDimensions();
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { width: winW } = useWindowDimensions();
+  const [gridW, setGridW] = useState(0); // ancho real del contenedor
 
-  // Auth tolerante
+  // Header propio
+  useLayoutEffect(() => {
+    nav.setOptions({ headerShown: false });
+  }, [nav]);
+
+  // Premium (-10%)
   const auth: any = (useAuth?.() as any) ?? {};
   const roleOrPlan = String(
     auth?.user?.role ?? auth?.role ?? auth?.plan ?? auth?.user?.plan ?? auth?.profile?.plan ?? ''
@@ -47,32 +48,48 @@ export default function HomeScreen() {
     roleOrPlan === 'premium' ||
     Boolean(auth?.isPremium ?? auth?.user?.isPremium ?? auth?.profile?.isPremium);
 
-  // columnas máximas posibles por ancho disponible
-  const maxByWidth = Math.max(
-    1,
-    Math.min(
-      3,
-      Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP))
-    )
-  );
-  const columns = width >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
+  // Ancho útil para las cards (restamos padding horizontal)
+  const usableW = useMemo(() => {
+    const measured = gridW > 0 ? gridW : winW;
+    return Math.max(0, measured - PADDING_H * 2);
+  }, [gridW, winW]);
+
+  // Columnas: calculadas con el ancho REAL + mínimo 2 en móviles
+  const computedCols = useMemo(() => {
+    const maxByWidth = Math.max(
+      1,
+      Math.floor((usableW + GAP) / (MIN_CARD_WIDTH + GAP))
+    );
+    // Hasta 4 col en pantallas grandes, y NUNCA menos de 2 en móviles
+    return Math.min(4, Math.max(2, maxByWidth));
+  }, [usableW]);
 
   const cardWidth = useMemo(() => {
-    const available = width - PADDING_H * 2 - GAP * (columns - 1);
-    return Math.floor(available / columns);
-  }, [width, columns]);
+    const available = usableW - GAP * (computedCols - 1);
+    return Math.floor(available / computedCols);
+  }, [usableW, computedCols]);
 
-  // datos
+  const onGridLayout = (e: LayoutChangeEvent) => {
+    setGridW(e.nativeEvent.layout.width);
+  };
+
+  // --------- datos ----------
   const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
-    ALL_GAMES_NAMES,
+    ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'],
     {},
     { refreshMs: 15000 }
   );
-  const {
-    data: upcomingRaw,
-    loading: loadingUpcoming,
-    refetch: refetchUpcoming,
-  } = useConvexQuery<UpcomingGame[]>(UPCOMING_NAMES, { limit: 6 }, { refreshMs: 30000 });
+  const { data: upcomingRaw, loading: loadingUpcoming, refetch: refetchUpcoming } =
+    useConvexQuery<UpcomingGame[]>(
+      [
+        'queries/getUpcomingGames:getUpcomingGames',
+        'queries/getUpcomingGames',
+        'getUpcomingGames',
+        'queries/getComingSoon:getComingSoon',
+      ],
+      { limit: 6 },
+      { refreshMs: 30000 }
+    );
 
   const newest = useMemo(() => {
     const list = (allGames ?? []).slice();
@@ -115,21 +132,50 @@ export default function HomeScreen() {
     refetchUpcoming();
   };
 
-  const wmSize = Math.max(220, Math.min(360, Math.floor(width * 0.55)));
-  const goToCatalog = () => navigation.navigate('Tabs' as any, { screen: 'Catalog' } as any);
+  const wmSize = Math.max(220, Math.min(360, Math.floor(winW * 0.55)));
+  const goToCatalog = () => nav.navigate('Tabs' as any, { screen: 'Catalog' } as any);
 
   return (
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F2B705" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
+      {/* Header propio (logo PV centrado, SIN título) */}
+      <View style={styles.headerBar}>
+        <Pressable
+          onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Volver al inicio"
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.accent} />
+        </Pressable>
+
+        <View style={styles.centerLogoWrap}>
+          <Image
+            source={require('../../assets/branding/pv-logo-h28.png')}
+            style={styles.centerLogo}
+            resizeMode="contain"
+          />
+        </View>
+
+        <Pressable
+          onPress={() => nav.navigate('Notifications' as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Ir a notificaciones"
+        >
+          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+        </Pressable>
+      </View>
+
       {/* Marca de agua */}
-      <View style={[styles.watermark, { width: wmSize, height: wmSize, left: (width - wmSize) / 2 }]}>
+      <View style={[styles.watermark, { width: wmSize, height: wmSize, left: (winW - wmSize) / 2 }]}>
         <Image source={heroLogo} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
       </View>
 
-      {/* Header */}
+      {/* Encabezado de sección */}
       <View style={styles.header}>
         <Text style={styles.title}>INICIO</Text>
         <Text style={styles.subtitle}>
@@ -139,15 +185,15 @@ export default function HomeScreen() {
 
       {/* Nuevos juegos */}
       <Section title="Nuevos juegos" subtitle="Explorá la colección y encontrá tu próxima aventura.">
-        <View style={styles.grid}>
+        <View style={styles.grid} onLayout={onGridLayout}>
           {newest.map((g: any, i: number) => {
             const game = mapGame(g, i);
-            const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
+            const mr = computedCols > 1 && i % computedCols !== computedCols - 1 ? GAP : 0;
             return (
               <View
                 key={game.id}
                 style={{
-                  width: cardWidth,
+                  width: cardWidth,          // ancho fijo por columna
                   marginRight: mr,
                   marginBottom: GAP,
                 }}
@@ -157,10 +203,7 @@ export default function HomeScreen() {
                   tag={isPremium ? '-10%' : i < 2 ? 'Acción' : undefined}
                   onPress={() =>
                     (g?._id || g?.id || g?.gameId) &&
-                    navigation.navigate('GameDetail', {
-                      gameId: String(g?._id ?? g?.id ?? g?.gameId),
-                      initial: g,
-                    })
+                    nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })
                   }
                 />
               </View>
@@ -174,7 +217,7 @@ export default function HomeScreen() {
 
       {/* Próximamente */}
       <Section title="Próximamente">
-        <View style={[styles.grid, styles.topBorder]}>
+        <View style={[styles.grid, styles.topBorder]} onLayout={onGridLayout}>
           {(upcoming ?? []).map((item: any, i: number) => {
             const game = mapGame(item, i);
             const releaseAt =
@@ -182,7 +225,7 @@ export default function HomeScreen() {
             const releaseLabel = releaseAt
               ? `Próximamente en ${new Date(Number(releaseAt)).getFullYear()}`
               : 'Próximamente';
-            const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
+            const mr = computedCols > 1 && i % computedCols !== computedCols - 1 ? GAP : 0;
             return (
               <View
                 key={game.id}
@@ -226,11 +269,34 @@ function Section({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingHorizontal: PADDING_H,
+
+  // ===== Header propio =====
+  headerBar: {
     paddingTop: spacing.xl,
-    gap: spacing.xs,
+    paddingHorizontal: PADDING_H,
+    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#072633',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceBorder,
   },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    backgroundColor: '#0F2D3A',
+  },
+  centerLogoWrap: { flex: 1, alignItems: 'center' },
+  centerLogo: { height: 28, width: 120 },
+
+  // ===== Contenido =====
+  header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.xs },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },
 

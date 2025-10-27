@@ -1,5 +1,5 @@
 ﻿// playverse/playverse-mobile/src/screens/MyGamesScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback, useLayoutEffect } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -7,7 +7,10 @@ import {
   Text,
   View,
   useWindowDimensions,
+  Pressable,
+  Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -16,9 +19,7 @@ import { Button, GameCard } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { Game } from '../types/game';
-
-// ✅ Evitamos logs de funciones inexistentes en Convex
-const SAFE_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'];
+import { useAuth } from '../context/AuthContext';
 
 const MIN_CARD_WIDTH = 150;
 const GAP = spacing.md;
@@ -36,10 +37,26 @@ function fmtDate(ts?: number | string | null) {
 
 type TabKey = 'rent' | 'buy';
 
+// Queries tolerantes (biblioteca del usuario en Convex)
+const MY_LIBRARY_NAMES = [
+  'queries/myLibrary:listMine',
+  'queries/library:listMine',
+  'queries/myGames:listMine',
+  'queries/myGames:get',
+  'queries/purchases:listForMe',
+  'queries/rentals:listForMe',
+];
+
 export default function MyGamesScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+  const { profile } = useAuth();
   const [tab, setTab] = useState<TabKey>('rent');
+
+  // ⚠️ Ocultamos header del stack -> usamos header propio
+  useLayoutEffect(() => {
+    nav.setOptions({ headerShown: false });
+  }, [nav]);
 
   // columnas responsivas sin huecos laterales
   const maxByWidth = Math.max(
@@ -53,15 +70,16 @@ export default function MyGamesScreen() {
     return Math.floor(available / columns);
   }, [width, columns]);
 
-  const { data: allGames, loading, refetch } = useConvexQuery<Game[]>(
-    SAFE_NAMES,
+  // Sólo consultamos Convex si hay sesión
+  const { data: libRaw, loading, refetch } = useConvexQuery<Game[]>(
+    MY_LIBRARY_NAMES,
     {},
-    { refreshMs: 20000 }
+    { refreshMs: 20000, enabled: !!profile }
   );
 
-  // Normalizamos “biblioteca” sin tocar backend:
+  // Normalizamos la librería
   const normalized = useMemo(() => {
-    const source = (allGames ?? []) as any[];
+    const source = (Array.isArray(libRaw) ? libRaw : []) as any[];
     return source.map((row, idx) => {
       const id = row?._id ?? row?.id ?? row?.gameId ?? idx;
 
@@ -76,15 +94,14 @@ export default function MyGamesScreen() {
         id: String(id),
         title: row?.title ?? 'Juego',
         cover_url: row?.cover_url ?? row?.coverUrl,
-        gameId: row?._id ? String(row._id) : undefined,
+        gameId: row?._id ? String(row._id) : String(row?.gameId ?? id),
         owned,
         expiresAt,
         raw: row,
       };
     });
-  }, [allGames]);
+  }, [libRaw]);
 
-  // Particionamos: alquiler vs comprados
   const rentals = useMemo(
     () =>
       normalized
@@ -97,28 +114,98 @@ export default function MyGamesScreen() {
     [normalized]
   );
 
-  // Fallback: si no hay datos claros, mostramos algo igual
-  const emptyBoth = rentals.length === 0 && purchased.length === 0;
-  const visible = emptyBoth ? normalized.slice(0, 6) : tab === 'rent' ? rentals : purchased;
+  const visible = tab === 'rent' ? rentals : purchased;
 
-  const goToCatalog = () =>
-    navigation.navigate('Tabs' as any, { screen: 'Catalog' } as any);
+  const goToCatalog = () => nav.navigate('Tabs' as any, { screen: 'Catalog' } as any);
 
   const onPressCard = (g: any) => {
     const gid = g?.gameId ?? g?.id;
     if (!gid) return;
-    navigation.navigate('GameDetail', { gameId: String(gid), initial: g.raw ?? g });
+    nav.navigate('GameDetail', { gameId: String(gid), initial: g.raw ?? g });
   };
+
+  const onRefresh = useCallback(() => refetch?.(), [refetch]);
+
+  // 🔐 Si NO hay perfil, CTA login (sin listar nada)
+  if (!profile) {
+    return (
+      <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+        {/* Header propio (logo PV centrado, SIN título) */}
+        <View style={styles.headerBar}>
+          <Pressable
+            onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Volver al inicio"
+          >
+            <Ionicons name="arrow-back" size={18} color={colors.accent} />
+          </Pressable>
+
+          <View style={styles.centerLogoWrap}>
+            <Image
+              source={require('../../assets/branding/pv-logo-h28.png')}
+              style={styles.centerLogo}
+              resizeMode="contain"
+            />
+          </View>
+
+          <Pressable
+            onPress={() => nav.navigate('Notifications' as any)}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Ir a notificaciones"
+          >
+            <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          </Pressable>
+        </View>
+
+        <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
+          <Text style={styles.title}>MIS JUEGOS</Text>
+          <Text style={styles.subtitle}>Iniciá sesión para ver tus juegos comprados o alquilados.</Text>
+          <Button title="Iniciar sesión" variant="primary" onPress={() => nav.navigate('Login' as any)} />
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={
-        <RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor="#F2B705" />
+        <RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />
       }
     >
-      {/* Encabezado */}
+      {/* Header propio (logo PV centrado, SIN título) */}
+      <View style={styles.headerBar}>
+        <Pressable
+          onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Volver al inicio"
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.accent} />
+        </Pressable>
+
+        <View style={styles.centerLogoWrap}>
+          <Image
+            source={require('../../assets/branding/pv-logo-h28.png')}
+            style={styles.centerLogo}
+            resizeMode="contain"
+          />
+        </View>
+
+        <Pressable
+          onPress={() => nav.navigate('Notifications' as any)}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Ir a notificaciones"
+        >
+          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+        </Pressable>
+      </View>
+
+      {/* Encabezado de sección */}
       <View style={styles.header}>
         <Text style={styles.title}>MIS JUEGOS</Text>
         <Text style={styles.subtitle}>Tu biblioteca personal de PlayVerse.</Text>
@@ -131,12 +218,7 @@ export default function MyGamesScreen() {
             onPress={() => setTab('rent')}
             style={styles.segmentBtn}
           />
-          <Button
-            title="Catálogo"
-            variant="ghost"
-            onPress={goToCatalog}
-            style={styles.segmentBtn}
-          />
+          <Button title="Catálogo" variant="ghost" onPress={goToCatalog} style={styles.segmentBtn} />
           <Button
             title="Comprados"
             variant={tab === 'buy' ? 'primary' : 'ghost'}
@@ -148,12 +230,11 @@ export default function MyGamesScreen() {
 
       {/* Grid */}
       {visible.length === 0 ? (
-        <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
+        <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
           <Text style={styles.subtitle}>
-            {tab === 'rent'
-              ? 'No tenés juegos en alquiler.'
-              : 'No tenés juegos comprados.'}
+            {tab === 'rent' ? 'No tenés juegos en alquiler.' : 'No tenés juegos comprados.'}
           </Text>
+          <Button title="Ir al catálogo" variant="ghost" onPress={goToCatalog} />
         </View>
       ) : (
         <View style={styles.grid}>
@@ -173,13 +254,15 @@ export default function MyGamesScreen() {
                     id: item.id,
                     title: item.title,
                     cover_url: item.cover_url,
-                    // ⬇️ Importante: NO pasar null; dejar undefined para respetar el tipo
                     purchasePrice: undefined,
                     weeklyPrice: undefined,
                   }}
                   showPrices={false}
                   overlayLabel={overlay}
-                  onPress={() => onPressCard(item)}
+                  onPress={() => {
+                    const gid = item?.gameId ?? item?.id;
+                    gid && nav.navigate('GameDetail', { gameId: String(gid), initial: item.raw ?? item });
+                  }}
                 />
               </View>
             );
@@ -192,6 +275,33 @@ export default function MyGamesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+
+  /* ===== Header propio (igual a Favoritos/Login) ===== */
+  headerBar: {
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#072633',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceBorder,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    backgroundColor: '#0F2D3A',
+  },
+  centerLogoWrap: { flex: 1, alignItems: 'center' },
+  centerLogo: { height: 28, width: 120 },
+
+  /* ===== Sección ===== */
   header: {
     paddingHorizontal: PADDING_H,
     paddingTop: spacing.xl,
@@ -200,14 +310,8 @@ const styles = StyleSheet.create({
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },
 
-  segmentRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-  },
-  segmentBtn: {
-    flex: 1,
-  },
+  segmentRow: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm },
+  segmentBtn: { flex: 1 },
 
   grid: {
     flexDirection: 'row',

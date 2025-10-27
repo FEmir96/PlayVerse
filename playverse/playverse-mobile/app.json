@@ -9,32 +9,57 @@
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": ["assets/**"],
     "newArchEnabled": true,
+
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+
     "ios": {
       "supportsTablet": true
     },
+
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [{ "scheme": "playverse", "host": "*", "pathPrefix": "/" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
-      "expo-router"
-    ],
-    "experiments": {
-      "typedRoutes": true
+
+    "plugins": ["expo-router"],
+
+    "experiments": { "typedRoutes": true },
+
+    "extra": {
+      "scheme": "playverse",
+      "auth": {
+        "google": {
+          "expoClientId": "<TU_WEB_CLIENT_ID>.apps.googleusercontent.com",
+          "iosClientId": "<TU_IOS_CLIENT_ID>.apps.googleusercontent.com",
+          "androidClientId": "<TU_ANDROID_CLIENT_ID>.apps.googleusercontent.com"
+        },
+        "microsoft": {
+          "clientId": "<TU_AZURE_APP_CLIENT_ID_GUID>",
+          "tenantId": "common"
+        }
+      }
     }
   }
 }
