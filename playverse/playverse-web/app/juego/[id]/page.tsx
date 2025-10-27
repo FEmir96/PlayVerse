@@ -747,7 +747,7 @@ export default function GameDetailPage() {
     if (isFreeToPlay && isFreePlan) return true;
     
     // Si es free to play pero plan premium, poder jugar solo si es premium, sino muestra modal
-    if (isFreeToPlay && isPremiumPlan) return isPremiumSub || isAdmin || isFreeUser;
+    if (isFreeToPlay && isPremiumPlan) return true;
     
     // Si es juego pago, solo mostrar jugar si está comprado/alquilado
     if (!isFreeToPlay) return hasPurchased || hasActiveRental;

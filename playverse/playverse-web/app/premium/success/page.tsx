@@ -60,7 +60,7 @@ export default function PremiumSuccessPage() {
                   clipRule="evenodd"
                 />
               </svg>
-              <span className="text-slate-300">Descuentos del 27% aplicados</span>
+              <span className="text-slate-300">Descuentos del 10% aplicados</span>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <svg className="w-5 h-5 text-teal-400" fill="currentColor" viewBox="0 0 20 20">
@@ -76,7 +76,7 @@ export default function PremiumSuccessPage() {
 
           <div className="space-y-3">
             <Link href="/catalogo">
-              <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold">
+              <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold mb-3">
                 Explorar catálogo
               </Button>
             </Link>
