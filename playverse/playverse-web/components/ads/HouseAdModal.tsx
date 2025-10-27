@@ -1,7 +1,7 @@
-// playverse-web/app/components/ads/HouseAdModal.tsx
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 export type HouseAdPayload = {
   id: string;
@@ -33,6 +33,12 @@ function pickCovers(ad: HouseAdPayload | null) {
 }
 
 export default function HouseAdModal({ open, ad, onSkip, onCta }: Props) {
+  const pathname = usePathname();
+  const isGameRoute = !!pathname && pathname.startsWith("/static-games");
+
+  // No mostrar el modal dentro de rutas de juegos
+  if (!open || !ad || isGameRoute) return null;
+
   const [sec, setSec] = useState(0);
   const [canSkip, setCanSkip] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -60,8 +66,6 @@ export default function HouseAdModal({ open, ad, onSkip, onCta }: Props) {
       timerRef.current = null;
     };
   }, [open, ad?.id]);
-
-  if (!open || !ad) return null;
 
   return (
     <div

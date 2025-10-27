@@ -398,6 +398,7 @@ export default function GameDetailPage() {
   const isPremiumPlan = (game as any)?.plan === "premium";
   const isFreePlan = (game as any)?.plan === "free";
   const isPremiumSub = profile?.role === "premium";
+  const isFreeUser = profile?.role === "free";
 
   const hasPurchased = useMemo(() => {
     if (!game?._id) return false;
@@ -745,8 +746,8 @@ export default function GameDetailPage() {
     // Si es free to play y plan free, siempre mostrar jugar
     if (isFreeToPlay && isFreePlan) return true;
     
-    // Si es free to play pero plan premium, mostrar jugar solo si es premium
-    if (isFreeToPlay && isPremiumPlan) return isPremiumSub || isAdmin;
+    // Si es free to play pero plan premium, poder jugar solo si es premium, sino muestra modal
+    if (isFreeToPlay && isPremiumPlan) return isPremiumSub || isAdmin || isFreeUser;
     
     // Si es juego pago, solo mostrar jugar si está comprado/alquilado
     if (!isFreeToPlay) return hasPurchased || hasActiveRental;
@@ -1369,7 +1370,7 @@ export default function GameDetailPage() {
 
           <div className="space-y-4">
             <p className="text-slate-300 text-center">
-              Para jugar o alquilar este título es necesario contar con la
+              Para jugar, comprar o alquilar este título es necesario contar con la
               suscripción <span className="text-amber-300 font-semibold">PREMIUM</span> de PlayVerse.
             </p>
           </div>
