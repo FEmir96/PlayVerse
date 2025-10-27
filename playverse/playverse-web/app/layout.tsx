@@ -1,4 +1,3 @@
-// playverse-web/app/layout.tsx
 import type React from "react";
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
@@ -20,6 +19,9 @@ import HouseAdProvider from "./providers/HouseAdProvider";
 // shadcn/ui
 import { Toaster } from "@/components/ui/toaster";
 
+// Cliente que oculta footer / desactiva scroll en rutas de juegos
+import GameModeManager from "@/components/GameModeManager";
+
 export const metadata: Metadata = {
   title: "PlayVerse - Tu portal al universo de los juegos",
   description: "Alquila o compra videojuegos. ¡La diversión te espera!",
@@ -35,11 +37,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ConvexProviderClient>
           <SessionProviderClient>
             <HouseAdProvider>
+              <GameModeManager />
               <Suspense fallback={<div>Loading...</div>}>
                 <Header />
                 <OAuthToast />
                 <main className="min-h-screen">{children}</main>
-                <ConditionalFooter />
+
+                {/* envolver footer para control directo desde GameModeManager */}
+                <div id="site-footer" className="w-full">
+                  <ConditionalFooter />
+                </div>
               </Suspense>
               <Analytics />
               <Toaster />
