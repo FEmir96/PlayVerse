@@ -11,7 +11,9 @@ import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ValidationError } from "@/components/ui/validation-error";
 import { useToast } from "@/hooks/use-toast";
+import { validatePaymentForm } from "@/lib/validation";
 
 /* ---------- Helpers de precios: mismos criterios que /juego/[id] ---------- */
 const num = (v: unknown): number | undefined => {
@@ -193,11 +195,16 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   // UI
   const [useSaved, setUseSaved] = useState(true);
   const [rememberNew, setRememberNew] = useState(false);
+  const [methodId, setMethodId] = useState<string | null>(null);
 
   const [holder, setHolder] = useState("");
   const [number, setNumber] = useState("");
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
+  
+  // Estados de validación
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [showValidation, setShowValidation] = useState(false);
 
   const normalizeBrand = (b?: string): PM["brand"] => {
     const s = (b || "").toLowerCase();
@@ -241,6 +248,17 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
 
   const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
+  // Inicializar método seleccionado
+  useEffect(() => {
+    if (useSaved && !methodId && Array.isArray(methods) && methods.length > 0) {
+      setMethodId(String(methods[0]._id));
+    }
+    if (!useSaved) setMethodId(null);
+  }, [methods, methodId, useSaved]);
+
+  const brandLabel = (b: string) =>
+    b === "visa" ? "Visa" : b === "mastercard" ? "Mastercard" : b === "amex" ? "Amex" : "Tarjeta";
+
   /** ¿Ya es dueño del juego? */
   const alreadyOwned = useMemo(() => {
     if (!library || !game?._id) return false;
@@ -266,9 +284,43 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const onPay = async () => {
     if (!profile?._id || !game?._id) return;
 
+    // Limpiar errores previos
+    setValidationErrors({});
+    setShowValidation(true);
+
     if (alreadyOwned) {
       toast({ title: "Compra no necesaria", description: "Ya tienes este producto en tu catálogo." });
       return;
+    }
+
+    // Validación: si usás guardadas, elegí una
+    if (useSaved && Array.isArray(methods) && methods.length > 0 && !methodId) {
+      toast({
+        title: "Selecciona un método de pago",
+        description: "Debes elegir una tarjeta para continuar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validación tarjeta nueva
+    if (!useSaved) {
+      const validation = validatePaymentForm({ holder, number, exp, cvc });
+      
+      if (!validation.isValid) {
+        const errors: Record<string, string> = {};
+        validation.errors.forEach(error => {
+          errors[error.field] = error.message;
+        });
+        setValidationErrors(errors);
+        
+        toast({
+          title: "Datos de tarjeta inválidos",
+          description: "Por favor corrige los errores marcados en rojo.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     try {
@@ -345,7 +397,7 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
         </div>
 
         {/* Derecha */}
-        <div className="space-y-4">
+        <div className="text-center space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             {discountRate > 0 && (
               <div className="flex items-baseline gap-3">
@@ -374,20 +426,60 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
               </div>
 
               {useSaved ? (
-                <div className="flex items-center justify-between rounded-lg bg-slate-800 p-3">
-                  <div>
-                    <p className="text-slate-200 text-sm">{primaryPM.brand.toUpperCase()} •••• {primaryPM.last4}</p>
-                    <p className="text-slate-400 text-xs">
-                      Expira {String(primaryPM.expMonth).padStart(2, "0")}/{String(primaryPM.expYear).slice(-2)}
-                    </p>
+                Array.isArray(methods) && methods.length > 0 ? (
+                  <div className="space-y-2">
+                    {methods.map((pm) => {
+                      const label = `${brandLabel(pm.brand)} •••• ${pm.last4} — ${String(
+                        pm.expMonth
+                      ).padStart(2, "0")}/${pm.expYear}`;
+                      return (
+                        <label
+                          key={String(pm._id)}
+                          className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer ${
+                            methodId === String(pm._id)
+                              ? "border-orange-300 bg-orange-300/10"
+                              : "border-slate-700 hover:border-orange-300/60"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="pm"
+                            checked={methodId === String(pm._id)}
+                            onChange={() => setMethodId(String(pm._id))}
+                          />
+                          <span className="text-slate-200">{label}</span>
+                        </label>
+                      );
+                    })}
                   </div>
-                  <span className="text-xs text-emerald-300">Seleccionada</span>
-                </div>
+                ) : (
+                  <div className="text-xs text-slate-400">
+                    No tenés tarjetas guardadas. Activá el formulario destildando arriba.
+                  </div>
+                )
               ) : (
                 <>
                   <div>
                     <label className="text-slate-300 text-sm">Nombre del titular</label>
-                    <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+                    <Input 
+                      value={holder} 
+                      onChange={(e) => {
+                        setHolder(e.target.value);
+                        // Limpiar error al escribir
+                        if (validationErrors.holder) {
+                          setValidationErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.holder;
+                            return newErrors;
+                          });
+                        }
+                      }} 
+                      placeholder="Nombre en la tarjeta" 
+                      className={`bg-slate-700 text-white mt-1 ${
+                        validationErrors.holder ? 'border-red-400' : 'border-slate-600'
+                      }`} 
+                    />
+                    <ValidationError error={showValidation ? validationErrors.holder : undefined} />
                   </div>
                   <div>
                     <label className="text-slate-300 text-sm">Número de tarjeta</label>
@@ -396,12 +488,23 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
                       onChange={(e) => {
                         const d = e.target.value.replace(/\D/g, "").slice(0, 19);
                         setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                        // Limpiar error al escribir
+                        if (validationErrors.number) {
+                          setValidationErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.number;
+                            return newErrors;
+                          });
+                        }
                       }}
                       placeholder="4111 1111 1111 1111"
-                      className="bg-slate-700 border-slate-600 text-white mt-1"
+                      className={`bg-slate-700 text-white mt-1 ${
+                        validationErrors.number ? 'border-red-400' : 'border-slate-600'
+                      }`}
                       inputMode="numeric"
                       autoComplete="cc-number"
                     />
+                    <ValidationError error={showValidation ? validationErrors.number : undefined} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -411,16 +514,47 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
                         onChange={(e) => {
                           const d = e.target.value.replace(/\D/g, "").slice(0, 4);
                           setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                          // Limpiar error al escribir
+                          if (validationErrors.exp) {
+                            setValidationErrors(prev => {
+                              const newErrors = { ...prev };
+                              delete newErrors.exp;
+                              return newErrors;
+                            });
+                          }
                         }}
                         placeholder="MM/YY"
-                        className="bg-slate-700 border-slate-600 text-white mt-1"
+                        className={`bg-slate-700 text-white mt-1 ${
+                          validationErrors.exp ? 'border-red-400' : 'border-slate-600'
+                        }`}
                         inputMode="numeric"
                         autoComplete="cc-exp"
                       />
+                      <ValidationError error={showValidation ? validationErrors.exp : undefined} />
                     </div>
                     <div>
                       <label className="text-slate-300 text-sm">CVC</label>
-                      <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                      <Input 
+                        value={cvc} 
+                        onChange={(e) => {
+                          setCvc(e.target.value.replace(/\D/g, "").slice(0, 3));
+                          // Limpiar error al escribir
+                          if (validationErrors.cvc) {
+                            setValidationErrors(prev => {
+                              const newErrors = { ...prev };
+                              delete newErrors.cvc;
+                              return newErrors;
+                            });
+                          }
+                        }} 
+                        placeholder="123" 
+                        className={`bg-slate-700 text-white mt-1 ${
+                          validationErrors.cvc ? 'border-red-400' : 'border-slate-600'
+                        }`} 
+                        inputMode="numeric" 
+                        autoComplete="cc-csc" 
+                      />
+                      <ValidationError error={showValidation ? validationErrors.cvc : undefined} />
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
@@ -434,7 +568,25 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div>
                 <label className="text-slate-300 text-sm">Nombre del titular</label>
-                <Input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre en la tarjeta" className="bg-slate-700 border-slate-600 text-white mt-1" />
+                <Input 
+                  value={holder} 
+                  onChange={(e) => {
+                    setHolder(e.target.value);
+                    // Limpiar error al escribir
+                    if (validationErrors.holder) {
+                      setValidationErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.holder;
+                        return newErrors;
+                      });
+                    }
+                  }} 
+                  placeholder="Nombre en la tarjeta" 
+                  className={`bg-slate-700 text-white mt-1 ${
+                    validationErrors.holder ? 'border-red-400' : 'border-slate-600'
+                  }`} 
+                />
+                <ValidationError error={showValidation ? validationErrors.holder : undefined} />
               </div>
               <div>
                 <label className="text-slate-300 text-sm">Número de tarjeta</label>
@@ -443,12 +595,23 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
                   onChange={(e) => {
                     const d = e.target.value.replace(/\D/g, "").slice(0, 19);
                     setNumber(d.replace(/(\d{4})(?=\d)/g, "$1 ").trim());
+                    // Limpiar error al escribir
+                    if (validationErrors.number) {
+                      setValidationErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.number;
+                        return newErrors;
+                      });
+                    }
                   }}
                   placeholder="4111 1111 1111 1111"
-                  className="bg-slate-700 border-slate-600 text-white mt-1"
+                  className={`bg-slate-700 text-white mt-1 ${
+                    validationErrors.number ? 'border-red-400' : 'border-slate-600'
+                  }`}
                   inputMode="numeric"
                   autoComplete="cc-number"
                 />
+                <ValidationError error={showValidation ? validationErrors.number : undefined} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -458,16 +621,47 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
                     onChange={(e) => {
                       const d = e.target.value.replace(/\D/g, "").slice(0, 4);
                       setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                      // Limpiar error al escribir
+                      if (validationErrors.exp) {
+                        setValidationErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors.exp;
+                          return newErrors;
+                        });
+                      }
                     }}
                     placeholder="MM/YY"
-                    className="bg-slate-700 border-slate-600 text-white mt-1"
+                    className={`bg-slate-700 text-white mt-1 ${
+                      validationErrors.exp ? 'border-red-400' : 'border-slate-600'
+                    }`}
                     inputMode="numeric"
                     autoComplete="cc-exp"
                   />
+                  <ValidationError error={showValidation ? validationErrors.exp : undefined} />
                 </div>
                 <div>
                   <label className="text-slate-300 text-sm">CVC</label>
-                  <Input value={cvc} onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="123" className="bg-slate-700 border-slate-600 text-white mt-1" inputMode="numeric" autoComplete="cc-csc" />
+                  <Input 
+                    value={cvc} 
+                    onChange={(e) => {
+                      setCvc(e.target.value.replace(/\D/g, "").slice(0, 3));
+                      // Limpiar error al escribir
+                      if (validationErrors.cvc) {
+                        setValidationErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors.cvc;
+                          return newErrors;
+                        });
+                      }
+                    }} 
+                    placeholder="123" 
+                    className={`bg-slate-700 text-white mt-1 ${
+                      validationErrors.cvc ? 'border-red-400' : 'border-slate-600'
+                    }`} 
+                    inputMode="numeric" 
+                    autoComplete="cc-csc" 
+                  />
+                  <ValidationError error={showValidation ? validationErrors.cvc : undefined} />
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-1">

@@ -13,7 +13,9 @@ import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ValidationError } from "@/components/ui/validation-error";
 import { useToast } from "@/hooks/use-toast";
+import { validatePaymentForm, type ValidationError as ValidationErrorType } from "@/lib/validation";
 
 /* helpers mínimos */
 const formatMoney = (n: number, currency = "USD") =>
@@ -103,6 +105,10 @@ export default function CartCheckoutPage() {
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
   const [rememberNew, setRememberNew] = useState(false);
+  
+  // Estados de validación
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [showValidation, setShowValidation] = useState(false);
 
   // Totales
   const subtotalBase = useMemo(
@@ -131,6 +137,10 @@ export default function CartCheckoutPage() {
     if (processing) return;
     if (!userId || items.length === 0) return;
 
+    // Limpiar errores previos
+    setValidationErrors({});
+    setShowValidation(true);
+
     // Validación: si usás guardadas, elegí una
     if (useSaved && Array.isArray(paymentMethods) && paymentMethods.length > 0 && !methodId) {
       toast({
@@ -143,13 +153,18 @@ export default function CartCheckoutPage() {
 
     // Validación tarjeta nueva
     if (!useSaved) {
-      const numDigits = number.replace(/\D/g, "");
-      const expDigits = exp.replace(/\D/g, "");
-      const cvcDigits = cvc.replace(/\D/g, "");
-      if (!holder || numDigits.length < 12 || expDigits.length < 4 || cvcDigits.length < 3) {
+      const validation = validatePaymentForm({ holder, number, exp, cvc });
+      
+      if (!validation.isValid) {
+        const errors: Record<string, string> = {};
+        validation.errors.forEach(error => {
+          errors[error.field] = error.message;
+        });
+        setValidationErrors(errors);
+        
         toast({
-          title: "Datos incompletos",
-          description: "Revisa el titular, número, fecha y CVC.",
+          title: "Datos de tarjeta inválidos",
+          description: "Por favor corrige los errores marcados en rojo.",
           variant: "destructive",
         });
         return;
@@ -345,10 +360,23 @@ export default function CartCheckoutPage() {
                       <label className="text-slate-300 text-sm">Nombre del titular</label>
                       <Input
                         value={holder}
-                        onChange={(e) => setHolder(e.target.value)}
+                        onChange={(e) => {
+                          setHolder(e.target.value);
+                          // Limpiar error al escribir
+                          if (validationErrors.holder) {
+                            setValidationErrors(prev => {
+                              const newErrors = { ...prev };
+                              delete newErrors.holder;
+                              return newErrors;
+                            });
+                          }
+                        }}
                         placeholder="Nombre en la tarjeta"
-                        className="bg-slate-700 border-slate-600 text-white mt-1"
+                        className={`bg-slate-700 text-white mt-1 ${
+                          validationErrors.holder ? 'border-red-400' : 'border-slate-600'
+                        }`}
                       />
+                      <ValidationError error={showValidation ? validationErrors.holder : undefined} />
                     </div>
                     <div>
                       <label className="text-slate-300 text-sm">Número de tarjeta</label>
@@ -358,12 +386,23 @@ export default function CartCheckoutPage() {
                           const d = e.target.value.replace(/\D/g, "").slice(0, 19);
                           const pretty = d.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
                           setNumber(pretty);
+                          // Limpiar error al escribir
+                          if (validationErrors.number) {
+                            setValidationErrors(prev => {
+                              const newErrors = { ...prev };
+                              delete newErrors.number;
+                              return newErrors;
+                            });
+                          }
                         }}
                         placeholder="4111 1111 1111 1111"
-                        className="bg-slate-700 border-slate-600 text-white mt-1"
+                        className={`bg-slate-700 text-white mt-1 ${
+                          validationErrors.number ? 'border-red-400' : 'border-slate-600'
+                        }`}
                         inputMode="numeric"
                         autoComplete="cc-number"
                       />
+                      <ValidationError error={showValidation ? validationErrors.number : undefined} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -373,23 +412,47 @@ export default function CartCheckoutPage() {
                           onChange={(e) => {
                             const d = e.target.value.replace(/\D/g, "").slice(0, 4);
                             setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                            // Limpiar error al escribir
+                            if (validationErrors.exp) {
+                              setValidationErrors(prev => {
+                                const newErrors = { ...prev };
+                                delete newErrors.exp;
+                                return newErrors;
+                              });
+                            }
                           }}
                           placeholder="MM/YY"
-                          className="bg-slate-700 border-slate-600 text-white mt-1"
+                          className={`bg-slate-700 text-white mt-1 ${
+                            validationErrors.exp ? 'border-red-400' : 'border-slate-600'
+                          }`}
                           inputMode="numeric"
                           autoComplete="cc-exp"
                         />
+                        <ValidationError error={showValidation ? validationErrors.exp : undefined} />
                       </div>
                       <div>
                         <label className="text-slate-300 text-sm">CVC</label>
                         <Input
                           value={cvc}
-                          onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                          onChange={(e) => {
+                            setCvc(e.target.value.replace(/\D/g, "").slice(0, 4));
+                            // Limpiar error al escribir
+                            if (validationErrors.cvc) {
+                              setValidationErrors(prev => {
+                                const newErrors = { ...prev };
+                                delete newErrors.cvc;
+                                return newErrors;
+                              });
+                            }
+                          }}
                           placeholder="123"
-                          className="bg-slate-700 border-slate-600 text-white mt-1"
+                          className={`bg-slate-700 text-white mt-1 ${
+                            validationErrors.cvc ? 'border-red-400' : 'border-slate-600'
+                          }`}
                           inputMode="numeric"
                           autoComplete="cc-csc"
                         />
+                        <ValidationError error={showValidation ? validationErrors.cvc : undefined} />
                       </div>
                     </div>
                     <label className="flex items-center gap-2 pt-1">

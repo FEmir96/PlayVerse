@@ -200,17 +200,6 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {hasItems && userId && (
-                <button
-                  onClick={async () => {
-                    await cartClear({ userId });
-                  }}
-                  className="text-amber-300 text-sm hover:underline"
-                  type="button"
-                >
-                  Vaciar
-                </button>
-              )}
               <Link href="/checkout/carrito" onClick={onClose}>
                 <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900">
                   <ShoppingCart className="w-4 h-4 mr-2" />

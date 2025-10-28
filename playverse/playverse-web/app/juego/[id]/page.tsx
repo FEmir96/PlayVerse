@@ -736,6 +736,7 @@ export default function GameDetailPage() {
   const developers = ((game as any)?.developers as string[] | undefined) ?? [];
   const publishers = ((game as any)?.publishers as string[] | undefined) ?? [];
   const languages = ((game as any)?.languages as string[] | undefined) ?? [];
+  const categories = ((game as any)?.genres as string[] | undefined) ?? [];
   const ageRatingSystem = (game as any)?.ageRatingSystem as string | undefined;
   const ageRatingLabel = (game as any)?.ageRatingLabel as string | undefined;
 
@@ -800,9 +801,20 @@ export default function GameDetailPage() {
               <div className="bg-slate-800/70 border border-orange-400/20 rounded-lg px-4 py-3 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-orange-400">{game.title}</h1>
                 <div className="flex items-center gap-2">
+                  {/* replaced: category badge hidden */}{false && (
                   <Badge className="bg-orange-400 text-slate-900 hover:bg-orange-500">
                     {(game as any).genres?.[0] || "Acción"}
                   </Badge>
+                  )}
+                  {isPremiumPlan ? (
+                    <Badge className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-600 text-slate-900 shadow-md shadow-yellow-400/50">
+                      Premium
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-teal-400 text-slate-900">
+                      Free
+                    </Badge>
+                  )}
                 </div>
               </div>
 
@@ -1210,6 +1222,13 @@ export default function GameDetailPage() {
                     <div className="flex justify-between">
                       <span className="text-slate-400">Editor:</span>
                       <span className="text-white">{publishers.join(", ")}</span>
+                    </div>
+                  )}
+
+                  {categories.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Categoría:</span>
+                      <span className="text-white">{categories.join(", ")}</span>
                     </div>
                   )}
 

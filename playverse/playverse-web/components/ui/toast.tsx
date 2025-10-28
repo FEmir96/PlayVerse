@@ -19,7 +19,7 @@ const ToastViewport = React.forwardRef<
       // ✅ ARRIBA y CENTRADO
       // - ocupa ancho máximo 420px
       // - centrado con mx-auto
-      'fixed inset-x-0 top-0 z-[100] mx-auto w-full max-w-[420px] p-4',
+      'fixed inset-x-0 top-0 mx-auto w-full max-w-[420px] p-4',
       // layout de lista de toasts
       'flex flex-col gap-2',
       className,
@@ -82,15 +82,17 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      'absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600',
+      'absolute right-2 top-2 m-0 !mr-0 p-1 rounded-md text-slate-300 hover:text-white focus:outline-none focus:ring-2 transition-colors',
       className,
     )}
+    style={{ marginRight: 0 }} // 🔥 esto anula el estilo inline de Radix
     toast-close=""
     {...props}
   >
     <X className="h-4 w-4" />
   </ToastPrimitives.Close>
 ))
+
 ToastClose.displayName = ToastPrimitives.Close.displayName
 
 const ToastTitle = React.forwardRef<
