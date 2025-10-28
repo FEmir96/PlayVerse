@@ -24,16 +24,15 @@ import { useAuth } from '../context/AuthContext';
 
 const heroLogo = require('../../assets/images/playverse-logo.png');
 
-const MIN_CARD_WIDTH = 150;   // igual que Catálogo
+const MIN_CARD_WIDTH = 150;
 const GAP = spacing.md;
 const PADDING_H = spacing.xl;
 
 export default function HomeScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width: winW } = useWindowDimensions();
-  const [gridW, setGridW] = useState(0); // ancho real del contenedor
+  const [gridW, setGridW] = useState(0);
 
-  // Header propio
   useLayoutEffect(() => {
     nav.setOptions({ headerShown: false });
   }, [nav]);
@@ -48,19 +47,26 @@ export default function HomeScreen() {
     roleOrPlan === 'premium' ||
     Boolean(auth?.isPremium ?? auth?.user?.isPremium ?? auth?.profile?.isPremium);
 
-  // Ancho útil para las cards (restamos padding horizontal)
+  // ===== Notificaciones (badge) =====
+  const userId = auth?.user?._id ?? auth?.profile?._id ?? null;
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    userId ? { userId, limit: 20 } : ({} as any),
+    { enabled: !!userId, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(
+    () => (notifications ?? []).filter((n: any) => n?.isRead === false).length,
+    [notifications]
+  );
+
+  // Ancho útil para las cards
   const usableW = useMemo(() => {
     const measured = gridW > 0 ? gridW : winW;
     return Math.max(0, measured - PADDING_H * 2);
   }, [gridW, winW]);
 
-  // Columnas: calculadas con el ancho REAL + mínimo 2 en móviles
   const computedCols = useMemo(() => {
-    const maxByWidth = Math.max(
-      1,
-      Math.floor((usableW + GAP) / (MIN_CARD_WIDTH + GAP))
-    );
-    // Hasta 4 col en pantallas grandes, y NUNCA menos de 2 en móviles
+    const maxByWidth = Math.max(1, Math.floor((usableW + GAP) / (MIN_CARD_WIDTH + GAP)));
     return Math.min(4, Math.max(2, maxByWidth));
   }, [usableW]);
 
@@ -141,7 +147,7 @@ export default function HomeScreen() {
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
-      {/* Header propio (logo PV centrado, SIN título) */}
+      {/* Header propio */}
       <View style={styles.headerBar}>
         <Pressable
           onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -161,12 +167,17 @@ export default function HomeScreen() {
         </View>
 
         <Pressable
-          onPress={() => nav.navigate('Notifications' as any)}
+          onPress={() => nav.navigate(userId ? ('Notifications' as any) : ('Profile' as any))}
           style={styles.iconButton}
           accessibilityRole="button"
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          {unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -175,7 +186,7 @@ export default function HomeScreen() {
         <Image source={heroLogo} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
       </View>
 
-      {/* Encabezado de sección */}
+      {/* Encabezado */}
       <View style={styles.header}>
         <Text style={styles.title}>INICIO</Text>
         <Text style={styles.subtitle}>
@@ -193,7 +204,7 @@ export default function HomeScreen() {
               <View
                 key={game.id}
                 style={{
-                  width: cardWidth,          // ancho fijo por columna
+                  width: cardWidth,
                   marginRight: mr,
                   marginBottom: GAP,
                 }}
@@ -270,7 +281,6 @@ function Section({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
 
-  // ===== Header propio =====
   headerBar: {
     paddingTop: spacing.xl,
     paddingHorizontal: PADDING_H,
@@ -295,7 +305,17 @@ const styles = StyleSheet.create({
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
 
-  // ===== Contenido =====
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+
   header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.xs },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },

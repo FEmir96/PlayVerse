@@ -1,117 +1,103 @@
+// playverse/playverse-mobile/src/context/FavoritesContext.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
-
 import { useAuth } from './AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import { convexHttp } from '../lib/convexClient';
 
-type FavoriteRecord = {
-  _id: string;
-  userId: string;
-  gameId: string;
-  createdAt?: number;
-  game?: {
-    _id: string;
-    title?: string;
-    cover_url?: string;
-    plan?: string;
-  } | null;
-};
+/**
+ * Probamos múltiples nombres posibles de query en Convex (sin tocar backend).
+ * Si alguno existe, useConvexQuery lo detecta y deja de intentar los demás.
+ */
+const FAVORITES_QUERY_NAMES = [
+  // Las más probables primero:
+  'favorites:listByUser',
+  'queries/getFavorites:getFavorites',
+  'queries/favorites:listByUser',
+  'queries/favorites:getByUser',
+  'queries/favorites:getForUser',
+  // Variantes que a veces usamos:
+  'favorites:getByUser',
+  'favorites:getForUser',
+  'favorites/byUser',
+  'favorites/allByUser',
+  'favorites:list',
+  'favorites:forUser',
+  'queries/favorites:byUser',
+  'queries/favorites:allByUser',
+];
 
 type FavoritesContextValue = {
-  favorites: FavoriteRecord[];
-  favoriteIds: Set<string>;
-  loading: boolean;
-  canFavorite: boolean;
-  toggleFavorite: (gameId: string) => Promise<{ ok: boolean; status?: 'added' | 'removed'; error?: any }>;
-  refetch: () => Promise<void>;
+  ids: string[];
+  isFavorite: (gameId?: string | null) => boolean;
+  toggle: (gameId: string) => Promise<void>;
+  refetch?: () => void;
 };
 
-const FavoritesContext = createContext<FavoritesContextValue | undefined>(undefined);
+const FavoritesContext = createContext<FavoritesContextValue>({
+  ids: [],
+  isFavorite: () => false,
+  toggle: async () => {},
+  refetch: undefined,
+});
 
-export function FavoritesProvider({ children }: { children: React.ReactNode }) {
+type FavoriteRow = { gameId?: string; _id?: string; id?: string };
+
+export const FavoritesProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { profile } = useAuth();
-  const userId = profile?._id ? String(profile._id) : undefined;
+  const enabled = !!profile?._id;
 
-  const { data, loading, refetch } = useConvexQuery<FavoriteRecord[]>(
-    'queries/listFavoritesByUser:listFavoritesByUser',
-    userId ? { userId } : ({} as any),
-    { enabled: !!userId, refreshMs: 12000 }
+  // Trae las filas de favoritos del usuario, con fallbacks.
+  const { data: favRows = [], refetch } = useConvexQuery<FavoriteRow[]>(
+    FAVORITES_QUERY_NAMES,
+    enabled ? { userId: profile!._id } : ({} as any),
+    { enabled, refreshMs: 20000 }
   );
 
-  const [favorites, setFavorites] = useState<FavoriteRecord[]>([]);
+  const [ids, setIds] = useState<string[]>([]);
 
+  // Al desloguear, limpiar inmediatamente los favoritos locales
   useEffect(() => {
-    if (!userId) {
-      setFavorites([]);
-      return;
-    }
-    if (Array.isArray(data)) {
-      setFavorites(data);
-    }
-  }, [userId, data]);
+    if (!enabled) setIds([]);
+  }, [enabled]);
 
-  const favoriteIds = useMemo(() => {
-    return new Set(favorites.map((fav) => String(fav.gameId)));
-  }, [favorites]);
+  // Mapear filas -> ids de game (string)
+  useEffect(() => {
+    if (!enabled) return;
+    const next = (favRows ?? [])
+      .map((r) => String(r?.gameId ?? r?.id ?? r?._id ?? ''))
+      .filter(Boolean);
+    setIds(next);
+  }, [favRows, enabled]);
 
-  const toggleFavorite = useCallback<FavoritesContextValue['toggleFavorite']>(
-    async (gameId) => {
-      if (!userId) {
-        return { ok: false, error: new Error('No autenticado') };
-      }
-      const key = String(gameId);
-      const currentlyFavorite = favoriteIds.has(key);
-      const previousSnapshot = favorites;
+  const isFavorite = useCallback(
+    (gameId?: string | null) => !!gameId && ids.includes(String(gameId)),
+    [ids]
+  );
 
-      setFavorites((prev) => {
-        if (currentlyFavorite) {
-          return prev.filter((fav) => String(fav.gameId) !== key);
-        }
-        const optimistic: FavoriteRecord = {
-          _id: `optimistic-${key}`,
-          userId,
-          gameId: key,
-          createdAt: Date.now(),
-        };
-        return [optimistic, ...prev];
-      });
-
+  const toggle = useCallback(
+    async (gameId: string) => {
+      if (!profile?._id || !gameId) return;
+      // Optimista
+      setIds((prev) => (prev.includes(gameId) ? prev.filter((x) => x !== gameId) : [...prev, gameId]));
       try {
-        const result = await (convexHttp as any).mutation('mutations/toggleFavorite:toggleFavorite', {
-          userId,
-          gameId: key,
+        const client: any = convexHttp as any;
+        await client.mutation('mutations/toggleFavorite:toggleFavorite', {
+          userId: profile._id,
+          gameId,
         });
-        await refetch();
-        return { ok: true, status: result?.status };
-      } catch (error) {
-        setFavorites(previousSnapshot);
-        return { ok: false, error };
+        await refetch?.();
+      } catch (err) {
+        // Revert en caso de error
+        setIds((prev) => (prev.includes(gameId) ? prev.filter((x) => x !== gameId) : [...prev, gameId]));
+        console.error('toggleFavorite error', err);
       }
     },
-    [userId, favoriteIds, favorites, refetch]
+    [profile?._id, refetch]
   );
 
-  const value = useMemo<FavoritesContextValue>(
-    () => ({
-      favorites,
-      favoriteIds,
-      loading,
-      canFavorite: !!userId,
-      toggleFavorite,
-      refetch: async () => {
-        await refetch();
-      },
-    }),
-    [favorites, favoriteIds, loading, toggleFavorite, userId, refetch]
-  );
+  const value = useMemo(() => ({ ids, isFavorite, toggle, refetch }), [ids, isFavorite, toggle, refetch]);
 
   return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
-}
+};
 
-export function useFavorites() {
-  const ctx = useContext(FavoritesContext);
-  if (!ctx) {
-    throw new Error('useFavorites must be used within <FavoritesProvider>');
-  }
-  return ctx;
-}
+export const useFavorites = () => useContext(FavoritesContext);

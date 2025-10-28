@@ -14,16 +14,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { spacing, colors, typography } from '../styles/theme';
+import { spacing, colors, typography, radius } from '../styles/theme';
 import { Button, GameCard } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { RootStackParamList } from '../navigation/AppNavigator';
-import type { Game } from '../types/game';
 import { useAuth } from '../context/AuthContext';
 
 const MIN_CARD_WIDTH = 150;
 const GAP = spacing.md;
 const PADDING_H = spacing.xl;
+
+type TabKey = 'rent' | 'buy';
+
+type LibraryItem = {
+  id: string;
+  title: string;
+  cover_url?: string | null;
+  gameId: string;
+  owned: boolean;
+  expiresAt?: number | null;
+  raw: any;
+};
 
 function fmtDate(ts?: number | string | null) {
   const n = Number(ts);
@@ -35,30 +46,16 @@ function fmtDate(ts?: number | string | null) {
   return `${dd}/${mm}/${yy}`;
 }
 
-type TabKey = 'rent' | 'buy';
-
-// Queries tolerantes (biblioteca del usuario en Convex)
-const MY_LIBRARY_NAMES = [
-  'queries/myLibrary:listMine',
-  'queries/library:listMine',
-  'queries/myGames:listMine',
-  'queries/myGames:get',
-  'queries/purchases:listForMe',
-  'queries/rentals:listForMe',
-];
-
 export default function MyGamesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
   const { profile } = useAuth();
   const [tab, setTab] = useState<TabKey>('rent');
 
-  // ⚠️ Ocultamos header del stack -> usamos header propio
   useLayoutEffect(() => {
     nav.setOptions({ headerShown: false });
   }, [nav]);
 
-  // columnas responsivas sin huecos laterales
   const maxByWidth = Math.max(
     1,
     Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP)))
@@ -70,67 +67,83 @@ export default function MyGamesScreen() {
     return Math.floor(available / columns);
   }, [width, columns]);
 
-  // Sólo consultamos Convex si hay sesión
-  const { data: libRaw, loading, refetch } = useConvexQuery<Game[]>(
-    MY_LIBRARY_NAMES,
-    {},
-    { refreshMs: 20000, enabled: !!profile }
+  const enabled = !!profile?._id;
+
+  const {
+    data: purchasesRaw = [],
+    loading: loadingPurchases,
+    refetch: refetchPurchases,
+  } = useConvexQuery<any[]>(
+    'queries/getUserPurchases:getUserPurchases',
+    enabled ? { userId: profile!._id } : ({} as any),
+    { enabled, refreshMs: 20000 }
   );
 
-  // Normalizamos la librería
-  const normalized = useMemo(() => {
-    const source = (Array.isArray(libRaw) ? libRaw : []) as any[];
-    return source.map((row, idx) => {
-      const id = row?._id ?? row?.id ?? row?.gameId ?? idx;
-
-      const owned =
-        Boolean(row?.owned ?? row?.isOwned ?? row?.purchased ?? row?.purchaseDate) ||
-        (row?.weeklyPrice == null && row?.purchasePrice != null);
-
-      const expiresAt =
-        row?.expiresAt ?? row?.rentalEnd ?? row?.rentedUntil ?? row?.rentalUntil ?? null;
-
-      return {
-        id: String(id),
-        title: row?.title ?? 'Juego',
-        cover_url: row?.cover_url ?? row?.coverUrl,
-        gameId: row?._id ? String(row._id) : String(row?.gameId ?? id),
-        owned,
-        expiresAt,
-        raw: row,
-      };
-    });
-  }, [libRaw]);
-
-  const rentals = useMemo(
-    () =>
-      normalized
-        .filter(x => !x.owned && x.expiresAt)
-        .sort((a, b) => Number(a.expiresAt ?? 0) - Number(b.expiresAt ?? 0)),
-    [normalized]
-  );
-  const purchased = useMemo(
-    () => normalized.filter(x => x.owned).sort((a, b) => Number(b.id) - Number(a.id)),
-    [normalized]
+  const {
+    data: rentalsRaw = [],
+    loading: loadingRentals,
+    refetch: refetchRentals,
+  } = useConvexQuery<any[]>(
+    'queries/getUserRentals:getUserRentals',
+    enabled ? { userId: profile!._id } : ({} as any),
+    { enabled, refreshMs: 20000 }
   );
 
-  const visible = tab === 'rent' ? rentals : purchased;
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    enabled ? { userId: profile!._id, limit: 20 } : ({} as any),
+    { enabled, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(
+    () => (!enabled ? 0 : (notifications ?? []).filter((n: any) => n?.isRead === false).length),
+    [notifications, enabled]
+  );
 
-  const goToCatalog = () => nav.navigate('Tabs' as any, { screen: 'Catalog' } as any);
+  const loading = loadingPurchases || loadingRentals;
+  const onRefresh = useCallback(() => {
+    refetchPurchases?.();
+    refetchRentals?.();
+  }, [refetchPurchases, refetchRentals]);
 
-  const onPressCard = (g: any) => {
-    const gid = g?.gameId ?? g?.id;
-    if (!gid) return;
-    nav.navigate('GameDetail', { gameId: String(gid), initial: g.raw ?? g });
-  };
+  const rentals: LibraryItem[] = useMemo(() => {
+    return (rentalsRaw ?? [])
+      .map((row: any, idx: number): LibraryItem => {
+        const id = String(row?._id ?? row?.gameId ?? idx);
+        return {
+          id,
+          title: row?.title ?? row?.game?.title ?? 'Juego',
+          cover_url: row?.cover_url ?? row?.game?.cover_url ?? null,
+          gameId: String(row?.gameId ?? row?._id ?? id),
+          owned: false,
+          expiresAt: row?.expiresAt ?? row?.rentedUntil ?? row?.rentalUntil ?? null,
+          raw: row,
+        };
+      })
+      .sort((a, b) => Number(a.expiresAt ?? 0) - Number(b.expiresAt ?? 0));
+  }, [rentalsRaw]);
 
-  const onRefresh = useCallback(() => refetch?.(), [refetch]);
+  const purchased: LibraryItem[] = useMemo(() => {
+    return (purchasesRaw ?? [])
+      .map((row: any, idx: number): LibraryItem => {
+        const id = String(row?._id ?? row?.gameId ?? idx);
+        return {
+          id,
+          title: row?.title ?? row?.game?.title ?? 'Juego',
+          cover_url: row?.cover_url ?? row?.game?.cover_url ?? null,
+          gameId: String(row?.gameId ?? row?._id ?? id),
+          owned: true,
+          expiresAt: null,
+          raw: row,
+        };
+      })
+      .sort((a, b) => (a.id > b.id ? -1 : 1));
+  }, [purchasesRaw]);
 
-  // 🔐 Si NO hay perfil, CTA login (sin listar nada)
+  const visible: LibraryItem[] = tab === 'rent' ? rentals : purchased;
+
   if (!profile) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-        {/* Header propio (logo PV centrado, SIN título) */}
         <View style={styles.headerBar}>
           <Pressable
             onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -150,10 +163,10 @@ export default function MyGamesScreen() {
           </View>
 
           <Pressable
-            onPress={() => nav.navigate('Notifications' as any)}
+            onPress={() => nav.navigate('Profile' as any)}
             style={styles.iconButton}
             accessibilityRole="button"
-            accessibilityLabel="Ir a notificaciones"
+            accessibilityLabel="Ir a iniciar sesión"
           >
             <Ionicons name="notifications-outline" size={18} color={colors.accent} />
           </Pressable>
@@ -162,7 +175,11 @@ export default function MyGamesScreen() {
         <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
           <Text style={styles.title}>MIS JUEGOS</Text>
           <Text style={styles.subtitle}>Iniciá sesión para ver tus juegos comprados o alquilados.</Text>
-          <Button title="Iniciar sesión" variant="primary" onPress={() => nav.navigate('Login' as any)} />
+          <Button
+            title="Iniciar sesión"
+            variant="primary"
+            onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
+          />
         </View>
       </ScrollView>
     );
@@ -172,11 +189,8 @@ export default function MyGamesScreen() {
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={
-        <RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />
-      }
+      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
-      {/* Header propio (logo PV centrado, SIN título) */}
       <View style={styles.headerBar}>
         <Pressable
           onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -202,50 +216,35 @@ export default function MyGamesScreen() {
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          {unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
-      {/* Encabezado de sección */}
       <View style={styles.header}>
         <Text style={styles.title}>MIS JUEGOS</Text>
         <Text style={styles.subtitle}>Tu biblioteca personal de PlayVerse.</Text>
 
-        {/* Segmented: Alquiler — Catálogo — Comprados */}
         <View style={styles.segmentRow}>
-          <Button
-            title="Alquiler"
-            variant={tab === 'rent' ? 'primary' : 'ghost'}
-            onPress={() => setTab('rent')}
-            style={styles.segmentBtn}
-          />
-          <Button title="Catálogo" variant="ghost" onPress={goToCatalog} style={styles.segmentBtn} />
-          <Button
-            title="Comprados"
-            variant={tab === 'buy' ? 'primary' : 'ghost'}
-            onPress={() => setTab('buy')}
-            style={styles.segmentBtn}
-          />
+          <Button title="Alquiler" variant={tab === 'rent' ? 'primary' : 'ghost'} onPress={() => setTab('rent')} style={styles.segmentBtn} />
+          <Button title="Comprados" variant={tab === 'buy' ? 'primary' : 'ghost'} onPress={() => setTab('buy')} style={styles.segmentBtn} />
         </View>
       </View>
 
-      {/* Grid */}
       {visible.length === 0 ? (
         <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
           <Text style={styles.subtitle}>
             {tab === 'rent' ? 'No tenés juegos en alquiler.' : 'No tenés juegos comprados.'}
           </Text>
-          <Button title="Ir al catálogo" variant="ghost" onPress={goToCatalog} />
         </View>
       ) : (
         <View style={styles.grid}>
           {visible.map((item, i) => {
             const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
-
-            const overlay = item.owned
-              ? 'Comprado'
-              : fmtDate(item.expiresAt)
-              ? `Alquiler • vence ${fmtDate(item.expiresAt)}`
-              : undefined;
+            const overlay = item.owned ? 'Comprado' : fmtDate(item.expiresAt) ? `Alquiler • vence ${fmtDate(item.expiresAt)}` : undefined;
 
             return (
               <View key={item.id} style={{ width: cardWidth, marginRight: mr, marginBottom: GAP }}>
@@ -253,11 +252,10 @@ export default function MyGamesScreen() {
                   game={{
                     id: item.id,
                     title: item.title,
-                    cover_url: item.cover_url,
-                    purchasePrice: undefined,
-                    weeklyPrice: undefined,
+                    cover_url: item.cover_url ?? undefined,
                   }}
                   showPrices={false}
+                  showFavorite={false}  // 👈 sin corazón en Mis Juegos
                   overlayLabel={overlay}
                   onPress={() => {
                     const gid = item?.gameId ?? item?.id;
@@ -276,7 +274,6 @@ export default function MyGamesScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
 
-  /* ===== Header propio (igual a Favoritos/Login) ===== */
   headerBar: {
     paddingTop: spacing.xl,
     paddingHorizontal: spacing.xl,
@@ -301,12 +298,18 @@ const styles = StyleSheet.create({
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
 
-  /* ===== Sección ===== */
-  header: {
-    paddingHorizontal: PADDING_H,
-    paddingTop: spacing.xl,
-    gap: spacing.sm,
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+
+  header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },
 

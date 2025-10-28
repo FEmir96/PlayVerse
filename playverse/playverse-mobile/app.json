@@ -51,9 +51,7 @@
       "scheme": "playverse",
       "auth": {
         "google": {
-          "expoClientId": "<TU_WEB_CLIENT_ID>.apps.googleusercontent.com",
-          "iosClientId": "<TU_IOS_CLIENT_ID>.apps.googleusercontent.com",
-          "androidClientId": "<TU_ANDROID_CLIENT_ID>.apps.googleusercontent.com"
+          "expoClientId": "<TU_WEB_CLIENT_ID>.apps.googleusercontent.com"
         },
         "microsoft": {
           "clientId": "<TU_AZURE_APP_CLIENT_ID_GUID>",

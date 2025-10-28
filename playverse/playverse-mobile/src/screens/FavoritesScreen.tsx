@@ -1,61 +1,85 @@
-import React, { useLayoutEffect, useMemo, useCallback } from 'react';
+// playverse/playverse-mobile/src/screens/FavoritesScreen.tsx
+import React, { useMemo, useLayoutEffect } from 'react';
 import {
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
+  Pressable,
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import type { RootStackParamList } from '../navigation/AppNavigator';
-import { GameCard } from '../components';
 import { spacing, colors, typography } from '../styles/theme';
-import { useAuth } from '../context/AuthContext';
+import { Button, GameCard } from '../components';
+import { useConvexQuery } from '../lib/useConvexQuery';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useFavorites } from '../context/FavoritesContext';
+import { useAuth } from '../context/AuthContext';
 
-const LAPTOP_BREAKPOINT = 1024;
-const TWO_COLUMN_BREAKPOINT = 360;
-const MIN_CARD_WIDTH = 160;
+const MIN_CARD_WIDTH = 150;
+const GAP = spacing.md;
+const PADDING_H = spacing.xl;
+
+const ALL_GAMES_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'];
 
 export default function FavoritesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { width } = useWindowDimensions();
   const { profile } = useAuth();
-  const { favorites, loading, refetch } = useFavorites();
+  const { ids, refetch: refetchFavs } = useFavorites();
 
   useLayoutEffect(() => {
     nav.setOptions({ headerShown: false });
   }, [nav]);
 
-  const { width } = useWindowDimensions();
-  const columns = width >= LAPTOP_BREAKPOINT ? 3 : width >= TWO_COLUMN_BREAKPOINT ? 2 : 1;
-  const horizontalSpace = spacing.xl * 2 + spacing.md * (columns - 1);
-  const rawCardWidth = (width - horizontalSpace) / columns;
-  const cardWidth = Math.max(MIN_CARD_WIDTH, Math.min(columns === 1 ? 320 : 220, rawCardWidth));
+  const maxByWidth = Math.max(
+    1,
+    Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP)))
+  );
+  const columns = width >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
 
-  // Null-safety: evitamos favorites.length si viene indefinido
-  const safeFavorites = useMemo(() => Array.isArray(favorites) ? favorites : [], [favorites]);
+  const cardWidth = useMemo(() => {
+    const available = width - PADDING_H * 2 - GAP * (columns - 1);
+    return Math.floor(available / columns);
+  }, [width, columns]);
 
-  const onRefresh = useCallback(() => {
-    try {
-      refetch?.();
-    } catch {}
-  }, [refetch]);
+  const { data: allGames = [], loading, refetch } = useConvexQuery<any[]>(
+    ALL_GAMES_NAMES,
+    {},
+    { refreshMs: 20000 }
+  );
+
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    profile?._id ? { userId: profile._id, limit: 20 } : ({} as any),
+    { enabled: !!profile?._id, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(
+    () => (!profile ? 0 : (notifications ?? []).filter((n: any) => n?.isRead === false).length),
+    [notifications, profile]
+  );
+
+  const favGames = useMemo(() => {
+    const set = new Set(ids);
+    return (allGames ?? []).filter((g: any) => set.has(String(g._id ?? g.id ?? g.gameId)));
+  }, [ids, allGames]);
+
+  const onRefresh = () => {
+    refetch?.();
+    refetchFavs?.();
+  };
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={
-        <RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />
-      }
+      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
-      {/* Header propio (logo PV centrado, SIN título) */}
       <View style={styles.headerBar}>
         <Pressable
           onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -75,73 +99,68 @@ export default function FavoritesScreen() {
         </View>
 
         <Pressable
-          onPress={() => nav.navigate('Notifications' as any)}
+          onPress={() => nav.navigate(profile ? ('Notifications' as any) : ('Profile' as any))}
           style={styles.iconButton}
           accessibilityRole="button"
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          {!!profile && unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
-      {!profile ? (
-        <View style={styles.center}>
-          <Text style={styles.title}>Inicia sesión</Text>
-          <Text style={styles.subtitleCenter}>
-            Inicia sesión para ver tus juegos favoritos y seguir sus novedades.
-          </Text>
-          <Pressable
-            onPress={() => nav.navigate('Profile' as any)}
-            style={[styles.cta, { marginTop: spacing.md }]}
-            accessibilityRole="button"
-            accessibilityLabel="Ir a iniciar sesión"
-          >
-            <Text style={styles.ctaText}>Iniciar sesión</Text>
-          </Pressable>
+      <View style={styles.header}>
+        <Text style={styles.title}>FAVORITOS</Text>
+        <Text style={styles.subtitle}>Tus juegos marcados con ❤️</Text>
+      </View>
+
+      {favGames.length === 0 ? (
+        <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
+          <Text style={styles.subtitle}>No tenés juegos en favoritos.</Text>
+          {!profile ? (
+            <Button
+              title="Iniciar sesión"
+              variant="primary"
+              onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
+            />
+          ) : null}
         </View>
       ) : (
-        <>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Tu radar personal de juegos imperdibles</Text>
-          </View>
+        <View style={styles.grid}>
+          {favGames.map((row: any, i: number) => {
+            const gid = String(row._id ?? row.id ?? row.gameId ?? i);
+            const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
 
-          {safeFavorites.length === 0 ? (
-            <View style={styles.center}>
-              <Text style={styles.subtitleCenter}>Aún no tienes favoritos.</Text>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.grid,
-                { justifyContent: columns === 1 ? 'center' : 'flex-start' },
-              ]}
-            >
-              {safeFavorites.map((row, i) => {
-                const gameId = row.game?._id ?? row.gameId;
-                return (
-                  <GameCard
-                    key={String(row._id ?? i)}
-                    game={{
-                      id: String(gameId ?? row._id ?? i),
-                      title: row.game?.title || 'Juego',
-                      cover_url: row.game?.cover_url,
-                      gameId: gameId ? String(gameId) : undefined,
-                    }}
-                    style={{ flexBasis: cardWidth, maxWidth: cardWidth }}
-                    tag="Favorito"
-                    onPress={() => gameId && nav.navigate('GameDetail' as any, { gameId: String(gameId) } as any)}
-                  />
-                );
-              })}
-            </View>
-          )}
-        </>
+            return (
+              <View key={gid} style={{ width: cardWidth, marginRight: mr, marginBottom: GAP }}>
+                <GameCard
+                  game={{
+                    id: gid,
+                    title: row.title ?? 'Juego',
+                    cover_url: row.cover_url ?? row.coverUrl,
+                    purchasePrice: row.purchasePrice,
+                    weeklyPrice: row.weeklyPrice,
+                    igdbRating: row.igdbRating,
+                    plan: row.plan,
+                  }}
+                  onPress={() => nav.navigate('GameDetail', { gameId: gid, initial: row })}
+                />
+              </View>
+            );
+          })}
+        </View>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+
   headerBar: {
     paddingTop: spacing.xl,
     paddingHorizontal: spacing.xl,
@@ -163,52 +182,29 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceBorder,
     backgroundColor: '#0F2D3A',
   },
-  centerLogoWrap: {
-    flex: 1,
-    alignItems: 'center',
+  centerLogoWrap: { flex: 1, alignItems: 'center' },
+  centerLogo: { height: 28, width: 120 },
+
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
-  centerLogo: {
-    height: 28,
-    width: 120,
-  },
-  sectionHead: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-  },
-  sectionTitle: {
-    color: colors.accent,
-    fontSize: typography.body,
-  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+
+  header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.xs },
+  title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
+  subtitle: { color: colors.accent, opacity: 0.9 },
+
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PADDING_H,
     paddingTop: spacing.md,
-  },
-  center: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    gap: spacing.sm,
-  },
-  title: {
-    color: colors.accent,
-    fontSize: typography.h1,
-    fontWeight: '900',
-  },
-  subtitleCenter: {
-    color: colors.accent,
-    textAlign: 'center',
-  },
-  cta: {
-    backgroundColor: colors.accent,
-    borderRadius: 999,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  ctaText: {
-    color: '#1B1B1B',
-    fontWeight: '800',
+    alignItems: 'flex-start',
   },
 });

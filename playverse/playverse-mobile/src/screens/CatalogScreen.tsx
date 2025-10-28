@@ -18,7 +18,7 @@ import { spacing, colors, typography } from '../styles/theme';
 import { Button, Chip, GameCard, SearchBar } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { RootStackParamList } from '../navigation/AppNavigator';
-import type { Game } from '../types/game';
+import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE = 10;
 const CATEGORIES = ['Todos', 'Accion', 'RPG', 'Carreras'];
@@ -32,8 +32,8 @@ const ALL_GAMES_NAMES = ['queries/getGames:getGames', 'queries/getAllGames:getAl
 export default function CatalogScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+  const { profile } = useAuth();
 
-  // ⚠️ Usamos header propio
   useLayoutEffect(() => {
     nav.setOptions({ headerShown: false });
   }, [nav]);
@@ -49,10 +49,20 @@ export default function CatalogScreen() {
     return Math.floor(available / columns);
   }, [width, columns]);
 
-  const { data: allGames, loading, refetch } = useConvexQuery<Game[]>(
+  const { data: allGames, loading, refetch } = useConvexQuery<any[]>(
     ALL_GAMES_NAMES,
     {},
     { refreshMs: 20000 }
+  );
+
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    profile?._id ? { userId: profile._id, limit: 20 } : ({} as any),
+    { enabled: !!profile?._id, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(
+    () => (!profile ? 0 : (notifications ?? []).filter((n: any) => n?.isRead === false).length),
+    [notifications, profile]
   );
 
   const [search, setSearch] = useState('');
@@ -66,7 +76,9 @@ export default function CatalogScreen() {
       list = list.filter((g) => g.title?.toLowerCase().includes(q));
     }
     if (cat !== 'Todos') {
-      list = list.filter((g) => (g.genres || []).some((x) => x?.toLowerCase().includes(cat.toLowerCase())));
+      list = list.filter((g) =>
+        (g.genres || []).some((x: string) => x?.toLowerCase().includes(cat.toLowerCase()))
+      );
     }
     list.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     return list;
@@ -81,7 +93,6 @@ export default function CatalogScreen() {
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />}
     >
-      {/* Header propio (logo PV centrado, SIN título) */}
       <View style={styles.headerBar}>
         <Pressable
           onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -101,19 +112,23 @@ export default function CatalogScreen() {
         </View>
 
         <Pressable
-          onPress={() => nav.navigate('Notifications' as any)}
+          onPress={() => nav.navigate(profile ? ('Notifications' as any) : ('Profile' as any))}
           style={styles.iconButton}
           accessibilityRole="button"
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          {!!profile && unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
-      {/* Encabezado */}
       <View style={styles.header}>
         <Text style={styles.title}>CATÁLOGO DE JUEGOS</Text>
-        <Text style={styles.subtitle}>Sumérgete en PlayVerse. Encontrá tu próximo juego.</Text>
+        <Text style={styles.subtitle}>Sumergite en PlayVerse. Encontrá tu próximo juego.</Text>
       </View>
 
       <View style={styles.filters}>
@@ -163,10 +178,10 @@ export default function CatalogScreen() {
       ) : (
         <View style={styles.grid}>
           {visible.map((row: any, i: number) => {
-            const gameId = row._id ?? row.id ?? row.gameId ?? i;
+            const gid = String(row._id ?? row.id ?? row.gameId ?? i);
             return (
               <View
-                key={String(gameId)}
+                key={gid}
                 style={{
                   width: cardWidth,
                   marginRight: i % columns !== columns - 1 ? GAP : 0,
@@ -175,18 +190,15 @@ export default function CatalogScreen() {
               >
                 <GameCard
                   game={{
-                    id: String(gameId),
+                    id: gid,
                     title: row.title ?? 'Juego',
                     cover_url: row.cover_url ?? row.coverUrl,
-                    gameId: row._id ? String(row._id) : undefined,
                     purchasePrice: row.purchasePrice,
                     weeklyPrice: row.weeklyPrice,
                     igdbRating: row.igdbRating,
                     plan: row.plan,
                   }}
-                  onPress={() =>
-                    gameId && nav.navigate('GameDetail', { gameId: String(gameId), initial: row })
-                  }
+                  onPress={() => nav.navigate('GameDetail', { gameId: gid, initial: row })}
                 />
               </View>
             );
@@ -211,7 +223,6 @@ export default function CatalogScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
 
-  /* ===== Header propio (igual a Favoritos/Login) ===== */
   headerBar: {
     paddingTop: spacing.xl,
     paddingHorizontal: spacing.xl,
@@ -236,7 +247,17 @@ const styles = StyleSheet.create({
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
 
-  /* ===== Contenido ===== */
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+
   header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.xs },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },

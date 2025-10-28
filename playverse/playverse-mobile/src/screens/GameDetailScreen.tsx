@@ -29,7 +29,6 @@ export default function GameDetailScreen() {
   const params = (route.params ?? {}) as Partial<RootStackParamList['GameDetail']>;
   const linkingUrl = Linking.useURL();
 
-  // Header propio (ocultamos el del stack)
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -129,15 +128,7 @@ export default function GameDetailScreen() {
       .filter(Boolean) as string[];
   }, [game, initial, igdbShots]);
 
-  // ---------- Trailer robusto ----------
-  const trailerRaw =
-    (game as any)?.trailer_url ||
-    (game as any)?.extraTrailerUrl ||
-    (initial as any)?.trailer_url ||
-    (initial as any)?.extraTrailerUrl ||
-    (game as any)?.trailerUrl ||
-    (initial as any)?.trailerUrl;
-
+  // Trailer helpers...
   function normalizeHttps(u: string) {
     if (/^https?:\/\//i.test(u)) return u;
     if (/^\/\//.test(u)) return `https:${u}`;
@@ -149,6 +140,7 @@ export default function GameDetailScreen() {
   function extractYouTubeId(u: string) {
     if (!u) return undefined;
     const raw = u.startsWith('youtube:') ? u.slice('youtube:'.length) : u;
+
     if (!/^https?:\/\//i.test(raw) && isLikelyYouTubeId(raw)) return raw;
 
     const url = new URL(normalizeHttps(raw));
@@ -192,6 +184,14 @@ export default function GameDetailScreen() {
     }
     return undefined;
   }
+
+  const trailerRaw =
+    (game as any)?.trailer_url ||
+    (game as any)?.extraTrailerUrl ||
+    (initial as any)?.trailer_url ||
+    (initial as any)?.extraTrailerUrl ||
+    (game as any)?.trailerUrl ||
+    (initial as any)?.trailerUrl;
 
   const trailerInfo = useMemo(() => {
     const raw = trailerRaw ? resolveAssetUrl(trailerRaw) || trailerRaw : undefined;
@@ -253,6 +253,19 @@ export default function GameDetailScreen() {
     typeof (game as any)?.igdbRating === 'number' ? (game as any).igdbRating : undefined;
 
   const { profile } = useAuth();
+
+  // ===== Notificaciones (badge) =====
+  const userId = profile?._id ?? null;
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    userId ? { userId, limit: 20 } : ({} as any),
+    { enabled: !!userId, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(
+    () => (notifications ?? []).filter((n: any) => n?.isRead === false).length,
+    [notifications]
+  );
+
   const isLoading = loadingRemote && !game;
 
   const basePurchasePrice =
@@ -287,7 +300,7 @@ export default function GameDetailScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
     >
-      {/* ===== Header propio ===== */}
+      {/* Header propio */}
       <View style={styles.headerBar}>
         <Pressable
           onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -307,12 +320,17 @@ export default function GameDetailScreen() {
         </View>
 
         <Pressable
-          onPress={() => navigation.navigate('Notifications' as any)}
+          onPress={() => navigation.navigate(userId ? ('Notifications' as any) : ('Profile' as any))}
           style={styles.iconButton}
           accessibilityRole="button"
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          {unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -386,7 +404,7 @@ export default function GameDetailScreen() {
           </View>
         </View>
       ) : (
-        <View style={[styles.card, { marginTop: spacing.lg }]}>
+        <View style={styles.card}>
           <Text style={styles.sectionLabel}>Trailer</Text>
           <Text style={styles.helper}>Este juego no tiene trailer disponible por ahora.</Text>
         </View>
@@ -427,7 +445,6 @@ export default function GameDetailScreen() {
         <Text style={styles.note}>Gestiona compras y suscripciones desde la web PlayVerse.</Text>
       </View>
 
-      {/* ABOUT */}
       {game?.description ? (
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>Descripción</Text>
@@ -478,6 +495,17 @@ const styles = StyleSheet.create({
   },
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
+
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
 
   // HERO
   header: {
@@ -593,7 +621,6 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
   },
 
-  // TEXT HELPERS
   helper: {
     color: '#98B8C6',
     fontSize: typography.body,
@@ -648,7 +675,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 
-  // BODY / FACTS
   sectionLabel: {
     color: '#D6EEF7',
     fontWeight: '800',
