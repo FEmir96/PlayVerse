@@ -97,10 +97,10 @@ export default function ProfileScreen() {
     { enabled: !!userId, refreshMs: 20000 }
   );
 
-  const unreadCount = useMemo(
-    () => (notifications ?? []).filter((n: any) => n?.isRead === false).length,
-    [notifications]
-  );
+  const unreadCount = useMemo(() => {
+    if (!userId) return 0;
+    return (notifications ?? []).filter((n: any) => n?.isRead === false).length;
+  }, [userId, notifications]);
 
   useEffect(() => {
     setFieldErrors({});
@@ -211,13 +211,13 @@ export default function ProfileScreen() {
       </View>
 
       <Pressable
-        onPress={() => navigation.navigate('Notifications' as any)}
+        onPress={() => navigation.navigate(userId ? ('Notifications' as any) : ('Profile' as any))}
         style={styles.iconButton}
         accessibilityRole="button"
         accessibilityLabel="Ir a notificaciones"
       >
         <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-        {unreadCount > 0 ? (
+        {userId && unreadCount > 0 ? (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
           </View>

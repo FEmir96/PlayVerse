@@ -4,25 +4,53 @@ import { v } from "convex/values";
 export const getFavoritesByUser = query({
   args: { userId: v.id("profiles") },
   handler: async ({ db }, { userId }) => {
-    const favs = await db
+    const favorites = await db
       .query("favorites")
-      .withIndex("by_user", q => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    // Traemos los juegos y devolvemos datos útiles para la UI
-    const games = await Promise.all(favs.map(f => db.get(f.gameId)));
-    const byId = new Map(games.filter(Boolean).map(g => [g!._id, g!]));
+    if (favorites.length === 0) return [];
 
-    return favs
-      .map(f => byId.get(f.gameId))
-      .filter(Boolean)
-      .map(g => ({
-        _id: g!._id,
-        title: g!.title ?? "Juego",
-        cover_url: (g as any).cover_url ?? null,
-        plan: (g as any).plan ?? "free",
-        price_buy: (g as any).price_buy ?? null,
-        weekly_price: (g as any).weekly_price ?? null,
-      }));
+    const gameDocs = await Promise.all(
+      favorites.map((favorite) => db.get(favorite.gameId))
+    );
+    const gamesById = new Map(
+      gameDocs.filter(Boolean).map((game) => [game!._id, game!])
+    );
+
+    return favorites
+      .map((favorite) => {
+        const game = gamesById.get(favorite.gameId) ?? null;
+        return {
+          _id: favorite._id,
+          userId: favorite.userId,
+          gameId: favorite.gameId,
+          createdAt:
+            typeof favorite.createdAt === "number"
+              ? favorite.createdAt
+              : Date.now(),
+          game: game
+            ? {
+                _id: game._id,
+                title: game.title ?? "Juego",
+                cover_url: (game as any).cover_url ?? null,
+                plan: (game as any).plan ?? "free",
+                weeklyPrice:
+                  (game as any).weeklyPrice ??
+                  (game as any).weekly_price ??
+                  null,
+                purchasePrice:
+                  (game as any).purchasePrice ??
+                  (game as any).price_buy ??
+                  null,
+                igdbRating:
+                  (game as any).igdbRating ??
+                  (game as any).igdb_rating ??
+                  null,
+              }
+            : null,
+        };
+      })
+      .filter((row) => row.game);
   },
 });

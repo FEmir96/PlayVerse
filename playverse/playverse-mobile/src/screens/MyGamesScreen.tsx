@@ -67,6 +67,7 @@ export default function MyGamesScreen() {
     return Math.floor(available / columns);
   }, [width, columns]);
 
+  // ===== Convex, filtrado por usuario =====
   const enabled = !!profile?._id;
 
   const {
@@ -87,16 +88,6 @@ export default function MyGamesScreen() {
     'queries/getUserRentals:getUserRentals',
     enabled ? { userId: profile!._id } : ({} as any),
     { enabled, refreshMs: 20000 }
-  );
-
-  const { data: notifications } = useConvexQuery<any[]>(
-    'notifications:getForUser',
-    enabled ? { userId: profile!._id, limit: 20 } : ({} as any),
-    { enabled, refreshMs: 20000 }
-  );
-  const unreadCount = useMemo(
-    () => (!enabled ? 0 : (notifications ?? []).filter((n: any) => n?.isRead === false).length),
-    [notifications, enabled]
   );
 
   const loading = loadingPurchases || loadingRentals;
@@ -141,6 +132,7 @@ export default function MyGamesScreen() {
 
   const visible: LibraryItem[] = tab === 'rent' ? rentals : purchased;
 
+  // Si no hay sesión: CTA login (sin Catálogo)
   if (!profile) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
@@ -163,7 +155,7 @@ export default function MyGamesScreen() {
           </View>
 
           <Pressable
-            onPress={() => nav.navigate('Profile' as any)}
+            onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
             style={styles.iconButton}
             accessibilityRole="button"
             accessibilityLabel="Ir a iniciar sesión"
@@ -189,7 +181,9 @@ export default function MyGamesScreen() {
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />}
+      refreshControl={
+        <RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />
+      }
     >
       <View style={styles.headerBar}>
         <Pressable
@@ -216,11 +210,6 @@ export default function MyGamesScreen() {
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-          {unreadCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
-            </View>
-          ) : null}
         </Pressable>
       </View>
 
@@ -229,8 +218,18 @@ export default function MyGamesScreen() {
         <Text style={styles.subtitle}>Tu biblioteca personal de PlayVerse.</Text>
 
         <View style={styles.segmentRow}>
-          <Button title="Alquiler" variant={tab === 'rent' ? 'primary' : 'ghost'} onPress={() => setTab('rent')} style={styles.segmentBtn} />
-          <Button title="Comprados" variant={tab === 'buy' ? 'primary' : 'ghost'} onPress={() => setTab('buy')} style={styles.segmentBtn} />
+          <Button
+            title="Alquiler"
+            variant={tab === 'rent' ? 'primary' : 'ghost'}
+            onPress={() => setTab('rent')}
+            style={styles.segmentBtn}
+          />
+          <Button
+            title="Comprados"
+            variant={tab === 'buy' ? 'primary' : 'ghost'}
+            onPress={() => setTab('buy')}
+            style={styles.segmentBtn}
+          />
         </View>
       </View>
 
@@ -244,7 +243,12 @@ export default function MyGamesScreen() {
         <View style={styles.grid}>
           {visible.map((item, i) => {
             const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
-            const overlay = item.owned ? 'Comprado' : fmtDate(item.expiresAt) ? `Alquiler • vence ${fmtDate(item.expiresAt)}` : undefined;
+
+            const overlay = item.owned
+              ? 'Comprado'
+              : fmtDate(item.expiresAt)
+              ? `Alquiler • vence ${fmtDate(item.expiresAt)}`
+              : undefined;
 
             return (
               <View key={item.id} style={{ width: cardWidth, marginRight: mr, marginBottom: GAP }}>
@@ -253,9 +257,11 @@ export default function MyGamesScreen() {
                     id: item.id,
                     title: item.title,
                     cover_url: item.cover_url ?? undefined,
+                    purchasePrice: undefined,
+                    weeklyPrice: undefined,
                   }}
                   showPrices={false}
-                  showFavorite={false}  // 👈 sin corazón en Mis Juegos
+                  showFavorite={false}  // 👈 NO mostrar corazón en Mis Juegos
                   overlayLabel={overlay}
                   onPress={() => {
                     const gid = item?.gameId ?? item?.id;
@@ -298,18 +304,11 @@ const styles = StyleSheet.create({
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
 
-  badge: {
-    position: 'absolute',
-    right: -4,
-    top: -4,
-    backgroundColor: '#ff6b6b',
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+  header: {
+    paddingHorizontal: PADDING_H,
+    paddingTop: spacing.xl,
+    gap: spacing.sm,
   },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-
-  header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },
 

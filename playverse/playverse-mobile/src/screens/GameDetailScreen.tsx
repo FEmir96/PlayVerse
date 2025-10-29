@@ -261,10 +261,10 @@ export default function GameDetailScreen() {
     userId ? { userId, limit: 20 } : ({} as any),
     { enabled: !!userId, refreshMs: 20000 }
   );
-  const unreadCount = useMemo(
-    () => (notifications ?? []).filter((n: any) => n?.isRead === false).length,
-    [notifications]
-  );
+  const unreadCount = useMemo(() => {
+    if (!userId) return 0;
+    return (notifications ?? []).filter((n: any) => n?.isRead === false).length;
+  }, [userId, notifications]);
 
   const isLoading = loadingRemote && !game;
 
@@ -326,7 +326,7 @@ export default function GameDetailScreen() {
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-          {unreadCount > 0 ? (
+          {userId && unreadCount > 0 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
             </View>

@@ -83,12 +83,20 @@ function resolveRedirect(): RedirectSetup {
 }
 
 export async function signInWithGoogleNative(): Promise<OAuthResult> {
-  const clientId =
-    (Constants.expoConfig?.extra as any)?.googleClientId ??
-    process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-  if (!clientId) return { ok: false, error: 'Missing GOOGLE_CLIENT_ID' };
-
+  const extras = (Constants.expoConfig?.extra || {}) as any;
+  const authExtra = extras?.auth?.google ?? {};
   const { redirectUri, promptOptions } = resolveRedirect();
+  const isExpoGo = Constants.appOwnership === 'expo';
+
+  const clientId = isExpoGo
+    ? authExtra.expoClientId ??
+      extras.googleExpoClientId ??
+      process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID ??
+      extras.googleClientId ??
+      process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID
+    : extras.googleClientId ?? process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+
+  if (!clientId) return { ok: false, error: 'Missing GOOGLE_CLIENT_ID' };
 
   const request = new AuthSession.AuthRequest({
     clientId,
@@ -143,18 +151,27 @@ export async function signInWithGoogleNative(): Promise<OAuthResult> {
 }
 
 export async function signInWithMicrosoftNative(): Promise<OAuthResult> {
-  const clientId =
-    (Constants.expoConfig?.extra as any)?.microsoftClientId ??
-    process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID;
+  const extras = (Constants.expoConfig?.extra || {}) as any;
+  const authExtra = extras?.auth?.microsoft ?? {};
+  const { redirectUri, promptOptions } = resolveRedirect();
+  const isExpoGo = Constants.appOwnership === 'expo';
+
+  const clientId = isExpoGo
+    ? authExtra.expoClientId ??
+      extras.microsoftExpoClientId ??
+      process.env.EXPO_PUBLIC_MICROSOFT_EXPO_CLIENT_ID ??
+      extras.microsoftClientId ??
+      process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID
+    : extras.microsoftClientId ?? process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID;
 
   const tenant =
-    (Constants.expoConfig?.extra as any)?.microsoftTenantId ??
+    authExtra.tenantId ??
+    extras.microsoftTenantId ??
     process.env.EXPO_PUBLIC_MICROSOFT_TENANT_ID ??
     'consumers';
 
   if (!clientId) return { ok: false, error: 'Missing MICROSOFT_CLIENT_ID' };
 
-  const { redirectUri, promptOptions } = resolveRedirect();
   const authEndpoint = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`;
 
   const request = new AuthSession.AuthRequest({

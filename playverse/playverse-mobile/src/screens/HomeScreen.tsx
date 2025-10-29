@@ -37,7 +37,6 @@ export default function HomeScreen() {
     nav.setOptions({ headerShown: false });
   }, [nav]);
 
-  // Premium (-10%)
   const auth: any = (useAuth?.() as any) ?? {};
   const roleOrPlan = String(
     auth?.user?.role ?? auth?.role ?? auth?.plan ?? auth?.user?.plan ?? auth?.profile?.plan ?? ''
@@ -54,12 +53,12 @@ export default function HomeScreen() {
     userId ? { userId, limit: 20 } : ({} as any),
     { enabled: !!userId, refreshMs: 20000 }
   );
-  const unreadCount = useMemo(
-    () => (notifications ?? []).filter((n: any) => n?.isRead === false).length,
-    [notifications]
-  );
+  const unreadCount = useMemo(() => {
+    if (!userId) return 0;
+    return (notifications ?? []).filter((n: any) => n?.isRead === false).length;
+  }, [userId, notifications]);
 
-  // Ancho útil para las cards
+  // Layout grid
   const usableW = useMemo(() => {
     const measured = gridW > 0 ? gridW : winW;
     return Math.max(0, measured - PADDING_H * 2);
@@ -80,11 +79,12 @@ export default function HomeScreen() {
   };
 
   // --------- datos ----------
-  const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
-    ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'],
-    {},
-    { refreshMs: 15000 }
-  );
+const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
+  // ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'],
+  'queries/getGames:getGames', // 👈 dejá una sola ruta válida para evitar el warning
+  {},
+  { refreshMs: 15000 }
+);
   const { data: upcomingRaw, loading: loadingUpcoming, refetch: refetchUpcoming } =
     useConvexQuery<UpcomingGame[]>(
       [
@@ -121,16 +121,25 @@ export default function HomeScreen() {
   const discount = (p?: number | null) =>
     p && isFinite(Number(p)) ? Math.round(Number(p) * 0.9) : p ?? undefined;
 
-  const mapGame = (row: any, idx: number) => ({
-    id: String(row?._id ?? row?.id ?? row?.gameId ?? idx),
-    title: row?.title ?? 'Juego',
-    cover_url: row?.cover_url ?? row?.coverUrl,
-    gameId: row?._id ? String(row._id) : undefined,
-    purchasePrice: isPremium ? discount(row?.purchasePrice) : row?.purchasePrice,
-    weeklyPrice: isPremium ? discount(row?.weeklyPrice) : row?.weeklyPrice,
-    igdbRating: row?.igdbRating,
-    plan: row?.plan,
-  });
+  const mapGame = (row: any, idx: number) => {
+    // 🔒 Normalizo plan a la unión 'free' | 'premium' para evitar el error de TS
+    const planRaw = String(row?.plan ?? '').toLowerCase();
+    const plan = (planRaw === 'premium' ? 'premium' : planRaw === 'free' ? 'free' : undefined) as
+      | 'free'
+      | 'premium'
+      | undefined;
+
+    return {
+      id: String(row?._id ?? row?.id ?? row?.gameId ?? idx),
+      title: row?.title ?? 'Juego',
+      cover_url: row?.cover_url ?? row?.coverUrl,
+      gameId: row?._id ? String(row._id) : undefined,
+      purchasePrice: isPremium ? discount(row?.purchasePrice) : row?.purchasePrice,
+      weeklyPrice: isPremium ? discount(row?.weeklyPrice) : row?.weeklyPrice,
+      igdbRating: row?.igdbRating,
+      plan,
+    };
+  };
 
   const refreshing = !!(loadingAll || loadingUpcoming);
   const onRefresh = () => {
@@ -147,7 +156,7 @@ export default function HomeScreen() {
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
-      {/* Header propio */}
+      {/* Header */}
       <View style={styles.headerBar}>
         <Pressable
           onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
@@ -173,7 +182,7 @@ export default function HomeScreen() {
           accessibilityLabel="Ir a notificaciones"
         >
           <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-          {unreadCount > 0 ? (
+          {userId && unreadCount > 0 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
             </View>
@@ -253,7 +262,17 @@ export default function HomeScreen() {
         </View>
       </Section>
 
-      <View style={{ paddingHorizontal: PADDING_H }}>
+      {/* CTA catálogo */}
+      <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
+        <Button
+          title="Ver catálogo completo"
+          variant="ghost"
+          onPress={() => nav.navigate('Tabs' as any, { screen: 'Catalog' } as any)}
+        />
+      </View>
+
+      {/* PremiumBanner ABAJO del botón */}
+      <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
         <PremiumBanner />
       </View>
     </ScrollView>

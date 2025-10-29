@@ -1,6 +1,6 @@
 // playverse/playverse-mobile/src/lib/useConvexQuery.ts
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { convexHttp } from './convexClient';
+import { convexHttp, CONVEX_URL } from './convexClient';
 
 type Options = { enabled?: boolean; refreshMs?: number };
 
@@ -12,8 +12,8 @@ function keyFor(name: string, args: any) {
 }
 
 /**
- * nameOrNames: string o array de rutas de función Convex (intenta en orden).
- * Maneja endpoints inexistentes sin spamear errores y con “fallback”.
+ * nameOrNames: string o array de rutas Convex (intenta en orden).
+ * Devuelve { data, loading, error, refetch }
  */
 export function useConvexQuery<T>(
   nameOrNames: string | string[],
@@ -50,9 +50,7 @@ export function useConvexQuery<T>(
       const k = keyFor(n, args);
       try {
         const existing = IN_FLIGHT.get(k);
-        // 🔒 A partir de aquí p SIEMPRE es Promise<any> (no union)
-        const p: Promise<any> =
-          existing ?? (convexHttp as any).query(n as any, args ?? {});
+        const p: Promise<any> = existing ?? (convexHttp as any).query(n as any, args ?? {});
         if (!existing) IN_FLIGHT.set(k, p);
 
         const res = await p;
@@ -67,8 +65,10 @@ export function useConvexQuery<T>(
         lastErr = e;
         const msg = String(e?.message ?? '');
         if (/Could not find public function/i.test(msg)) {
-          // deshabilitar este nombre por 60s para no insistir
           DISABLED_UNTIL.set(n, now + 60_000);
+          console.warn(`[Convex][${CONVEX_URL}] No existe pública: ${n}`);
+        } else {
+          console.warn(`[Convex][${CONVEX_URL}] Error en ${n}:`, e);
         }
         // probar siguiente candidato
       }
