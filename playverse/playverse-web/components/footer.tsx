@@ -1,9 +1,31 @@
+"use client";
+
+import { useState } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export function Footer() {
+  const { data: session } = useSession();
+  const isLogged = !!session?.user?.email;
+  const [modalOpen, setModalOpen] = useState<"login" | "confirm" | "thankyou" | null>(null);
+
+  const handleNewsletterClick = () => {
+    if (!isLogged) {
+      setModalOpen("login");
+      return;
+    }
+    setModalOpen("confirm");
+  };
+
   return (
     <footer className="bg-slate-900 border-t border-slate-700 mt-16">
       <div className="container mx-auto px-4 py-12">
@@ -104,16 +126,66 @@ export function Footer() {
             <h3 className="text-white font-medium mb-4">Newsletter</h3>
             <p className="text-slate-400 text-sm mb-4">¡Nuevos juegos y ofertas exclusivas directo a tu email!</p>
             <div className="space-y-2">
-              <Input
-                type="email"
-                placeholder="Tu@email.com"
-                className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
-              />
-              <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium">Anotarme</Button>
+              <Button
+                onClick={handleNewsletterClick}
+                className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium"
+                onMouseDown={(e) => e.preventDefault()}
+                id="newsletter-cta"
+              >
+                Anotarme
+              </Button>
             </div>
           </div>
-        </div>
 
+          {/* Modals: login -> confirm -> thankyou */}
+          <Dialog open={modalOpen === "login"} onOpenChange={(open) => !open && setModalOpen(null)}>
+            <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md w-full">
+              <DialogHeader>
+                <DialogTitle className="text-orange-400 text-xl font-semibold">Inicia sesión para suscribirte</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <p className="text-slate-300">Debes iniciar sesión para anotarte a la newsletter.</p>
+              </div>
+              <DialogFooter className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setModalOpen(null)} className="border-slate-600 text-slate-300 bg-transparent">Cancelar</Button>
+                <Button onClick={() => { window.location.href = `/auth/login?next=${encodeURIComponent(window.location.pathname)}`; }} className="bg-orange-400 hover:bg-orange-500 text-slate-900">Iniciar sesión</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={modalOpen === "confirm"} onOpenChange={(open) => !open && setModalOpen(null)}>
+            <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md w-full">
+              <DialogHeader>
+                <DialogTitle className="text-orange-400 text-xl font-semibold">Confirmar suscripción</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <p className="text-slate-300">
+                  Estás a punto de anotar tu cuenta a la newsletter de PlayVerse. Te llegarán emails con las últimas novedades en la plataforma: nuevos juegos añadidos, próximos lanzamientos y recordatorios de alquileres por vencer.
+                </p>
+              </div>
+              <DialogFooter className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setModalOpen(null)} className="border-slate-600 text-slate-300 bg-transparent">Cancelar</Button>
+                <Button onClick={() => setModalOpen("thankyou")} className="bg-orange-400 hover:bg-orange-500 text-slate-900">Confirmar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={modalOpen === "thankyou"} onOpenChange={(open) => !open && setModalOpen(null)}>
+            <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md w-full">
+              <DialogHeader>
+                <DialogTitle className="text-orange-400 text-xl font-semibold">¡Gracias!</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <p className="text-slate-300">¡Listo! Tu cuenta fue anotada a la newsletter. Pronto recibirás novedades en tu correo.</p>
+              </div>
+              <DialogFooter className="flex gap-2 justify-end">
+                <Button onClick={() => setModalOpen(null)} className="bg-orange-400 hover:bg-orange-500 text-slate-900">Aceptar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+
+        </div>
         {/* Copyright */}
         <div className="border-t border-slate-700 mt-8 pt-8">
           <p className="text-slate-400 text-sm text-center">© 2025 PlayVerse. Todos los derechos reservados.</p>

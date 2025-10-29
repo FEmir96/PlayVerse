@@ -296,7 +296,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         u.searchParams.set("upgraded", "1");
         router.replace(u.pathname + u.search);
       } else {
-        router.replace("/premium/success");
+        router.replace("success");
       }
 
       toast({
@@ -383,7 +383,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                 </p>
 
                 <div className="space-y-2 mt-4">
-                  {["Acceso a toda la biblioteca", "Descuentos del 27%", "Cero publicidad"].map((feature, i) => (
+                  {["Acceso a toda la biblioteca", "Descuentos del 10%", "Cero publicidad"].map((feature, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <svg className="w-5 h-5 text-teal-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path

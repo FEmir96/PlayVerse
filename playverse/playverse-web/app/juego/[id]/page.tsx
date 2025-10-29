@@ -231,7 +231,6 @@ export default function GameDetailPage() {
   const [thumbStart, setThumbStart] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isHoverMain, setIsHoverMain] = useState(false);
   const thumbsPerView = 4;
 
   // Param estable
@@ -323,15 +322,6 @@ export default function GameDetailPage() {
   useEffect(() => {
     if (selectedIndex >= media.length) setSelectedIndex(0);
   }, [media.length, selectedIndex]);
-
-  useEffect(() => {
-    if (!media.length) return;
-    if (isHoverMain) return;
-    const t = setInterval(() => {
-      setSelectedIndex((prev) => (prev + 1) % media.length);
-    }, 4000);
-    return () => clearInterval(t);
-  }, [media.length, isHoverMain]);
 
   const nextThumbs = () => {
     if (thumbStart + thumbsPerView < media.length) setThumbStart((p) => p + 1);
@@ -774,11 +764,7 @@ export default function GameDetailPage() {
             {/* Columna izquierda (media) */}
             <div className="lg:col-span-2 space-y-4">
               {/* Media */}
-              <div
-                className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden"
-                onMouseEnter={() => setIsHoverMain(true)}
-                onMouseLeave={() => setIsHoverMain(false)}
-              >
+              <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden">
                 {current?.type === "video" ? (
                   <iframe
                     src={current.src}

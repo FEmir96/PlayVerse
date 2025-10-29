@@ -344,14 +344,28 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
         currency,
       } as any);
 
-      toast({ title: "Compra confirmada", description: "Te enviamos un email con los detalles." });
+      // Guardar detalle de la compra en sessionStorage y redirigir a la página de éxito
+      try {
+        const payload = {
+          gameId: String(game._id),
+          title: String(game.title ?? "Juego"),
+          cover: String(game.cover_url ?? "/placeholder.svg"),
+          amount: finalPrice,
+          currency,
+        } as const;
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("pv_purchase_success", JSON.stringify(payload));
+        }
+      } catch {}
 
+      // Redirigir a la página de éxito dedicada
       startTransition(() => {
-        router.replace("/");
+        router.replace("/checkout/compra/success");
         router.refresh();
       });
       setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/");
+        if (typeof window !== "undefined" && window.location.pathname !== "/checkout/compra/success")
+          window.location.assign("/checkout/compra/success");
       }, 600);
     } catch (e: any) {
       suppressOwnedToastRef.current = false;

@@ -197,15 +197,33 @@ export default function CartCheckoutPage() {
         paymentMethodId: useSaved ? (methodId ?? undefined) : undefined,
       } as any);
 
-      toast({ title: "Compra confirmada", description: "Te enviamos el comprobante por email." });
+      // Guardar payload de éxito y redirigir a página de confirmación
+      try {
+        const payload = {
+          items: items.map((it) => ({
+            gameId: String(it.gameId),
+            title: it.title,
+            cover: it.cover_url ?? "/placeholder.svg",
+            price: Number(it.price_buy) || 0,
+            currency: it.currency || "USD",
+          })),
+          amount: subtotal,
+          currency: "USD",
+        };
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("pv_cart_success", JSON.stringify(payload));
+        }
+      } catch (e) {
+        // ignore
+      }
 
       startTransition(() => {
-        router.replace("/");
+        router.replace("/checkout/carrito/success");
         router.refresh();
       });
       setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/") {
-          window.location.assign("/");
+        if (typeof window !== "undefined" && window.location.pathname !== "/checkout/carrito/success") {
+          window.location.assign("/checkout/carrito/success");
         }
       }, 800);
     } catch (e: any) {

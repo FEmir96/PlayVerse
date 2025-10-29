@@ -342,17 +342,29 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
         weeklyPrice,
       } as any);
 
-      toast({
-        title: "Alquiler extendido",
-        description: "Actualizamos la fecha de vencimiento correctamente.",
-      });
+      // Guardar payload de éxito y redirigir a página de confirmación
+      try {
+        const payload = {
+          gameId: String(game._id),
+          title,
+          cover,
+          weeks,
+          amount: total,
+          currency,
+        };
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("pv_extend_success", JSON.stringify(payload));
+        }
+      } catch (e) {
+        // ignore
+      }
 
       startTransition(() => {
-        router.replace("/");
+        router.replace("/checkout/extender/success");
         router.refresh();
       });
       setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/");
+        if (typeof window !== "undefined" && window.location.pathname !== "/checkout/extender/success") window.location.assign("/checkout/extender/success");
       }, 600);
     } catch (e: any) {
       const msg = String(e?.message ?? "");

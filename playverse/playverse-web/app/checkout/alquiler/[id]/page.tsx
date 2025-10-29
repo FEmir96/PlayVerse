@@ -323,14 +323,30 @@ export default function RentCheckoutPage({ params }: { params: { id: string } })
         currency,
       } as any);
 
-      toast({ title: "Alquiler confirmado", description: "¡Te enviamos el comprobante por email!" });
+      // Guardar payload de éxito y redirigir a página de confirmación
+      try {
+        const payload = {
+          gameId: String(game._id),
+          title,
+          cover,
+          weeks,
+          amount: total,
+          currency,
+        };
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("pv_rental_success", JSON.stringify(payload));
+        }
+      } catch (e) {
+        // ignore
+      }
 
       startTransition(() => {
-        router.replace("/");
+        router.replace("/checkout/alquiler/success");
         router.refresh();
       });
       setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/");
+        if (typeof window !== "undefined" && window.location.pathname !== "/checkout/alquiler/success")
+          window.location.assign("/checkout/alquiler/success");
       }, 600);
     } catch (e: any) {
       const msg = String(e?.message || "");

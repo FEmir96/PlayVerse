@@ -87,6 +87,12 @@ function LibraryCard({
   kind,
   expiresAt,
 }: LibraryCardProps) {
+    // Obtener datos del juego para mostrar el badge de plan (free/premium)
+    const gameDoc = useQuery(
+      (api as any).queries.getGameById.getGameById as any,
+      id ? ({ id } as any) : "skip"
+    ) as (Doc<"games"> | null | undefined);
+    const isPremiumPlan = (gameDoc as any)?.plan === "premium";
   const isRental = kind === "rental";
   const now = Date.now();
   const isExpired = isRental && typeof expiresAt === "number" && expiresAt <= now;
@@ -104,9 +110,21 @@ function LibraryCard({
     >
       <div className="p-5 pb-0">
         <div className="flex items-center justify-between mb-3">
-          <Badge className="bg-amber-400 text-slate-900 px-2 py-0.5">
-            {genre || "Acción"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className="bg-amber-400 text-slate-900 px-2 py-0.5">
+              {genre || "Acción"}
+            </Badge>
+          </div>
+
+          <div>
+            <Badge className={`font-semibold px-2 py-0.5 text-xs ${
+              isPremiumPlan
+                ? "bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-600 text-slate-900"
+                : "bg-teal-400 text-slate-900"
+            }`}>
+              {isPremiumPlan ? "Premium" : "Free"}
+            </Badge>
+          </div>
         </div>
         <CoverBox
           src={cover || "/placeholder.svg"}
