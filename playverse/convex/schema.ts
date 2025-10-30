@@ -208,6 +208,28 @@ transactions: defineTable({
     .index("by_user_createdAt", ["userId", "createdAt"])
     .index("by_user_isRead", ["userId", "isRead"]),
 
+  pushTokens: defineTable({
+    profileId: v.optional(v.id("profiles")),
+    email: v.optional(v.string()),
+    token: v.string(),
+    platform: v.optional(
+      v.union(
+        v.literal("ios"),
+        v.literal("android"),
+        v.literal("web"),
+        v.literal("unknown")
+      )
+    ),
+    deviceId: v.optional(v.string()),
+    lastUsedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    disabledAt: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_profile", ["profileId"])
+    .index("by_email", ["email"]),
+
   // ⬇️ NUEVO: historial de suscripciones
   subscriptions: defineTable({
     userId: v.id("profiles"),
@@ -301,3 +323,4 @@ transactions: defineTable({
     // permite q.eq("userId", userId).eq("gameId", gameId)
     .index("by_user_game", ["userId", "gameId"]),
 });
+

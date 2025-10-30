@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -18,6 +18,7 @@ import { colors, spacing, typography, radius } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import { convexHttp } from '../lib/convexClient';
+import { subscribe as subscribeNotificationsBus } from '../lib/notificationsBus';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 type NotificationDoc = {
@@ -39,7 +40,7 @@ const BADGE_STYLES: Record<string, BadgeStyle> = {
   discount: { label: 'Promo', background: '#2F1E19', color: colors.accentAlt },
   'new-game': { label: 'Nuevo juego', background: '#13263D', color: '#7BD4FF' },
   achievement: { label: 'Logro', background: '#1E2D4C', color: '#AFB7FF' },
-  'game-update': { label: 'Actualización', background: '#1B2538', color: '#A4C9D3' },
+  'game-update': { label: 'Actualizaci�n', background: '#1B2538', color: '#A4C9D3' },
   default: { label: 'Aviso', background: '#1B2F3B', color: colors.textPrimary },
 };
 
@@ -64,17 +65,30 @@ export default function NotificationsScreen() {
   const { data, loading, refetch } = useConvexQuery<NotificationDoc[]>(
     'notifications:getForUser',
     profile?._id ? { userId: profile._id, limit: 100 } : ({} as any),
-    { enabled: !!profile, refreshMs: 5000 }
+    { enabled: !!profile }
   );
+
+  const refetchRef = useRef(refetch);
+  useEffect(() => {
+    refetchRef.current = refetch;
+  }, [refetch]);
 
   useFocusEffect(
     useCallback(() => {
       if (!profile?._id) {
         return;
       }
-      refetch();
-    }, [profile?._id, refetch])
+      refetchRef.current?.();
+    }, [profile?._id])
   );
+
+  useEffect(() => {
+    if (!profile?._id) return;
+    const unsubscribe = subscribeNotificationsBus(() => {
+      refetchRef.current?.();
+    });
+    return unsubscribe;
+  }, [profile?._id]);
 
   const notifications = data ?? [];
   const unread = useMemo(
@@ -130,9 +144,9 @@ export default function NotificationsScreen() {
         </Pressable>
         <Text style={styles.title}>Notificaciones</Text>
         <Text style={styles.subtitle}>
-          Inicia sesión para ver tus alertas personalizadas.
+          Inicia sesi�n para ver tus alertas personalizadas.
         </Text>
-        <Button title="Iniciar sesión" onPress={goProfile} style={styles.loginButton} />
+        <Button title="Iniciar sesi�n" onPress={goProfile} style={styles.loginButton} />
       </View>
     );
   }
@@ -147,7 +161,7 @@ export default function NotificationsScreen() {
         <View style={styles.topMeta}>
           <Text style={styles.title}>Notificaciones</Text>
           <Text style={styles.subtitle}>
-            {unread > 0 ? `Tienes ${unread} sin leer` : 'Estás al día'}
+            {unread > 0 ? `Tienes ${unread} sin leer` : 'Est�s al d�a'}
           </Text>
         </View>
         <Pressable
@@ -224,7 +238,7 @@ export default function NotificationsScreen() {
                   </View>
                   {!item.isRead ? <View style={styles.unreadDot} /> : null}
                 </View>
-                <Text style={styles.cardTitle}>{item.title ?? 'Notificación PlayVerse'}</Text>
+                <Text style={styles.cardTitle}>{item.title ?? 'Notificaci�n PlayVerse'}</Text>
                 {item.message ? (
                   <Text style={styles.cardBody}>{item.message}</Text>
                 ) : null}
@@ -404,3 +418,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
 });
+
+
+
+
+
+

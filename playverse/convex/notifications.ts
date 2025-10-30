@@ -1,6 +1,7 @@
 // convex/notifications.ts
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 /* ─────────────────────────────────────────────
@@ -37,8 +38,36 @@ const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n
  * en una ventana temporal (por defecto 10 min).
  * Exportada para poder usarse desde otras mutaciones (import directo).
  */
+async function schedulePushNotification(
+  scheduler: any,
+  payload: {
+    userId: Id<"profiles">;
+    notificationId: Id<"notifications">;
+    title: string;
+    message: string;
+    type: NotificationType;
+    meta?: unknown;
+  }
+) {
+  if (!scheduler) return;
+  try {
+    await scheduler.runAfter(0, api.actions.push.send, {
+      userId: payload.userId,
+      notificationId: payload.notificationId,
+      title: payload.title,
+      message: payload.message,
+      data:
+        payload.meta && typeof payload.meta === "object"
+          ? { type: payload.type, meta: payload.meta }
+          : { type: payload.type },
+    });
+  } catch (error) {
+    console.error("schedulePushNotification error", error);
+  }
+}
+
 export async function notifyOnceServer(
-  ctx: { db: any },
+  ctx: { db: any; scheduler?: any },
   args: {
     userId: Id<"profiles">;
     type: NotificationType;
@@ -81,6 +110,15 @@ export async function notifyOnceServer(
     isRead: false,
     readAt: undefined,
     createdAt: Date.now(),
+    meta,
+  });
+
+  await schedulePushNotification(ctx.scheduler, {
+    userId,
+    notificationId: id,
+    title,
+    message,
+    type,
     meta,
   });
 
@@ -163,7 +201,7 @@ export const add = mutation({
     transactionId: v.optional(v.id("transactions")),
     meta: v.optional(v.any()),
   },
-  handler: async ({ db }, a) => {
+  handler: async ({ db, scheduler }, a) => {
     const now = Date.now();
     const id = await db.insert("notifications", {
       userId: a.userId,
@@ -175,6 +213,14 @@ export const add = mutation({
       isRead: false,
       readAt: undefined,
       createdAt: now,
+      meta: a.meta,
+    });
+    await schedulePushNotification(scheduler, {
+      userId: a.userId,
+      notificationId: id,
+      title: a.title,
+      message: a.message,
+      type: a.type,
       meta: a.meta,
     });
     return { ok: true as const, id };

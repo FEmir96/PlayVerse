@@ -1,4 +1,4 @@
-﻿// playverse/playverse-mobile/app.config.js
+// playverse/playverse-mobile/app.config.js
 import "dotenv/config";
 
 export default {
@@ -6,7 +6,7 @@ export default {
     
     name: "playverse",
     slug: "playverse",
-    owner: "fernandoemir",                // 👈 IMPORTANTE
+    owner: "fernandoemir",                // ?? IMPORTANTE
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -34,7 +34,8 @@ export default {
       favicon: "./assets/favicon.png"
     },
     plugins: [
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     extra: {
       convexUrl: process.env.CONVEX_URL || process.env.EXPO_PUBLIC_CONVEX_URL,
@@ -59,3 +60,4 @@ export default {
     }
   }
 };
+

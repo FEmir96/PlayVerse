@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { convexHttp } from '../lib/convexClient';
+import { unregisterStoredPushToken } from '../lib/pushNotifications';
 
 export type Profile = {
   _id: string;
@@ -94,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setProfile(undefined);
     persist(undefined);
+    unregisterStoredPushToken().catch(() => {});
   };
 
   const setFromProfile: AuthContextType['setFromProfile'] = (p) => {

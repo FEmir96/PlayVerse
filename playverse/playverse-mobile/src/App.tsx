@@ -10,6 +10,7 @@ import { convex } from './lib/convexClient';
 import { AuthProvider } from './context/AuthContext';
 import AppNavigator, { type RootStackParamList } from './navigation/AppNavigator';
 import { FavoritesProvider } from './context/FavoritesContext';
+import PushNotificationsManager from './components/PushNotificationsManager';
 
 // ✅ Llamar una sola vez, a nivel de módulo (evita bucles)
 try { WebBrowser.maybeCompleteAuthSession(); } catch {}
@@ -39,6 +40,7 @@ export default function MainApp() {
       <ConvexProvider client={convex}>
         <AuthProvider>
           <FavoritesProvider>
+            <PushNotificationsManager />
             {/* 👉 En web desactivo linking para evitar loops en el preview */}
             <NavigationContainer linking={Platform.OS === 'web' ? undefined : linking}>
               <AppNavigator />
@@ -50,3 +52,5 @@ export default function MainApp() {
     </GestureHandlerRootView>
   );
 }
+
+

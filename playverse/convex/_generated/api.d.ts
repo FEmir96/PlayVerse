@@ -8,11 +8,6 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 import type * as actions_ageRatingsNuke from "../actions/ageRatingsNuke.js";
 import type * as actions_backfillCoversFromIGDB from "../actions/backfillCoversFromIGDB.js";
 import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetailsFromIGDB.js";
@@ -27,6 +22,7 @@ import type * as actions_fillUpcomingCoversFromIGDB from "../actions/fillUpcomin
 import type * as actions_getIGDBScreenshots from "../actions/getIGDBScreenshots.js";
 import type * as actions_massBackfillAgeRatings from "../actions/massBackfillAgeRatings.js";
 import type * as actions_notifications_scheduleRentalExpiryReminders from "../actions/notifications/scheduleRentalExpiryReminders.js";
+import type * as actions_push from "../actions/push.js";
 import type * as actions_refreshIGDBBatch from "../actions/refreshIGDBBatch.js";
 import type * as actions_refreshIGDBRatingForGame from "../actions/refreshIGDBRatingForGame.js";
 import type * as actions_refreshRAWGBatch from "../actions/refreshRAWGBatch.js";
@@ -89,6 +85,7 @@ import type * as mutations_upsertGameEmbed from "../mutations/upsertGameEmbed.js
 import type * as mutations_upsertUpcoming from "../mutations/upsertUpcoming.js";
 import type * as notifications from "../notifications.js";
 import type * as profiles from "../profiles.js";
+import type * as pushTokens from "../pushTokens.js";
 import type * as queries_admin_listGames from "../queries/admin/listGames.js";
 import type * as queries_admin_listProfiles from "../queries/admin/listProfiles.js";
 import type * as queries_canPlayGame from "../queries/canPlayGame.js";
@@ -126,6 +123,12 @@ import type * as queries_scores_topByGame from "../queries/scores/topByGame.js";
 import type * as queries_searchGames from "../queries/searchGames.js";
 import type * as transactions from "../transactions.js";
 
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
 /**
  * A utility for referencing Convex functions in your app's API.
  *
@@ -149,6 +152,7 @@ declare const fullApi: ApiFromModules<{
   "actions/getIGDBScreenshots": typeof actions_getIGDBScreenshots;
   "actions/massBackfillAgeRatings": typeof actions_massBackfillAgeRatings;
   "actions/notifications/scheduleRentalExpiryReminders": typeof actions_notifications_scheduleRentalExpiryReminders;
+  "actions/push": typeof actions_push;
   "actions/refreshIGDBBatch": typeof actions_refreshIGDBBatch;
   "actions/refreshIGDBRatingForGame": typeof actions_refreshIGDBRatingForGame;
   "actions/refreshRAWGBatch": typeof actions_refreshRAWGBatch;
@@ -211,6 +215,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/upsertUpcoming": typeof mutations_upsertUpcoming;
   notifications: typeof notifications;
   profiles: typeof profiles;
+  pushTokens: typeof pushTokens;
   "queries/admin/listGames": typeof queries_admin_listGames;
   "queries/admin/listProfiles": typeof queries_admin_listProfiles;
   "queries/canPlayGame": typeof queries_canPlayGame;
@@ -248,11 +253,15 @@ declare const fullApi: ApiFromModules<{
   "queries/searchGames": typeof queries_searchGames;
   transactions: typeof transactions;
 }>;
+declare const fullApiWithMounts: typeof fullApi;
+
 export declare const api: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "public">
 >;
 export declare const internal: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {};

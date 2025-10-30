@@ -65,6 +65,10 @@ export default function ProfileScreen() {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
+  const handleContactPress = useCallback(() => {
+    navigation.navigate('Contact' as any);
+  }, [navigation]);
+
   const userId = profile?._id;
 
   const { data: fullProfile } = useConvexQuery<any>(
@@ -408,7 +412,7 @@ export default function ProfileScreen() {
           <Text style={styles.helper}>Autenticación nativa sin abrir la web.</Text>
         </View>
 
-        <FAQ />
+        <FAQ onContactPress={handleContactPress} />
       </ScrollView>
     );
   }
@@ -498,7 +502,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <FAQ />
+      <FAQ onContactPress={handleContactPress} />
 
       {/* Modal avatar grande */}
       <Modal visible={avatarModal} animationType="fade" transparent onRequestClose={() => setAvatarModal(false)}>
@@ -538,14 +542,19 @@ function GameRow({ title, cover, note }: { title?: string; cover?: string; note?
   );
 }
 
-function FAQ() {
+function FAQ({ onContactPress }: { onContactPress: () => void }) {
   return (
     <View style={styles.card}>
       <Text style={styles.sectionHeading}>Preguntas frecuentes</Text>
       <Text style={styles.label}>¿Cómo funciona el alquiler de juegos?</Text>
       <Text style={styles.label}>¿Qué incluye la membresía Premium?</Text>
       <Text style={styles.label}>¿Puedo cancelar mi suscripción?</Text>
-      <Button title="Contacto" variant="ghost" style={{ alignSelf: 'flex-start', marginTop: spacing.md }} />
+      <Button
+        title="Contacto"
+        variant="ghost"
+        onPress={onContactPress}
+        style={{ alignSelf: 'flex-start', marginTop: spacing.md }}
+      />
     </View>
   );
 }

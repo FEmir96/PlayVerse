@@ -12,6 +12,7 @@ import MyGamesScreen from '../screens/MyGamesScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import AuthCallbackScreen from '../screens/AuthCallbackScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import ContactScreen from '../screens/ContactScreen';
 
 import BottomTabBar from './BottomTabBar';
 import HeaderBar from '../components/HeaderBar';
@@ -89,6 +90,7 @@ function ProfileStackNavigator(): React.ReactElement {
   return (
     <ProfileStack.Navigator screenOptions={withPVHeader()}>
       <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: '' }} />
+      <ProfileStack.Screen name="Contact" component={ContactScreen} options={{ title: '' }} />
     </ProfileStack.Navigator>
   );
 }
