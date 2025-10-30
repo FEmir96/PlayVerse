@@ -547,7 +547,13 @@ export default function GameDetailPage() {
   const hasBuyPrice = typeof baseBuy === "number";
   const hasRentPrice = typeof baseRent === "number";
   const isPriceZero = (hasBuyPrice && baseBuy === 0) || (hasRentPrice && baseRent === 0);
-  const isFreeToPlay = Boolean(isFreePlan || isPriceZero);
+  // A game is considered free-to-play only when its price is zero OR when it's
+  // marked as `plan === 'free'` and it has no explicit buy/rent prices.
+  // This prevents a priced game from being treated as free just because its
+  // metadata says `plan: 'free'`.
+  const isFreeToPlay = Boolean(
+    isPriceZero || (isFreePlan && !hasBuyPrice && !hasRentPrice)
+  );
   const isPremiumViewer = isPremiumSub || isAdmin;
 
   const discountRate = isPremiumViewer ? 0.10 : 0;
@@ -748,15 +754,19 @@ export default function GameDetailPage() {
 
   // Nueva lógica para determinar qué botones mostrar
   const shouldShowPlayButton = () => {
-    // If plan-free or explicitly zero-priced, offer the Play button.
+    // Admins always see Play.
+    if (isAdmin) return true;
+
+    // If explicitly zero-priced or included in the free plan (and no prices), offer Play.
     if (isFreeToPlay) return true;
     // If paid, only show Play when the user already owns it or has an active rental.
     return hasPurchased || hasActiveRental;
   };
 
   const shouldShowUpgradeModal = () => {
-    // Show upgrade modal only when the game is free-by-plan premium AND the user is logged and not premium.
-    return isFreeToPlay && isPremiumPlan && isLogged && !isPremiumSub && !isAdmin;
+    // The upgrade modal should appear when the game requires PREMIUM access
+    // (i.e. game plan is premium) and the user is logged but not premium/admin.
+    return isPremiumPlan && isLogged && !isPremiumSub && !isAdmin;
   };
 
   /* ======================= RENDER ======================= */

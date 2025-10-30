@@ -318,6 +318,17 @@ export default function ProfilePage() {
 
   const savePaymentMethod = useMutation(savePaymentMethodRef);
 
+  // delete payment method (Convex)
+  const deletePaymentMethodRef = (api as any)["mutations/deletePaymentMethod"]?.deletePaymentMethod as FunctionReference<"mutation"> | undefined;
+  const deletePaymentMethod = deletePaymentMethodRef ? useMutation(deletePaymentMethodRef) : null;
+
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | number | null>(null);
+  const [pendingDeleteLabel, setPendingDeleteLabel] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [removedIds, setRemovedIds] = useState<Array<string | number>>([]);
+
   function maskCard(num: string) {
     const clean = num.replace(/\D/g, "");
     if (clean.length < 4) return "•••• •••• •••• " + clean;
@@ -387,6 +398,8 @@ export default function ProfilePage() {
 
   // ⬇️ NUEVO: cancelación
   const cancelPremium = useMutation(cancelPremiumRef);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // ⬇️ NUEVO: aviso por toast cuando está por vencer o ya venció (solo UI)
   useEffect(() => {
@@ -585,22 +598,7 @@ export default function ProfilePage() {
                     <Separator className="bg-slate-700" />
                     <Button
                       variant="outline"
-                      onClick={async () => {
-                        if (!convexProfile?._id) return;
-                        try {
-                          await (cancelPremium as any)({ userId: convexProfile._id, reason: "user_click" });
-                          toast({
-                            title: "Suscripción cancelada",
-                            description: "Tu cuenta volvió a Free. Podés suscribirte otra vez cuando quieras.",
-                          });
-                        } catch (e: any) {
-                          toast({
-                            title: "No se pudo cancelar",
-                            description: e?.message ?? "Intentá nuevamente.",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
+                      onClick={() => setConfirmCancelOpen(true)}
                       className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
                     >
                       Cancelar suscripción
@@ -633,7 +631,8 @@ export default function ProfilePage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {displayMethods && displayMethods.length > 0 ? (
-                  displayMethods.map((m) => (
+                  // hide any removed ids optimistically
+                  displayMethods.filter((mm) => !removedIds.includes(mm.id)).map((m) => (
                     <div key={m.id} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg">
                       <div className="flex items-center gap-3">
                         <CreditCard className="w-5 h-5 text-orange-400" />
@@ -644,7 +643,21 @@ export default function ProfilePage() {
                           </p>
                         </div>
                       </div>
-                      {!methodsFromDb && (
+                      {methodsFromDb ? (
+                        // server-backed method: open confirmation modal
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setPendingDeleteId(m.id);
+                            setPendingDeleteLabel(`${m.brand.toUpperCase()} •••• ${m.last4}`);
+                            setDeleteModalOpen(true);
+                          }}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      ) : (
                         <Button size="sm" variant="ghost" onClick={() => removeLocalMethod(m.id)} className="text-red-400 hover:text-red-300">
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -835,6 +848,90 @@ export default function ProfilePage() {
                   Cerrar
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === MODAL: Confirmar eliminación de método de pago === */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!deleting) setDeleteModalOpen(false); }}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-orange-400 font-semibold">Eliminar método de pago</h3>
+              <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!deleting) setDeleteModalOpen(false); }}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="text-slate-300 mb-4">¿Querés eliminar {pendingDeleteLabel ?? "este método de pago"}? Esta acción no se puede deshacer.</p>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setDeleteModalOpen(false)} className="text-slate-300">Cancelar</Button>
+              <Button
+                className="bg-red-500 hover:bg-red-600 text-white"
+                onClick={async () => {
+                  if (!deletePaymentMethod || pendingDeleteId == null) return;
+                  setDeleting(true);
+                  try {
+                    await deletePaymentMethod({ id: pendingDeleteId } as any);
+                    // optimistically hide
+                    setRemovedIds((arr) => [...arr, pendingDeleteId]);
+                    toast({ title: "Método eliminado", description: "Se quitó el método de pago." });
+                    setDeleteModalOpen(false);
+                    setPendingDeleteId(null);
+                    setPendingDeleteLabel(null);
+                  } catch (err: any) {
+                    toast({ title: "No se pudo eliminar", description: err?.message ?? "Intentá nuevamente.", variant: "destructive" });
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                disabled={deleting}
+              >
+                {deleting ? "Eliminando..." : "Eliminar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === MODAL: Confirmar cancelación de renovación automática === */}
+      {confirmCancelOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-orange-400 font-semibold">Cancelar suscripción</h3>
+              <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <p className="text-slate-300 mb-4">Perderás el acceso a todos los beneficios de PlayVerse Premium ¿Seguro que deseas continuar?</p>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setConfirmCancelOpen(false)} className="text-slate-300">Cancelar</Button>
+              <Button
+                className="bg-red-500 hover:bg-red-600 text-white"
+                onClick={async () => {
+                  if (!convexProfile?._id) return;
+                  setCancelling(true);
+                  try {
+                    await (cancelPremium as any)({ userId: convexProfile._id, reason: "user_click" });
+                    toast({
+                      title: "Renovación automática cancelada",
+                      description: "Tu cuenta mantendrá el acceso hasta el vencimiento actual.",
+                    });
+                    setConfirmCancelOpen(false);
+                  } catch (e: any) {
+                    toast({ title: "No se pudo cancelar", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
+                  } finally {
+                    setCancelling(false);
+                  }
+                }}
+                disabled={cancelling}
+              >
+                {cancelling ? "Cancelando..." : "Confirmar"}
+              </Button>
             </div>
           </div>
         </div>

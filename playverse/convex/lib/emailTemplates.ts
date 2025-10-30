@@ -14,15 +14,15 @@ export type BaseOpts = {
 };
 
 const COLORS = {
-  bgOuter:   "#0b1220",
-  cardBg:    "#0f172a",
-  border:    "#1f2937",
-  brand:     "#fbbf24",
-  accent:    "#fbbf24",
-  text:      "#fbbf24",
-  textSoft:  "#fbbf24",
+  bgOuter: "#0b1220",
+  cardBg: "#0f172a",
+  border: "#1f2937",
+  brand: "#fbbf24",
+  accent: "#fbbf24",
+  text: "#fbbf24",
+  textSoft: "#fbbf24",
   textMuted: "#fbbf24",
-  footer:    "#64748b",
+  footer: "#64748b",
 };
 
 // Fallback seguro a tu mini-repo por si la env faltara
@@ -52,17 +52,17 @@ function iconImg(src: string, alt: string, size = 20, extra = "") {
 }
 
 const ICONS = {
-  logo:        "/images/playverse-logo.png",
-  mushroom:    "/images/hongo.png",
-  star:        "/images/estrella.png",
-  controller:  "/images/control.png",
-  inv1:        "/images/rob1.png",
-  inv2:        "/images/rob2.png",
-  coin:        "/images/moneda.png",
-  amount:      "/images/moneda.png",
-  method:      "/images/control.png",
-  weeks:       "/images/estrella.png",
-  expires:     "/images/rob2.png",
+  logo: "/images/playverse-logo.png",
+  mushroom: "/images/hongo.png",
+  star: "/images/estrella.png",
+  controller: "/images/control.png",
+  inv1: "/images/rob1.png",
+  inv2: "/images/rob2.png",
+  coin: "/images/moneda.png",
+  amount: "/images/moneda.png",
+  method: "/images/control.png",
+  weeks: "/images/estrella.png",
+  expires: "/images/rob2.png",
 };
 
 /* ========= Piezas visuales reutilizables ========= */
@@ -73,12 +73,12 @@ function decorativeStrip() {
   const gap = 10;
 
   const icons = [
-    { s: ICONS.mushroom,  a: "Hongo" },
-    { s: ICONS.star,      a: "Estrella" },
-    { s: ICONS.controller,a: "Control" },
-    { s: ICONS.inv1,      a: "Alien 1" },
-    { s: ICONS.coin,      a: "Moneda" },
-    { s: ICONS.inv2,      a: "Alien 2" },
+    { s: ICONS.mushroom, a: "Hongo" },
+    { s: ICONS.star, a: "Estrella" },
+    { s: ICONS.controller, a: "Control" },
+    { s: ICONS.inv1, a: "Alien 1" },
+    { s: ICONS.coin, a: "Moneda" },
+    { s: ICONS.inv2, a: "Alien 2" },
   ];
 
   const imgs = icons
@@ -163,10 +163,10 @@ function titleWithThumb(title: string, coverUrl?: string | null) {
 /* ========= Bloque de información principal ========= */
 
 function infoBlock(opts: BaseOpts, extraRows = "") {
-  const money  = opts.amount.toLocaleString("en-US", { style: "currency", currency: opts.currency ?? "USD" });
+  const money = opts.amount.toLocaleString("en-US", { style: "currency", currency: opts.currency ?? "USD" });
   const method = opts.method ?? "Tarjeta";
-  const order  = opts.orderId ? `<div style="margin-top:8px;color:${COLORS.accent};font-size:12px"><strong>ID de pedido:</strong> ${esc(opts.orderId)}</div>` : "";
-  const cta    = opts.appUrl
+  const order = opts.orderId ? `<div style="margin-top:8px;color:${COLORS.accent};font-size:12px"><strong>ID de pedido:</strong> ${esc(opts.orderId)}</div>` : "";
+  const cta = opts.appUrl
     ? `<div style="margin-top:16px">
          <a href="${opts.appUrl}" style="display:inline-block;background:${COLORS.brand};color:#0b0f19;text-decoration:none;padding:11px 16px;border-radius:10px;font-weight:800;letter-spacing:.2px">Ir a PlayVerse</a>
        </div>`
@@ -192,13 +192,12 @@ function infoBlock(opts: BaseOpts, extraRows = "") {
             <span style="margin-left:6px;color:${COLORS.accent};font-weight:700">${esc(method)}</span>
           </td>
         </tr>
-        ${
-          extraRows
-            ? `<tr><td colspan="2" style="padding-top:10px">
+        ${extraRows
+      ? `<tr><td colspan="2" style="padding-top:10px">
                  <div style="display:flex;gap:14px;flex-wrap:wrap;color:${COLORS.accent};font-size:14px">${extraRows}</div>
                </td></tr>`
-            : ""
-        }
+      : ""
+    }
       </table>
 
       ${order}
@@ -239,8 +238,8 @@ export function buildExtendEmail(opts: BaseOpts) {
   const extra = (() => {
     const chips: string[] = [];
     if (typeof opts.weeks === "number") {
-      const ico = iconImg(ICONS.weeks, "Semanas +", 16, "opacity:.9;margin-right:6px");
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Semanas +:</strong>&nbsp;${opts.weeks}</span></div>`);
+      const ico = iconImg(ICONS.weeks, "Semanas", 16, "opacity:.9;margin-right:6px");
+      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Semanas:</strong>+&nbsp;${opts.weeks}</span></div>`);
     }
     if (typeof opts.expiresAt === "number") {
       const ico = iconImg(ICONS.expires, "Nuevo venc.", 16, "opacity:.9;margin-right:6px");
