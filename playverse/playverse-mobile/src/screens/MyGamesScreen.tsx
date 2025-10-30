@@ -1,4 +1,4 @@
-﻿// playverse/playverse-mobile/src/screens/MyGamesScreen.tsx
+// playverse/playverse-mobile/src/screens/MyGamesScreen.tsx
 import React, { useMemo, useState, useCallback, useLayoutEffect } from 'react';
 import {
   RefreshControl,
@@ -50,6 +50,7 @@ export default function MyGamesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
   const { profile } = useAuth();
+  const userId = profile?._id ?? null;
   const [tab, setTab] = useState<TabKey>('rent');
 
   useLayoutEffect(() => {
@@ -66,6 +67,16 @@ export default function MyGamesScreen() {
     const available = width - PADDING_H * 2 - GAP * (columns - 1);
     return Math.floor(available / columns);
   }, [width, columns]);
+
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    userId ? { userId, limit: 20 } : ({} as any),
+    { enabled: !!userId, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(() => {
+    if (!userId) return 0;
+    return (notifications ?? []).filter((n: any) => n?.isRead === false).length;
+  }, [userId, notifications]);
 
   // ===== Convex, filtrado por usuario =====
   const enabled = !!profile?._id;
@@ -203,14 +214,21 @@ export default function MyGamesScreen() {
           />
         </View>
 
-        <Pressable
-          onPress={() => nav.navigate('Notifications' as any)}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Ir a notificaciones"
-        >
-          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-        </Pressable>
+        <View style={styles.iconWrap}>
+          <Pressable
+            onPress={() => nav.navigate('Notifications' as any)}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Ir a notificaciones"
+          >
+            <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          </Pressable>
+          {userId && unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.header}>
@@ -301,6 +319,17 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceBorder,
     backgroundColor: '#0F2D3A',
   },
+  iconWrap: { position: 'relative' },
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
 

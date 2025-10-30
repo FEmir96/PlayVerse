@@ -261,19 +261,24 @@ export default function GameCard(props: GameCardProps) {
                   {title}
                 </Text>
 
-                <Pressable
-                  onPress={(e) => { e.stopPropagation?.(); toggleFavorite(); }}
-                  hitSlop={8}
-                  style={styles.heartBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-                >
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={20}
-                    color={isFavorite ? colors.accent : '#a9c4cf'}
-                  />
-                </Pressable>
+                {showFavorite ? (
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      toggleFavorite();
+                    }}
+                    hitSlop={8}
+                    style={styles.heartBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                  >
+                    <Ionicons
+                      name={isFavorite ? 'heart' : 'heart-outline'}
+                      size={20}
+                      color={isFavorite ? colors.accent : '#a9c4cf'}
+                    />
+                  </Pressable>
+                ) : null}
               </View>
 
               {!!overlayLabel && (

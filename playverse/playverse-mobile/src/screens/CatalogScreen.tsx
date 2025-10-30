@@ -31,6 +31,7 @@ export default function CatalogScreen() {
   const { width } = useWindowDimensions();
   const { favoriteIds } = useFavorites();
   const { profile } = useAuth();
+  const userId = profile?._id ?? null;
 
   useLayoutEffect(() => { nav.setOptions({ headerShown: false }); }, [nav]);
 
@@ -47,6 +48,15 @@ export default function CatalogScreen() {
     {},
     { refreshMs: 20000 }
   );
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    userId ? { userId, limit: 20 } : ({} as any),
+    { enabled: !!userId, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(() => {
+    if (!userId) return 0;
+    return (notifications ?? []).filter((n: any) => n?.isRead === false).length;
+  }, [userId, notifications]);
 
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Todos');
@@ -84,14 +94,21 @@ export default function CatalogScreen() {
           <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />
         </View>
 
-        <Pressable
-          onPress={() => nav.navigate(profile ? 'Notifications' as any : 'Profile' as any)}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel={profile ? 'Ir a notificaciones' : 'Ir a iniciar sesión'}
-        >
-          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-        </Pressable>
+        <View style={styles.iconWrap}>
+          <Pressable
+            onPress={() => nav.navigate(profile ? 'Notifications' as any : 'Profile' as any)}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel={profile ? 'Ir a notificaciones' : 'Ir a iniciar sesión'}
+          >
+            <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+          </Pressable>
+          {userId && unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.header}>
@@ -179,6 +196,17 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: '#0F2D3A',
   },
+  iconWrap: { position: 'relative' },
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
 

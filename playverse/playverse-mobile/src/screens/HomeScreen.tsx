@@ -51,7 +51,7 @@ export default function HomeScreen() {
   const { data: notifications } = useConvexQuery<any[]>(
     'notifications:getForUser',
     userId ? { userId, limit: 20 } : ({} as any),
-    { enabled: !!userId, refreshMs: 20000 }
+    { enabled: !!userId }
   );
   const unreadCount = useMemo(() => {
     if (!userId) return 0;
@@ -66,8 +66,8 @@ export default function HomeScreen() {
 
   const computedCols = useMemo(() => {
     const maxByWidth = Math.max(1, Math.floor((usableW + GAP) / (MIN_CARD_WIDTH + GAP)));
-    return Math.min(4, Math.max(2, maxByWidth));
-  }, [usableW]);
+    return winW >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
+  }, [usableW, winW]);
 
   const cardWidth = useMemo(() => {
     const available = usableW - GAP * (computedCols - 1);
@@ -79,12 +79,11 @@ export default function HomeScreen() {
   };
 
   // --------- datos ----------
-const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
-  // ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'],
-  'queries/getGames:getGames', // ðŸ‘ˆ dejÃ¡ una sola ruta vÃ¡lida para evitar el warning
-  {},
-  { refreshMs: 15000 }
-);
+  const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQuery<Game[]>(
+    // ['queries/getGames:getGames', 'queries/getAllGames:getAllGames'],
+    'queries/getGames:getGames',
+    {}
+  );
   const { data: upcomingRaw, loading: loadingUpcoming, refetch: refetchUpcoming } =
     useConvexQuery<UpcomingGame[]>(
       [
@@ -93,8 +92,7 @@ const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQu
         'getUpcomingGames',
         'queries/getComingSoon:getComingSoon',
       ],
-      { limit: 6 },
-      { refreshMs: 30000 }
+      { limit: 6 }
     );
 
   const newest = useMemo(() => {
@@ -199,13 +197,13 @@ const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQu
       <View style={styles.header}>
         <Text style={styles.title}>INICIO</Text>
         <Text style={styles.subtitle}>
-          DescubrÃ­ quÃ© hay de nuevo en PlayVerse{isPremium ? ' â€” descuento 10% activo.' : '.'}
-        </Text>
+          Descubrí qué hay de nuevo en PlayVerse{isPremium ? ' — descuento 10% activo.' : '.'}
+          Descubrí qué hay de nuevo en PlayVerse{isPremium ? ' — descuento 10% activo.' : '.'}
       </View>
 
       {/* Nuevos juegos */}
-      <Section title="Nuevos juegos" subtitle="ExplorÃ¡ la colecciÃ³n y encontrÃ¡ tu prÃ³xima aventura.">
-        <View style={styles.grid} onLayout={onGridLayout}>
+      <Section title="Nuevos juegos" subtitle="Explorá la colección y encontrá tu próxima aventura.">
+      <Section title="Nuevos juegos" subtitle="Explorá la colección y encontrá tu próxima aventura.">
           {newest.map((g: any, i: number) => {
             const game = mapGame(g, i);
             const mr = computedCols > 1 && i % computedCols !== computedCols - 1 ? GAP : 0;
@@ -219,8 +217,8 @@ const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQu
                 }}
               >
                 <GameCard
-                  game={game as any}
-                  tag={isPremium ? '-10%' : i < 2 ? 'AcciÃ³n' : undefined}
+      {/* Próximamente */}
+      <Section title="Próximamente">
                   onPress={() =>
                     (g?._id || g?.id || g?.gameId) &&
                     nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })
@@ -236,8 +234,8 @@ const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQu
       </Section>
 
       {/* PrÃ³ximamente */}
-      <Section title="PrÃ³ximamente">
-        <View style={[styles.grid, styles.topBorder]} onLayout={onGridLayout}>
+      {/* Próximamente */}
+      <Section title="Próximamente">
           {(upcoming ?? []).map((item: any, i: number) => {
             const game = mapGame(item, i);
             const releaseAt =
@@ -255,7 +253,7 @@ const { data: allGames, loading: loadingAll, refetch: refetchAll } = useConvexQu
                   marginBottom: GAP,
                 }}
               >
-                <GameCard game={game as any} disabled overlayLabel={releaseLabel} />
+                <GameCard game={game as any} disabled overlayLabel={releaseLabel} showFavorite={false} />
               </View>
             );
           })}

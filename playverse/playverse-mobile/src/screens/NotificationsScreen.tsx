@@ -40,7 +40,7 @@ const BADGE_STYLES: Record<string, BadgeStyle> = {
   discount: { label: 'Promo', background: '#2F1E19', color: colors.accentAlt },
   'new-game': { label: 'Nuevo juego', background: '#13263D', color: '#7BD4FF' },
   achievement: { label: 'Logro', background: '#1E2D4C', color: '#AFB7FF' },
-  'game-update': { label: 'Actualizaci�n', background: '#1B2538', color: '#A4C9D3' },
+  'game-update': { label: 'Actualización', background: '#1B2538', color: '#A4C9D3' },
   default: { label: 'Aviso', background: '#1B2F3B', color: colors.textPrimary },
 };
 
@@ -95,8 +95,6 @@ export default function NotificationsScreen() {
     () => notifications.filter((item) => !item.isRead).length,
     [notifications]
   );
-
-  const goHome = () => navigation.navigate('Tabs', { screen: 'Home' } as any);
   const goProfile = () => navigation.navigate('Tabs', { screen: 'Profile' } as any);
 
   const markAll = async () => {
@@ -138,15 +136,11 @@ export default function NotificationsScreen() {
   if (!profile) {
     return (
       <View style={styles.emptyRoot}>
-        <Pressable onPress={goHome} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={18} color="#1B1B1B" />
-          <Text style={styles.backLabel}>Volver al inicio</Text>
-        </Pressable>
         <Text style={styles.title}>Notificaciones</Text>
         <Text style={styles.subtitle}>
-          Inicia sesi�n para ver tus alertas personalizadas.
+          Inicia sesión para ver tus alertas personalizadas.
         </Text>
-        <Button title="Iniciar sesi�n" onPress={goProfile} style={styles.loginButton} />
+        <Button title="Iniciar sesión" onPress={goProfile} style={styles.loginButton} />
       </View>
     );
   }
@@ -154,25 +148,13 @@ export default function NotificationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <Pressable onPress={goHome} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={18} color="#1B1B1B" />
-          <Text style={styles.backLabel}>Inicio</Text>
-        </Pressable>
         <View style={styles.topMeta}>
           <Text style={styles.title}>Notificaciones</Text>
           <Text style={styles.subtitle}>
-            {unread > 0 ? `Tienes ${unread} sin leer` : 'Est�s al d�a'}
+            {unread > 0 ? `Tienes ${unread} sin leer` : 'Estás al día'}
           </Text>
         </View>
-        <Pressable
-          style={[styles.iconButton, unread === 0 && styles.iconButtonDisabled]}
-          onPress={markAll}
-          disabled={unread === 0}
-        >
-          <Ionicons name="checkmark-done" size={20} color="#1B1B1B" />
-        </Pressable>
       </View>
-
       <View style={styles.actionsRow}>
         <Button
           title="Marcar todo"
@@ -238,7 +220,7 @@ export default function NotificationsScreen() {
                   </View>
                   {!item.isRead ? <View style={styles.unreadDot} /> : null}
                 </View>
-                <Text style={styles.cardTitle}>{item.title ?? 'Notificaci�n PlayVerse'}</Text>
+                <Text style={styles.cardTitle}>{item.title ?? 'Notificación PlayVerse'}</Text>
                 {item.message ? (
                   <Text style={styles.cardBody}>{item.message}</Text>
                 ) : null}
@@ -260,52 +242,25 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
   },
   topBar: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.xs,
   },
   topMeta: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  backButton: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: '#F2B70511',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-  },
-  backLabel: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: '#1B1B1B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
   title: {
     fontSize: typography.h1,
     fontWeight: '800',
     color: colors.textPrimary,
+    textAlign: 'center',
   },
   subtitle: {
     marginTop: spacing.xs,
     fontSize: typography.body,
     color: colors.textSecondary,
-  },
-  iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconButtonDisabled: {
-    opacity: 0.35,
+    textAlign: 'center',
   },
   actionsRow: {
     flexDirection: 'row',
@@ -418,9 +373,3 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
 });
-
-
-
-
-
-
