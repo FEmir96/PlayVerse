@@ -16,7 +16,15 @@ import {
   ArrowUpDown,
   Play,
   Repeat2,
+  ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
@@ -45,16 +53,6 @@ type MinimalGame = {
   genres?: string[] | null;
 };
 
-const genres = [
-  "Todos",
-  "Acción",
-  "RPG",
-  "Carreras",
-  "Shooter",
-  "Sandbox",
-  "Estrategia",
-  "Deportes",
-];
 
 const norm = (s?: string | null) => String(s || "").trim().toLowerCase();
 function fmtDate(ts?: number | null) {
@@ -197,7 +195,7 @@ export default function MisJuegosPage() {
 
   const [activeTab, setActiveTab] = useState<"purchases" | "rentals">("purchases");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedGenre, setSelectedGenre] = useState("Todos");
+  const [sortType, setSortType] = useState<string>("recent");
 
   // ← Lee ?tab=... cuando cambia la URL (o al cargar)
   useEffect(() => {
@@ -244,19 +242,35 @@ export default function MisJuegosPage() {
 
   const titleLookup = useMemo(() => {
     const m = new Map<string, { id: string; genre?: string | null }>();
+    const idMap = new Map<string, string | null>();
+    const planMap = new Map<string, string | null>();
     for (const g of gamesMini || []) {
       const key = norm(g?.title);
-      if (key) m.set(key, { id: String(g._id), genre: g.genres?.[0] || null });
+      const gid = String(g._id);
+      const genre = g.genres?.[0] || null;
+      const plan = (g as any)?.plan ?? null;
+      if (key) m.set(key, { id: gid, genre });
+      idMap.set(gid, genre);
+      planMap.set(gid, plan);
     }
-    return m;
+    // return maps so resolveGame and plan lookups can use them
+    return { byTitle: m, byId: idMap, byPlan: planMap };
   }, [gamesMini]);
 
   const resolveGame = (
     explicitId?: Id<"games"> | string | null,
     titleMaybe?: string | null
   ) => {
-    if (explicitId) return { id: String(explicitId), genre: null as string | null };
-    const hit = titleLookup.get(norm(titleMaybe));
+    // titleLookup now is an object with byTitle and byId maps
+    const byTitle = (titleLookup as any)?.byTitle as Map<string, { id: string; genre?: string | null }> | undefined;
+    const byId = (titleLookup as any)?.byId as Map<string, string | null> | undefined;
+
+    if (explicitId) {
+      const gid = String(explicitId);
+      const genre = byId ? byId.get(gid) ?? null : null;
+      return { id: gid, genre };
+    }
+    const hit = byTitle ? byTitle.get(norm(titleMaybe)) : undefined;
     return { id: hit?.id || "", genre: hit?.genre || null };
   };
 
@@ -302,35 +316,59 @@ export default function MisJuegosPage() {
         )
       : [];
 
-  // Filtrar + dedup compras
+  // Filtrar + dedup compras con soporte de filtro por plan y orden
   const filteredPurchases = useMemo(() => {
     const list = purchases || [];
     const deduped = dedupePurchases(list);
-    if (!searchQuery.trim() && selectedGenre === "Todos") return deduped;
     const query = norm(searchQuery);
-    return deduped.filter((p) => {
-      const title = norm(p.game?.title || p.title);
-      const { genre } = resolveGame(p.game?._id ?? p.gameId ?? null, title);
-      const genreOk = selectedGenre === "Todos" || genre === selectedGenre;
-      const queryOk = !query || title.includes(query);
-      return genreOk && queryOk;
-    });
-  }, [purchases, searchQuery, selectedGenre]);
 
-  // Filtrar + dedup alquileres
+    const byPlan = (titleLookup as any)?.byPlan as Map<string, string | null> | undefined;
+
+    let out = deduped.filter((p) => {
+      const title = norm(p.game?.title || p.title);
+      const queryOk = !query || title.includes(query);
+      if (!queryOk) return false;
+
+      // No plan-based filtering (user requested filters removed) — keep all
+      return true;
+    });
+
+    // sorting
+    if (sortType === "oldest") {
+      out = out.slice().sort((a, b) => (Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0)));
+    } else {
+      // recent default
+      out = out.slice().sort((a, b) => (Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0)));
+    }
+
+    return out;
+  }, [purchases, searchQuery, sortType, titleLookup]);
+
+  // Filtrar + dedup alquileres con soporte de filtro por plan y orden por expiración
   const filteredRentals = useMemo(() => {
     const list = activeRentals;
     const deduped = dedupeRentals(list);
-    if (!searchQuery.trim() && selectedGenre === "Todos") return deduped;
     const query = norm(searchQuery);
-    return deduped.filter((r) => {
+    const byPlan = (titleLookup as any)?.byPlan as Map<string, string | null> | undefined;
+
+    let out = deduped.filter((r) => {
       const title = norm(r.game?.title);
-      const { genre } = resolveGame(r.game?._id ?? r.gameId ?? null, title);
-      const genreOk = selectedGenre === "Todos" || genre === selectedGenre;
       const queryOk = !query || title.includes(query);
-      return genreOk && queryOk;
+      if (!queryOk) return false;
+
+      // No plan-based filtering for rentals either.
+      return true;
     });
-  }, [activeRentals, searchQuery, selectedGenre]);
+
+    if (sortType === "expires_late") {
+      out = out.slice().sort((a, b) => (Number(b.expiresAt ?? 0) - Number(a.expiresAt ?? 0)));
+    } else {
+      // default expires_soon
+      out = out.slice().sort((a, b) => (Number(a.expiresAt ?? 0) - Number(b.expiresAt ?? 0)));
+    }
+
+    return out;
+  }, [activeRentals, searchQuery, sortType, titleLookup]);
 
   if (status === "loading") {
     return (
@@ -382,7 +420,7 @@ export default function MisJuegosPage() {
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Header */}
-      <section className="bg-gradient-to-b from-slate-800 to-slate-900 py-16">
+  <section className="bg-gradient-to-b from-slate-800 to-slate-900 py-12">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-orange-400 mb-4 tracking-wide">
             MIS JUEGOS
@@ -394,9 +432,9 @@ export default function MisJuegosPage() {
       </section>
 
       {/* Tabs */}
-      <section className="py-8 bg-slate-900">
+      <section className="py-6 bg-slate-900">
         <div className="container mx-auto px-4">
-          <div className="flex gap-2 justify-center mb-6">
+          <div className="flex gap-1 justify-center mb-4">
             <Button
               variant={activeTab === "purchases" ? "default" : "outline"}
               onClick={() => setTab("purchases")}
@@ -426,9 +464,9 @@ export default function MisJuegosPage() {
       </section>
 
       {/* Search + filtros */}
-      <section className="py-8 bg-slate-900 border-b border-slate-700">
+      <section className="py-6 bg-slate-900 border-b border-slate-700">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row gap-4 justify-center items-center mb-6">
+          <div className="flex flex-col md:flex-row gap-4 justify-center items-center mb-4">
             <div className="relative flex-1 max-w-2xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
               <Input
@@ -438,47 +476,68 @@ export default function MisJuegosPage() {
                 className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-              >
-                <Filter className="w-4 h-4 mr-2" />
-                Filtros
-              </Button>
-              <Button
-                variant="outline"
-                className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-              >
-                <ArrowUpDown className="w-4 h-4 mr-2" />
-                Ordenar
-              </Button>
+            <div className="flex gap-3 items-center">
+              <div>
+                <label className="sr-only">Ordenar</label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div>
+                      <Button
+                        className="flex items-center gap-2 bg-slate-900 border border-amber-400 text-amber-400 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-800/95"
+                      >
+                        {activeTab === "purchases"
+                          ? sortType === "oldest"
+                            ? "Menos recientes"
+                            : "Más recientes"
+                          : sortType === "expires_late"
+                          ? "Vence último"
+                          : "Vence primero"}
+                        <ChevronDown className="w-4 h-4 text-amber-400" />
+                      </Button>
+                    </div>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={8}
+                    className="z-50 bg-slate-900 border border-amber-400 rounded-md p-1 shadow-md text-amber-400"
+                  >
+                    <DropdownMenuRadioGroup
+                      value={sortType}
+                      onValueChange={(v) => setSortType(v)}
+                    >
+                      {activeTab === "purchases" ? (
+                        <>
+                          <DropdownMenuRadioItem value="recent">
+                            Compras más recientes
+                          </DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="oldest">
+                            Compras más antiguas
+                          </DropdownMenuRadioItem>
+                        </>
+                      ) : (
+                        <>
+                          <DropdownMenuRadioItem value="expires_soon">
+                            Vence primero
+                          </DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="expires_late">
+                            Vence último
+                          </DropdownMenuRadioItem>
+                        </>
+                      )}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
 
-          {/* Géneros */}
-          <div className="flex flex-wrap gap-2 justify-center items-center">
-            {genres.map((genre) => (
-              <Button
-                key={genre}
-                variant={selectedGenre === genre ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedGenre(genre)}
-                className={
-                  selectedGenre === genre
-                    ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
-                    : "border-slate-600 text-slate-300 hover:bg-slate-700 bg-transparent"
-                }
-              >
-                {genre}
-              </Button>
-            ))}
-          </div>
+          {/* Géneros: eliminado (no filtrar por categorías en Mis Juegos) */}
         </div>
       </section>
 
       {/* Contenido */}
-      <section className="py-12">
+      <section className="py-8">
         <div className="container mx-auto px-4">
           {activeTab === "purchases" ? (
             <>

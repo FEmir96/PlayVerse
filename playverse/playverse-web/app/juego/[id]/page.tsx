@@ -541,7 +541,13 @@ export default function GameDetailPage() {
   const currency = pickCurrency(game);
   const baseBuy = pickBuyPrice(game);
   const baseRent = pickRentPrice(game);
-  const isFreeToPlay = (baseBuy === 0 || baseBuy === undefined) && (baseRent === 0 || baseRent === undefined);
+  // Determine whether the game is actually free to play.
+  // Consider it free when the plan is explicitly `free` OR when a known price equals 0.
+  // Do NOT treat missing/undefined prices as free.
+  const hasBuyPrice = typeof baseBuy === "number";
+  const hasRentPrice = typeof baseRent === "number";
+  const isPriceZero = (hasBuyPrice && baseBuy === 0) || (hasRentPrice && baseRent === 0);
+  const isFreeToPlay = Boolean(isFreePlan || isPriceZero);
   const isPremiumViewer = isPremiumSub || isAdmin;
 
   const discountRate = isPremiumViewer ? 0.10 : 0;
@@ -608,36 +614,44 @@ export default function GameDetailPage() {
     if (!game?._id) return;
     const playUrl = `/play/${game._id}`;
 
-    if (isEmbeddable) {
-      if (!isLogged) {
-        router.push(`/auth/login?next=${encodeURIComponent(playUrl)}`);
-        return;
-      }
-      if (isPremiumPlan) {
-        if (isAdmin || isPremiumSub || hasPurchased || hasActiveRental) {
-          router.push(playUrl);
-          return;
-        }
-        setShowPremiumModal(true);
-        return;
-      }
-      router.push(playUrl);
-      return;
-    }
-
+    // Enforce login for any play action first.
     if (!isLogged) {
       setShowAuthAction(true);
       return;
     }
-    if (!canPlayEffective) {
-      toast({
-        title: "No disponible",
-        description: "Necesitás comprar o alquilar el juego para jugar.",
-        variant: "destructive",
-      });
+
+    // If the game requires premium subscription, gate access to premium users (or admins)
+    if (isPremiumPlan) {
+      if (isAdmin || isPremiumSub || hasPurchased || hasActiveRental) {
+        // Allowed to play
+        if (isEmbeddable) {
+          router.push(playUrl);
+        } else {
+          toast({ title: "Lanzando juego…", description: "¡Feliz gaming! 🎮" });
+        }
+        return;
+      }
+      setShowPremiumModal(true);
       return;
     }
-    toast({ title: "Lanzando juego…", description: "¡Feliz gaming! 🎮" });
+
+    // For free games or owned/rented paid games -> allow play
+    if (isFreeToPlay || canPlayEffective) {
+      if (isEmbeddable) {
+        router.push(playUrl);
+      } else {
+        // Non-embeddable: keep current UX of showing a launching toast
+        toast({ title: "Lanzando juego…", description: "¡Feliz gaming! 🎮" });
+      }
+      return;
+    }
+
+    // Fallback: user is logged but not allowed to play
+    toast({
+      title: "No disponible",
+      description: "Necesitás comprar o alquilar el juego para jugar.",
+      variant: "destructive",
+    });
   };
 
   const onToggleFavorite = async () => {
@@ -734,21 +748,15 @@ export default function GameDetailPage() {
 
   // Nueva lógica para determinar qué botones mostrar
   const shouldShowPlayButton = () => {
-    // Si es free to play y plan free, siempre mostrar jugar
-    if (isFreeToPlay && isFreePlan) return true;
-    
-    // Si es free to play pero plan premium, poder jugar solo si es premium, sino muestra modal
-    if (isFreeToPlay && isPremiumPlan) return true;
-    
-    // Si es juego pago, solo mostrar jugar si está comprado/alquilado
-    if (!isFreeToPlay) return hasPurchased || hasActiveRental;
-    
-    return false;
+    // If plan-free or explicitly zero-priced, offer the Play button.
+    if (isFreeToPlay) return true;
+    // If paid, only show Play when the user already owns it or has an active rental.
+    return hasPurchased || hasActiveRental;
   };
 
   const shouldShowUpgradeModal = () => {
-    // Mostrar modal de upgrade si es free to play de plan premium pero usuario no es premium
-    return isFreeToPlay && isPremiumPlan && !isPremiumSub && !isAdmin;
+    // Show upgrade modal only when the game is free-by-plan premium AND the user is logged and not premium.
+    return isFreeToPlay && isPremiumPlan && isLogged && !isPremiumSub && !isAdmin;
   };
 
   /* ======================= RENDER ======================= */
@@ -951,6 +959,7 @@ export default function GameDetailPage() {
                 {/* ====== fin precios ====== */}
 
                 <div className="space-y-3">
+                  {/* Always prefer the Play button for free games or when the user owns/has an active rental */}
                   {hasActiveRental ? (
                     <>
                       <Button
@@ -969,178 +978,101 @@ export default function GameDetailPage() {
                         </Button>
                       )}
                     </>
-                  ) : isEmbeddable ? (
-                    <>
-                      {shouldShowPlayButton() ? (
-                        <Button
-                          onClick={shouldShowUpgradeModal() ? () => setShowPremiumModal(true) : handlePlay}
-                          className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                        >
-                          Jugar
-                        </Button>
-                      ) : canPlayEffective ? (
+                  ) : (
+                    // Not actively rented
+                    (() => {
+                      const showPlay = shouldShowPlayButton();
+                      const showUpgrade = shouldShowUpgradeModal();
+                      return (
                         <>
-                          <Button
-                            onClick={handlePlay}
-                            className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                          >
-                            Jugar
-                          </Button>
-                          {canExtend && (
-                            <Button
-                              onClick={handleExtend}
-                              variant="outline"
-                              className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-                            >
-                              Extender
-                            </Button>
+                          {showPlay ? (
+                            <>
+                              <Button
+                                onClick={showUpgrade ? () => setShowPremiumModal(true) : handlePlay}
+                                className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
+                              >
+                                Jugar
+                              </Button>
+                              {canExtend && (
+                                <Button
+                                  onClick={handleExtend}
+                                  variant="outline"
+                                  className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                                >
+                                  Extender
+                                </Button>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                onClick={handlePurchase}
+                                variant="outline"
+                                className="w-full border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-slate-900 bg-transparent font-semibold"
+                              >
+                                Comprar ahora
+                              </Button>
+                              <Button
+                                onClick={handleRental}
+                                variant="outline"
+                                className="w-full border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-slate-900 bg-transparent font-semibold"
+                              >
+                                Alquilar
+                              </Button>
+
+                              {/* Carrito: only relevant for paid (non-free) titles */}
+                              {!hasPurchased && !hasActiveRental && !isFreeToPlay && (
+                                <Button
+                                  onClick={async () => {
+                                    if (!isLogged || !profile?._id || !game?._id) {
+                                      setShowAuthAction(true);
+                                      return;
+                                    }
+                                    if (requiresPremium) {
+                                      setShowPremiumModal(true);
+                                      return;
+                                    }
+                                    const prev = cartMarked;
+                                    setCartMarked(!prev);
+                                    try {
+                                      if (cartToggle) {
+                                        const res = await cartToggle({
+                                          userId: profile._id,
+                                          gameId: game._id,
+                                        } as any);
+                                        const added = !!(res as any)?.added;
+                                        if (added !== !prev) setCartMarked(added);
+                                        toast({
+                                          title: added ? "Añadido al carrito" : "Quitado del carrito",
+                                          description: `${game.title} ${added ? "se agregó" : "se quitó"} del carrito.`,
+                                        });
+                                      } else if (prev) {
+                                        await cartRemove?.({ userId: profile._id, gameId: game._id } as any);
+                                        toast({ title: "Quitado del carrito", description: `${game.title} se quitó del carrito.` });
+                                      } else {
+                                        await cartAdd?.({ userId: profile._id, gameId: game._id } as any);
+                                        toast({ title: "Añadido al carrito", description: `${game.title} se agregó al carrito.` });
+                                      }
+                                    } catch {
+                                      setCartMarked(prev);
+                                      toast({
+                                        title: "No se pudo actualizar el carrito",
+                                        description: "Inténtalo nuevamente.",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                  className="w-full font-semibold bg-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+                                >
+                                  <ShoppingCart className="w-4 h-4 mr-2" />
+                                  {cartMarked ? "Quitar del carrito" : "Añadir al carrito"}
+                                </Button>
+                              )}
+                            </>
                           )}
                         </>
-                      ) : (
-                        <>
-                          <Button
-                            onClick={handlePurchase}
-                            variant="outline"
-                            className="w-full border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-slate-900 bg-transparent font-semibold"
-                          >
-                            Comprar ahora
-                          </Button>
-                          <Button
-                            onClick={handleRental}
-                            variant="outline"
-                            className="w-full border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-slate-900 bg-transparent font-semibold"
-                          >
-                            Alquilar
-                          </Button>
-                        </>
-                      )}
-                      {/* 🛒 Toggle carrito (para embebibles también) */}
-                      {!hasPurchased && !hasActiveRental && !isFreeToPlay && (
-                        <Button
-                          onClick={async () => {
-                            if (!isLogged || !profile?._id || !game?._id) {
-                              setShowAuthAction(true);
-                              return;
-                            }
-                            if (requiresPremium) {
-                              setShowPremiumModal(true);
-                              return;
-                            }
-                            const prev = cartMarked;
-                            setCartMarked(!prev);
-                            try {
-                              if (cartToggle) {
-                                const res = await cartToggle({
-                                  userId: profile._id,
-                                  gameId: game._id,
-                                } as any);
-                                const added = !!(res as any)?.added;
-                                if (added !== !prev) setCartMarked(added);
-                                toast({
-                                  title: added ? "Añadido al carrito" : "Quitado del carrito",
-                                  description: `${game.title} ${added ? "se agregó" : "se quitó"} del carrito.`,
-                                });
-                              } else if (prev) {
-                                await cartRemove?.({ userId: profile._id, gameId: game._id } as any);
-                                toast({ title: "Quitado del carrito", description: `${game.title} se quitó del carrito.` });
-                              } else {
-                                await cartAdd?.({ userId: profile._id, gameId: game._id } as any);
-                                toast({ title: "Añadido al carrito", description: `${game.title} se agregó al carrito.` });
-                              }
-                            } catch {
-                              setCartMarked(prev);
-                              toast({
-                                title: "No se pudo actualizar el carrito",
-                                description: "Inténtalo nuevamente.",
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                          className="w-full font-semibold bg-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
-                        >
-                          <ShoppingCart className="w-4 h-4 mr-2" />
-                          {cartMarked ? "Quitar del carrito" : "Añadir al carrito"}
-                        </Button>
-                      )}
-
-                    </>
-                  ) : (
-                    <>
-                      {hasPurchased ? (
-                        <Button
-                          onClick={handlePlay}
-                          className="w-full bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-semibold"
-                        >
-                          Jugar
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            onClick={handlePurchase}
-                            variant="outline"
-                            className="w-full border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-slate-900 bg-transparent font-semibold"
-                          >
-                            Comprar ahora
-                          </Button>
-                          <Button
-                            onClick={handleRental}
-                            variant="outline"
-                            className="w-full border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-slate-900 bg-transparent font-semibold"
-                          >
-                            Alquilar
-                          </Button>
-                        </>
-                      )}
-
-                      {/* 🛒 Toggle carrito (optimista) */}
-                      {!hasPurchased && !hasActiveRental && (
-                        <Button
-                          onClick={async () => {
-                            if (!isLogged || !profile?._id || !game?._id) {
-                              setShowAuthAction(true);
-                              return;
-                            }
-                            if (requiresPremium) {
-                              setShowPremiumModal(true);
-                              return;
-                            }
-                            const prev = cartMarked;
-                            setCartMarked(!prev);
-                            try {
-                              if (cartToggle) {
-                                const res = await cartToggle({
-                                  userId: profile._id,
-                                  gameId: game._id,
-                                } as any);
-                                const added = !!(res as any)?.added;
-                                if (added !== !prev) setCartMarked(added);
-                                toast({
-                                  title: added ? "Añadido al carrito" : "Quitado del carrito",
-                                  description: `${game.title} ${added ? "se agregó" : "se quitó"} del carrito.`,
-                                });
-                              } else if (prev) {
-                                await cartRemove?.({ userId: profile._id, gameId: game._id } as any);
-                                toast({ title: "Quitado del carrito", description: `${game.title} se quitó del carrito.` });
-                              } else {
-                                await cartAdd?.({ userId: profile._id, gameId: game._id } as any);
-                                toast({ title: "Añadido al carrito", description: `${game.title} se agregó al carrito.` });
-                              }
-                            } catch {
-                              setCartMarked(prev);
-                              toast({
-                                title: "No se pudo actualizar el carrito",
-                                description: "Inténtalo nuevamente.",
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                          className="w-full font-semibold bg-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
-                        >
-                          <ShoppingCart className="w-4 h-4 mr-2" />
-                          {cartMarked ? "Quitar del carrito" : "Añadir al carrito"}
-                        </Button>
-                      )}
-                    </>
+                      );
+                    })()
                   )}
 
                   {/* Favoritos + Share */}

@@ -4,7 +4,14 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Filter, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Doc } from "@convex/_generated/dataModel";
@@ -16,16 +23,19 @@ export default function CatalogoPage() {
   const [selectedGenre, setSelectedGenre] = useState("Todos");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [planFilter, setPlanFilter] = useState<"all" | "free" | "premium">("all");
+  const [sortType, setSortType] = useState<"recent" | "oldest">("recent");
   const pageSize = 12;
 
   const args = useMemo(
     () => ({
       q: searchQuery || undefined,
       genre: selectedGenre === "Todos" ? undefined : selectedGenre,
+      plan: planFilter === "all" ? undefined : planFilter,
       page: currentPage,
       pageSize,
     }),
-    [searchQuery, selectedGenre, currentPage]
+    [searchQuery, selectedGenre, planFilter, currentPage]
   );
 
   const result = useQuery(api.queries.searchGames.searchGames, args) as
@@ -35,6 +45,18 @@ export default function CatalogoPage() {
   const items = result?.items ?? [];
   const total = result?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Client-side sort fallback: server may not accept `sort` yet, so sort locally
+  const itemsSorted = useMemo(() => {
+    if (!items || !items.length) return items;
+    const out = items.slice();
+    if (sortType === "oldest") {
+      out.sort((a, b) => (Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0)));
+    } else {
+      out.sort((a, b) => (Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0)));
+    }
+    return out;
+  }, [items, sortType]);
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -64,15 +86,29 @@ export default function CatalogoPage() {
                 className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
-            <div className="flex gap-3">
-              <Button variant="outline" className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent">
-                <Filter className="w-4 h-4 mr-2" />
-                Filtros
-              </Button>
-              <Button variant="outline" className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent">
-                <ArrowUpDown className="w-4 h-4 mr-2" />
-                Ordenar
-              </Button>
+            <div className="flex gap-3 items-center">
+              {/* Plan filter buttons */}
+              <div>
+                <label className="sr-only">Filtrar por plan</label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div>
+                      <Button className="flex items-center gap-2 bg-slate-900 border border-amber-400 text-amber-400 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-800/95">
+                        {planFilter === "all" ? "Todos" : planFilter === "free" ? "Free" : "Premium"}
+                        <ChevronDown className="w-4 h-4 text-amber-400" />
+                      </Button>
+                    </div>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent align="start" sideOffset={8} className="z-50 bg-slate-900 border border-amber-400 rounded-md p-1 shadow-md text-amber-400">
+                    <DropdownMenuRadioGroup value={planFilter} onValueChange={(v) => { setPlanFilter(v as any); setCurrentPage(1); }}>
+                      <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="free">Free</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="premium">Premium</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
 
@@ -106,7 +142,7 @@ export default function CatalogoPage() {
           {result ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                {items.map((g) => (
+                {itemsSorted.map((g) => (
                   <GameCard key={g._id} game={g} />
                 ))}
               </div>
@@ -156,7 +192,7 @@ export default function CatalogoPage() {
 
               <div className="text-center mt-4">
                 <p className="text-slate-400 text-sm">
-                  Página {currentPage} de {totalPages} • Mostrando {items.length} de {total} resultados
+                  Página {currentPage} de {totalPages} • Mostrando {itemsSorted.length} de {total} resultados
                 </p>
               </div>
             </>

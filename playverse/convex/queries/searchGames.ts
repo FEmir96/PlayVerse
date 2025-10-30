@@ -7,15 +7,17 @@ export const searchGames = query({
     q: v.optional(v.string()),
     genre: v.optional(v.string()),              // "Todos" => sin filtro
     plan: v.optional(v.union(v.literal("free"), v.literal("premium"))),
+    sort: v.optional(v.union(v.literal("recent"), v.literal("oldest"))),
     page: v.optional(v.number()),               // 1-based
     pageSize: v.optional(v.number()),           // default 12
   },
-  handler: async (ctx, { q, genre, plan, page = 1, pageSize = 12 }) => {
-    // base: por fecha desc para que sea determinista
+  handler: async (ctx, { q, genre, plan, sort = "recent", page = 1, pageSize = 12 }) => {
+    // base: order by createdAt desc (recent) or asc (oldest)
+    const orderDir = sort === "oldest" ? "asc" : "desc" as const;
     const all = await ctx.db
       .query("games")
       .withIndex("by_createdAt")
-      .order("desc")
+      .order(orderDir)
       .collect();
 
     let filtered = all as Doc<"games">[];
