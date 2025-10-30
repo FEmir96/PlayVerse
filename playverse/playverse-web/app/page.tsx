@@ -47,17 +47,6 @@ export default function HomePage() {
                 Explorar
               </Button>
             </Link>
-            {!user && (
-              <Link href="/auth/register">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 px-8 py-3 bg-transparent"
-                >
-                  Registrarse
-                </Button>
-              </Link>
-            )}
           </div>
         </div>
       </section>
