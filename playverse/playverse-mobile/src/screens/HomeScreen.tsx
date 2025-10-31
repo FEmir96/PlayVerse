@@ -197,13 +197,16 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>INICIO</Text>
         <Text style={styles.subtitle}>
-          DescubrÌ quÈ hay de nuevo en PlayVerse{isPremium ? ' ó descuento 10% activo.' : '.'}
-          DescubrÌ quÈ hay de nuevo en PlayVerse{isPremium ? ' ó descuento 10% activo.' : '.'}
+          Descubr√≠ qu√© hay de nuevo en PlayVerse{isPremium ? ' - descuento 10% activo.' : '.'}
+        </Text>
       </View>
 
       {/* Nuevos juegos */}
-      <Section title="Nuevos juegos" subtitle="Explor· la colecciÛn y encontr· tu prÛxima aventura.">
-      <Section title="Nuevos juegos" subtitle="Explor· la colecciÛn y encontr· tu prÛxima aventura.">
+      <Section
+        title="Nuevos juegos"
+        subtitle="Explor√° la colecci√≥n y encontr√° tu pr√≥xima aventura."
+      >
+        <View style={styles.grid} onLayout={onGridLayout}>
           {newest.map((g: any, i: number) => {
             const game = mapGame(g, i);
             const mr = computedCols > 1 && i % computedCols !== computedCols - 1 ? GAP : 0;
@@ -217,8 +220,8 @@ export default function HomeScreen() {
                 }}
               >
                 <GameCard
-      {/* PrÛximamente */}
-      <Section title="PrÛximamente">
+                  game={game as any}
+                  tag={isPremium ? '-10%' : i < 2 ? 'Acci√≥n' : undefined}
                   onPress={() =>
                     (g?._id || g?.id || g?.gameId) &&
                     nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })
@@ -234,15 +237,30 @@ export default function HomeScreen() {
       </Section>
 
       {/* Pr√≥ximamente */}
-      {/* PrÛximamente */}
-      <Section title="PrÛximamente">
+      <Section title="Pr√≥ximamente" subtitle="Agend√° los lanzamientos que est√°n por llegar.">
+        <View style={styles.grid}>
           {(upcoming ?? []).map((item: any, i: number) => {
             const game = mapGame(item, i);
             const releaseAt =
               item?.releaseAt ?? item?.release_at ?? item?.launchDate ?? item?.firstReleaseDate;
-            const releaseLabel = releaseAt
-              ? `Pr√≥ximamente en ${new Date(Number(releaseAt)).getFullYear()}`
-              : 'Pr√≥ximamente';
+            const releaseMs =
+              typeof releaseAt === 'number'
+                ? releaseAt
+                : typeof releaseAt === 'string'
+                ? Date.parse(releaseAt)
+                : Number(releaseAt);
+            const normalizedMs =
+              typeof releaseMs === 'number' && Number.isFinite(releaseMs)
+                ? (releaseMs < 1e12 ? releaseMs * 1000 : releaseMs)
+                : null;
+            const releaseDate =
+              typeof normalizedMs === 'number'
+                ? new Date(normalizedMs)
+                : null;
+            const releaseLabel =
+              releaseDate && !Number.isNaN(releaseDate.getTime())
+                ? `Pr√≥ximamente en ${releaseDate.getFullYear()}`
+                : 'Pr√≥ximamente';
             const mr = computedCols > 1 && i % computedCols !== computedCols - 1 ? GAP : 0;
             return (
               <View
@@ -253,13 +271,17 @@ export default function HomeScreen() {
                   marginBottom: GAP,
                 }}
               >
-                <GameCard game={game as any} disabled overlayLabel={releaseLabel} showFavorite={false} />
+                <GameCard
+                  game={game as any}
+                  disabled
+                  overlayLabel={releaseLabel}
+                  showFavorite={false}
+                />
               </View>
             );
           })}
         </View>
       </Section>
-
       {/* CTA cat√°logo */}
       <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
         <Button
