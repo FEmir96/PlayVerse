@@ -228,7 +228,8 @@ transactions: defineTable({
   })
     .index("by_token", ["token"])
     .index("by_profile", ["profileId"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_deviceId", ["deviceId"]),
 
   // ⬇️ NUEVO: historial de suscripciones
   subscriptions: defineTable({

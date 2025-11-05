@@ -22,7 +22,7 @@ import type * as actions_fillUpcomingCoversFromIGDB from "../actions/fillUpcomin
 import type * as actions_getIGDBScreenshots from "../actions/getIGDBScreenshots.js";
 import type * as actions_massBackfillAgeRatings from "../actions/massBackfillAgeRatings.js";
 import type * as actions_notifications_scheduleRentalExpiryReminders from "../actions/notifications/scheduleRentalExpiryReminders.js";
-import type * as actions_push from "../actions/push.js";
+import type * as actions_pushy from "../actions/pushy.js";
 import type * as actions_refreshIGDBBatch from "../actions/refreshIGDBBatch.js";
 import type * as actions_refreshIGDBRatingForGame from "../actions/refreshIGDBRatingForGame.js";
 import type * as actions_refreshRAWGBatch from "../actions/refreshRAWGBatch.js";
@@ -152,7 +152,7 @@ declare const fullApi: ApiFromModules<{
   "actions/getIGDBScreenshots": typeof actions_getIGDBScreenshots;
   "actions/massBackfillAgeRatings": typeof actions_massBackfillAgeRatings;
   "actions/notifications/scheduleRentalExpiryReminders": typeof actions_notifications_scheduleRentalExpiryReminders;
-  "actions/push": typeof actions_push;
+  "actions/pushy": typeof actions_pushy;
   "actions/refreshIGDBBatch": typeof actions_refreshIGDBBatch;
   "actions/refreshIGDBRatingForGame": typeof actions_refreshIGDBRatingForGame;
   "actions/refreshRAWGBatch": typeof actions_refreshRAWGBatch;

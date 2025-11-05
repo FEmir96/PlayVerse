@@ -1,16 +1,15 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import Pushy from 'pushy-react-native';
+import * as Application from 'expo-application';
+import * as Device from 'expo-device';
+import * as Crypto from 'expo-crypto';
 import Constants from 'expo-constants';
 
 import { convexHttp } from './convexClient';
 
-const STORAGE_TOKEN_KEY = 'pv.pushToken';
-let handlerConfigured = false;
-
-type RegisterOptions = {
-  profileId?: string;
-  email?: string;
-};
+/** ====== Storage helpers (opcional con require) ====== */
+const STORAGE_TOKEN_KEY = 'pv.pushyToken';
+const STORAGE_DEVICE_ID_KEY = 'pv.deviceId';
 
 function getSecureStore(): typeof import('expo-secure-store') | null {
   try {
@@ -21,128 +20,153 @@ function getSecureStore(): typeof import('expo-secure-store') | null {
   }
 }
 
-async function ensureNotificationChannel() {
-  if (Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync('default', {
-    name: 'General',
-    importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 250, 250, 250],
-    sound: 'default',
-    lightColor: '#F2B705',
-  });
-}
-
-function resolveProjectId(): string | undefined {
-  const easConfig: any = (Constants as any)?.easConfig;
-  if (easConfig?.projectId) return easConfig.projectId as string;
-  const expoConfig: any = (Constants as any)?.expoConfig ?? (Constants as any)?.manifest;
-  return (
-    expoConfig?.extra?.eas?.projectId ??
-    expoConfig?.extra?.easProjectId ??
-    expoConfig?.extra?.expoGo?.projectId ??
-    undefined
-  );
-}
-
-export function configureNotificationHandler() {
-  if (handlerConfigured) return;
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-  handlerConfigured = true;
-}
-
-async function getStoredToken(): Promise<string | null> {
-  const secureStore = getSecureStore();
-  if (!secureStore) return null;
+async function getItem(key: string): Promise<string | null> {
+  const SS = getSecureStore();
+  if (!SS) return null;
   try {
-    return await secureStore.getItemAsync(STORAGE_TOKEN_KEY);
+    return await SS.getItemAsync(key);
   } catch {
     return null;
   }
 }
-
-async function storeToken(token: string) {
-  const secureStore = getSecureStore();
-  if (!secureStore) return;
+async function setItem(key: string, value: string) {
+  const SS = getSecureStore();
+  if (!SS) return;
   try {
-    await secureStore.setItemAsync(STORAGE_TOKEN_KEY, token);
+    await SS.setItemAsync(key, value);
+  } catch {}
+}
+async function delItem(key: string) {
+  const SS = getSecureStore();
+  if (!SS) return;
+  try {
+    await SS.deleteItemAsync(key);
   } catch {}
 }
 
-async function deleteStoredToken() {
-  const secureStore = getSecureStore();
-  if (!secureStore) return;
-  try {
-    await secureStore.deleteItemAsync(STORAGE_TOKEN_KEY);
-  } catch {}
+/** ====== DeviceId estable ====== */
+async function resolveDeviceId(): Promise<string> {
+  // 1) Preferir un ID estable del SO
+  if (Platform.OS === 'android') {
+    try {
+      const androidId =
+        typeof (Application as any).getAndroidId === 'function'
+          ? (Application as any).getAndroidId()
+          : null;
+      if (androidId) return `android:${androidId}`;
+    } catch {
+      // ignore and continue
+    }
+  }
+  if (Platform.OS === 'ios') {
+    try {
+      const vendorId = await Application.getIosIdForVendorAsync();
+      if (vendorId) return `ios:${vendorId}`;
+    } catch {
+      // iOS antiguo o permisos restringidos
+    }
+  }
+
+  // 2) Reutilizar un ID nuestro persistido
+  const stored = await getItem(STORAGE_DEVICE_ID_KEY);
+  if (stored) return stored;
+
+  // 3) Generar uno determinístico y persistirlo
+  const entropy =
+    `${Platform.OS}|${Device?.modelName ?? 'unknown'}|${Device?.deviceType ?? 'unk'}|` +
+    `${Constants?.expoConfig?.slug ?? 'pv'}|${Date.now()}|${Math.random()}`;
+  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, entropy);
+  const generated = `pv:${hash.slice(0, 32)}`; // corto y suficiente
+  await setItem(STORAGE_DEVICE_ID_KEY, generated);
+  return generated;
 }
 
-export async function registerPushToken(options: RegisterOptions = {}) {
-  if (Platform.OS === 'web') return null;
-  if ((Constants.appOwnership as string | undefined) === 'expo') {
-    // Expo Go no soporta push remotos desde SDK 53
-    return null;
-  }
+type PushyListenerOptions = {
+  onReceive?: (data: Record<string, unknown>) => void;
+  onClick?: (data: Record<string, unknown>) => void;
+};
 
-  configureNotificationHandler();
-  await ensureNotificationChannel();
-
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
-    const request = await Notifications.requestPermissionsAsync();
-    finalStatus = request.status;
-  }
-
-  if (finalStatus !== 'granted') {
-    return null;
-  }
-
-  const projectId = resolveProjectId();
-  if (!projectId) {
-    console.warn('registerPushToken: skipping because projectId is not available yet.');
-    return null;
-  }
-
-  const pushToken = await Notifications.getExpoPushTokenAsync({ projectId });
-
-  const token = pushToken.data;
-  if (!token) return null;
-
-  const stored = await getStoredToken();
-  if (stored !== token) {
-    await storeToken(token);
-  }
-
+export function setupPushyListeners(opts: PushyListenerOptions = {}) {
+  if (Platform.OS === 'web') return;
   try {
-    await (convexHttp as any).mutation('pushTokens:register', {
-      token,
-      platform: Platform.OS,
-      profileId:
-        options.profileId && options.profileId.startsWith('local:') ? undefined : options.profileId,
-      email: options.email ?? undefined,
-      deviceId: Constants.deviceName ?? undefined,
+    if (typeof Pushy.listen === 'function') {
+      Pushy.listen();
+    }
+    Pushy.setNotificationListener(async (data) => {
+      const payload = (data && typeof data === 'object' ? data : {}) as Record<
+        string,
+        unknown
+      >;
+      opts.onReceive?.(payload);
+    });
+    Pushy.setNotificationClickListener(async (data) => {
+      const payload = (data && typeof data === 'object' ? data : {}) as Record<
+        string,
+        unknown
+      >;
+      opts.onClick?.(payload);
     });
   } catch (error) {
-    console.warn('registerPushToken error', error);
+    console.warn('[Pushy] listener setup failed', error);
+  }
+}
+
+/** ====== Registro / desregistro en backend ====== */
+export async function registerPushToken(opts: { profileId?: string; email?: string } = {}) {
+  if (Platform.OS === 'web') return null;
+
+  let deviceToken: string;
+  try {
+    // Pide permisos y registra en Pushy (retorna el token REAL de Pushy)
+    deviceToken = await Pushy.register();
+    // Notificación in-app en foreground (útil en dev)
+    const toggle = (Pushy as unknown as { toggleInAppNotification?: (enabled: boolean) => void })
+      .toggleInAppNotification;
+    if (typeof toggle === 'function') {
+      toggle(true);
+    }
+    if (typeof Pushy.listen === 'function') {
+      Pushy.listen();
+    }
+  } catch (error) {
+    console.warn('[Pushy] register error', error);
+    return null;
   }
 
-  return token;
+  // Guardar localmente para desregistrar luego si hace falta
+  const prev = await getItem(STORAGE_TOKEN_KEY);
+  if (prev !== deviceToken) {
+    await setItem(STORAGE_TOKEN_KEY, deviceToken);
+  }
+
+  // Resolver deviceId estable
+  const deviceId = await resolveDeviceId();
+
+  // Enviar a Convex (usa tu mutación existente)
+  await (convexHttp as any).mutation('pushTokens:register', {
+    token: deviceToken,
+    platform: Platform.OS,
+    profileId:
+      opts.profileId && opts.profileId.startsWith('local:') ? undefined : opts.profileId,
+    email: opts.email ?? undefined,
+    deviceId, // <<<<<<<<<<<<<<<<<<<<<<<< AQUÍ va el ID real
+  });
+
+  // Para que puedas copiar/pegar fácil si querés testear en dashboard
+  // (miralo en la consola de Metro)
+  console.log('[Pushy] token =>', deviceToken);
+  console.log('[Pushy] deviceId =>', deviceId);
+
+  return deviceToken;
 }
 
 export async function unregisterStoredPushToken() {
-  if (Platform.OS === 'web') return;
-  const token = await getStoredToken();
+  const token = await getItem(STORAGE_TOKEN_KEY);
   if (!token) return;
   try {
     await (convexHttp as any).mutation('pushTokens:unregister', { token });
-  } catch (error) {
-    console.warn('unregisterStoredPushToken error', error);
+  } catch (err) {
+    console.warn('unregisterStoredPushToken error', err);
   }
-  await deleteStoredToken();
+  await delItem(STORAGE_TOKEN_KEY);
 }

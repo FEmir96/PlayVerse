@@ -35,12 +35,27 @@ export const register = mutation({
       existing = scan.find((row: any) => row.token === token) ?? null;
     }
 
+    if (!existing && args.deviceId) {
+      const deviceKey = args.deviceId.trim();
+      try {
+        existing = await db
+          .query("pushTokens")
+          .withIndex("by_deviceId", (q: any) => q.eq("deviceId", deviceKey))
+          .first();
+      } catch {
+        const scan = await db.query("pushTokens").collect();
+        existing =
+          scan.find((row: any) => String(row.deviceId ?? "") === deviceKey) ?? null;
+      }
+    }
+
     if (existing) {
       await db.patch(existing._id, {
         profileId: args.profileId ?? existing.profileId ?? undefined,
         email: args.email ?? existing.email ?? undefined,
         platform: args.platform ?? existing.platform ?? "unknown",
         deviceId: args.deviceId ?? existing.deviceId ?? undefined,
+        token,
         lastUsedAt: now,
         updatedAt: now,
         disabledAt: undefined,

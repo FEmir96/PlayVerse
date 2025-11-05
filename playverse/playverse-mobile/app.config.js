@@ -21,44 +21,65 @@ export default {
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
-      backgroundColor: "#ffffff"
+      backgroundColor: "#ffffff",
     },
 
-    // -- iOS: ahora con bundleIdentifier (requerido para builds) --
+    // -- iOS: bundleIdentifier + target mínimo que pide EAS --
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.playverse.app"
+      bundleIdentifier: "com.playverse.app",
+      deploymentTarget: "15.1",
     },
 
-    // -- Android: ahora con package (requerido para builds) --
+    // -- Android: package; sin Firebase --
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#ffffff",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.playverse.app",
-      // Para push en builds reales: subir FCM luego (opcional)
+      // ❌ No usamos FCM:
       // googleServicesFile: "./google-services.json"
+      // ✅ Permisos para Pushy / notificaciones:
+      permissions: [
+        "INTERNET",
+        "WAKE_LOCK",
+        "RECEIVE_BOOT_COMPLETED",
+        "POST_NOTIFICATIONS" // Android 13+
+      ],
     },
 
     web: {
       bundler: "metro",
       output: "static",
-      favicon: "./assets/favicon.png"
+      favicon: "./assets/favicon.png",
     },
 
-    // -- Plugins: mantuve los tuyos y el de notifications --
+    // -- Plugins: mantenemos los tuyos + build-properties (repo de Pushy) --
     plugins: [
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/withPushy",
+      [
+        "expo-build-properties",
+        {
+          android: {
+            // Repositorio Maven de Pushy (requerido)
+            extraMavenRepos: ["https://repo.pushy.me"],
+          },
+        },
+      ],
     ],
 
-    // -- Extra: conservé TODO lo tuyo y agregué eas.projectId (clave para getExpoPushTokenAsync) --
+    // -- Extra (conservado) + EAS projectId --
     extra: {
       convexUrl: process.env.CONVEX_URL || process.env.EXPO_PUBLIC_CONVEX_URL,
-      webAuthUrl: process.env.EXPO_PUBLIC_WEB_URL || process.env.NEXTAUTH_URL || "http://localhost:3000",
+      webAuthUrl:
+        process.env.EXPO_PUBLIC_WEB_URL ||
+        process.env.NEXTAUTH_URL ||
+        "http://localhost:3000",
       webAssetBase: process.env.EXPO_PUBLIC_WEB_ASSET_BASE,
       googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
       googleExpoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
@@ -77,10 +98,10 @@ export default {
         },
       },
 
-      // ← agregado para EAS/Push
+      // ← EAS/Push (conservado)
       eas: {
-    "projectId": "4dae069c-2e28-4075-a5be-4dea3c345351"
-      }
-    }
-  }
+        projectId: "4dae069c-2e28-4075-a5be-4dea3c345351",
+      },
+    },
+  },
 };
