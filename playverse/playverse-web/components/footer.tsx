@@ -1,37 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import React from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+// Dialog components removed: newsletter feature deprecated
 
 export function Footer() {
   const { data: session } = useSession();
-  const isLogged = !!session?.user?.email;
-  const [modalOpen, setModalOpen] = useState<"login" | "confirm" | "thankyou" | null>(null);
-
-  const handleNewsletterClick = () => {
-    if (!isLogged) {
-      setModalOpen("login");
-      return;
-    }
-    setModalOpen("confirm");
-  };
+  // no-op: newsletter feature removed
 
   return (
     <footer className="bg-slate-900 border-t border-slate-700 mt-16">
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Logo and Description */}
-          <div className="space-y-4">
+  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+  {/* Left spacer to center columns on md+ */}
+  <div className="hidden md:block md:col-span-1" />
+
+  {/* Logo and Description */}
+  <div className="space-y-4 md:col-span-3">
             <Link href="/" className="flex items-center">
               <Image src="/images/playverse-logo.png" alt="PlayVerse" width={80} height={40} className="h-10 w-auto" />
             </Link>
@@ -87,7 +75,7 @@ export function Footer() {
           </div>
 
           {/* Navigation */}
-          <div>
+          <div className="md:col-span-4 md:justify-self-center">
             <h3 className="text-white font-medium mb-4">Navegación</h3>
             <div className="flex flex-col space-y-2 items-start">
               <Link href="/" className="inline text-slate-400 hover:text-orange-400 text-sm">
@@ -106,7 +94,7 @@ export function Footer() {
           </div>
 
           {/* Support */}
-          <div>
+          <div className="md:col-span-2 md:justify-self-center">
             <h3 className="text-white font-medium mb-4">Soporte</h3>
             <div className="flex flex-col space-y-2 items-start">
               <Link href="/contacto" className="inline text-slate-400 hover:text-orange-400 text-sm">
@@ -121,68 +109,8 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Newsletter */}
-          <div>
-            <h3 className="text-white font-medium mb-4">Newsletter</h3>
-            <p className="text-slate-400 text-sm mb-4">¡Nuevos juegos y ofertas exclusivas directo a tu email!</p>
-            <div className="space-y-2">
-              <Button
-                onClick={handleNewsletterClick}
-                className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium"
-                onMouseDown={(e) => e.preventDefault()}
-                id="newsletter-cta"
-              >
-                Anotarme
-              </Button>
-            </div>
-          </div>
-
-          {/* Modals: login -> confirm -> thankyou */}
-          <Dialog open={modalOpen === "login"} onOpenChange={(open) => !open && setModalOpen(null)}>
-            <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md w-full">
-              <DialogHeader>
-                <DialogTitle className="text-orange-400 text-xl font-semibold">Inicia sesión para suscribirte</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p className="text-slate-300">Debes iniciar sesión para anotarte a la newsletter.</p>
-              </div>
-              <DialogFooter className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setModalOpen(null)} className="border-slate-600 text-slate-300 bg-transparent">Cancelar</Button>
-                <Button onClick={() => { window.location.href = `/auth/login?next=${encodeURIComponent(window.location.pathname)}`; }} className="bg-orange-400 hover:bg-orange-500 text-slate-900">Iniciar sesión</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={modalOpen === "confirm"} onOpenChange={(open) => !open && setModalOpen(null)}>
-            <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md w-full">
-              <DialogHeader>
-                <DialogTitle className="text-orange-400 text-xl font-semibold">Confirmar suscripción</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p className="text-slate-300">
-                  Estás a punto de anotar tu cuenta a la newsletter de PlayVerse. Te llegarán emails con las últimas novedades en la plataforma: nuevos juegos añadidos, próximos lanzamientos y recordatorios de alquileres por vencer.
-                </p>
-              </div>
-              <DialogFooter className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setModalOpen(null)} className="border-slate-600 text-slate-300 bg-transparent">Cancelar</Button>
-                <Button onClick={() => setModalOpen("thankyou")} className="bg-orange-400 hover:bg-orange-500 text-slate-900">Confirmar</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={modalOpen === "thankyou"} onOpenChange={(open) => !open && setModalOpen(null)}>
-            <DialogContent className="bg-slate-800 border-orange-400/30 text-white max-w-md w-full">
-              <DialogHeader>
-                <DialogTitle className="text-orange-400 text-xl font-semibold">¡Gracias!</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p className="text-slate-300">¡Listo! Tu cuenta fue anotada a la newsletter. Pronto recibirás novedades en tu correo.</p>
-              </div>
-              <DialogFooter className="flex gap-2 justify-end">
-                <Button onClick={() => setModalOpen(null)} className="bg-orange-400 hover:bg-orange-500 text-slate-900">Aceptar</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {/* Right spacer to center columns on md+ */}
+          <div className="hidden md:block md:col-span-2" />
           
 
         </div>

@@ -1,37 +1,52 @@
-"use client"
+﻿"use client";
 
-import type React from "react"
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import Image from "next/image";
 
-import { useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import Image from "next/image"
+// Verificar si el email existe (sin enviar correo aún)
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("")
-  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "checking" | "success" | "error">("idle");
+  const [error, setError] = useState<string>("");
+  const [emailToCheck, setEmailToCheck] = useState<string | null>(null);
+
+  const queryArg = useMemo(() => (emailToCheck ? { email: emailToCheck } : "skip"), [emailToCheck]);
+  const profile = useQuery(api.queries.getUserByEmail.getUserByEmail as any, queryArg) as any;
+
+  useEffect(() => {
+    if (!emailToCheck) return;
+    if (profile === undefined) return; // cargando
+    if (profile && profile.email) {
+      setStatus("success");
+      setError("");
+    } else {
+      setStatus("error");
+      setError("No existe ninguna cuenta creada con ese email. Probá a crear una cuenta.");
+    }
+    setEmailToCheck(null);
+  }, [profile, emailToCheck]);
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Handle password reset logic here
-    console.log("Password reset requested for:", email)
-    setIsSubmitted(true)
-  }
+    e.preventDefault();
+    setError("");
+    setStatus("checking");
+    setEmailToCheck(email.trim().toLowerCase());
+  };
 
-  if (isSubmitted) {
+  if (status === "success") {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <Image
-                src="/images/playverse-logo.png"
-                alt="PlayVerse"
-                width={120}
-                height={80}
-                className="object-contain"
-              />
+              <Image src="/images/playverse-logo.png" alt="PlayVerse" width={120} height={80} className="object-contain" />
             </div>
             <h1 className="text-4xl font-bold text-orange-400 mb-2">PLAYVERSE</h1>
           </div>
@@ -43,19 +58,17 @@ export default function ForgotPasswordPage() {
                 <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-orange-400 mb-2">¡Correo enviado!</h2>
+            <h2 className="text-xl font-semibold text-orange-400 mb-2">¡Solicitud registrada!</h2>
             <p className="text-slate-300 mb-6">
-              Hemos enviado las instrucciones para restablecer tu contraseña a <strong>{email}</strong>
+              Si la dirección <strong>{email}</strong> está registrada, te enviaremos un correo con un enlace para restablecer tu contraseña. Revisá tu bandeja de entrada y spam.
             </p>
             <Link href="/auth/login">
-              <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold">
-                Volver al login
-              </Button>
+              <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold">Volver al login</Button>
             </Link>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -63,16 +76,10 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <Image
-              src="/images/playverse-logo.png"
-              alt="PlayVerse"
-              width={120}
-              height={80}
-              className="object-contain"
-            />
+            <Image src="/images/playverse-logo.png" alt="PlayVerse" width={120} height={80} className="object-contain" />
           </div>
           <h1 className="text-4xl font-bold text-orange-400 mb-2">PLAYVERSE</h1>
-          <p className="text-slate-300">Recupera tu acceso</p>
+          <p className="text-slate-300">Recuperá tu acceso</p>
         </div>
 
         <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6">
@@ -86,43 +93,33 @@ export default function ForgotPasswordPage() {
             <h2 className="text-xl font-semibold text-orange-400">¿Olvidaste tu contraseña?</h2>
           </div>
 
-          <p className="text-slate-400 text-center mb-6">
-            Ingresa tu email y te enviaremos las instrucciones para restablecer tu contraseña
-          </p>
+          <p className="text-slate-400 text-center mb-6">Ingresá tu email. Te enviaremos un enlace para reestablecer tu contraseña.</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
-              <Input
-                type="email"
-                placeholder="tu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400"
-                required
-              />
+              <Input type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-400" required />
             </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3"
-            >
+            {status === "error" && (
+              <p className="text-red-500 text-sm">{error}</p>
+            )}
+
+            <Button type="submit" disabled={status === "checking"} className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3">
               <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                 <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
               </svg>
-              Enviar instrucciones
+              {status === "checking" ? "Verificando..." : "Enviar instrucciones"}
             </Button>
           </form>
 
           <div className="mt-6 text-center">
             <span className="text-slate-400">¿Recordaste tu contraseña? </span>
-            <Link href="/auth/login" className="text-orange-400 hover:text-orange-300 font-medium">
-              Inicia sesión
-            </Link>
+            <Link href="/auth/login" className="text-orange-400 hover:text-orange-300 font-medium">Iniciá sesión</Link>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
