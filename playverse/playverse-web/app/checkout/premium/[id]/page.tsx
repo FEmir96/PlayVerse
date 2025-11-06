@@ -211,6 +211,11 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     if (!useSaved) setMethodId(null);
   }, [methods, methodId, useSaved]);
 
+  // Alinear el toggle con la disponibilidad real de métodos guardados
+  useEffect(() => {
+    setUseSaved((methods?.length ?? 0) > 0);
+  }, [methods]);
+
   const brandLabel = (b: string) =>
     b === "visa" ? "Visa" : b === "mastercard" ? "Mastercard" : b === "amex" ? "Amex" : "Tarjeta";
 
@@ -221,7 +226,15 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     setValidationErrors({});
     setShowValidation(true);
 
-    // Validación: si usás guardadas, elegí una
+    // Validación: si usás guardadas, debe haber al menos una y estar seleccionada
+    if (useSaved && (!Array.isArray(methods) || methods.length === 0)) {
+      toast({
+        title: "No hay tarjetas guardadas",
+        description: "Destildá 'Usar tarjeta guardada' y completá los datos de tarjeta.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (useSaved && Array.isArray(methods) && methods.length > 0 && !methodId) {
       toast({
         title: "Selecciona un método de pago",

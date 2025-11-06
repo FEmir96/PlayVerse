@@ -8,6 +8,11 @@
  * @module
  */
 
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as actions_ageRatingsNuke from "../actions/ageRatingsNuke.js";
 import type * as actions_backfillCoversFromIGDB from "../actions/backfillCoversFromIGDB.js";
 import type * as actions_backfillDetailsFromIGDB from "../actions/backfillDetailsFromIGDB.js";
@@ -122,12 +127,6 @@ import type * as queries_scores_getMyBestByGame from "../queries/scores/getMyBes
 import type * as queries_scores_topByGame from "../queries/scores/topByGame.js";
 import type * as queries_searchGames from "../queries/searchGames.js";
 import type * as transactions from "../transactions.js";
-
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -253,15 +252,11 @@ declare const fullApi: ApiFromModules<{
   "queries/searchGames": typeof queries_searchGames;
   transactions: typeof transactions;
 }>;
-declare const fullApiWithMounts: typeof fullApi;
-
 export declare const api: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "public">
 >;
 export declare const internal: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "internal">
 >;
-
-export declare const components: {};

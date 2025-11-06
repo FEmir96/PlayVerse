@@ -601,7 +601,7 @@ export default function ProfilePage() {
                       onClick={() => setConfirmCancelOpen(true)}
                       className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
                     >
-                      Cancelar suscripción
+                      Cancelar renovación automática
                     </Button>
                   </>
                 ) : (
@@ -900,13 +900,13 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-orange-400 font-semibold">Cancelar suscripción</h3>
+              <h3 className="text-orange-400 font-semibold">Cancelar renovación automática</h3>
               <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
-            <p className="text-slate-300 mb-4">Perderás el acceso a todos los beneficios de PlayVerse Premium ¿Seguro que deseas continuar?</p>
+            <p className="text-slate-300 mb-4">Cumplida la fecha de expiración, perderás el acceso a todos los beneficios de PlayVerse Premium y no se te renovará automáticamente ¿Seguro que deseas continuar?</p>
 
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => setConfirmCancelOpen(false)} className="text-slate-300">Cancelar</Button>
