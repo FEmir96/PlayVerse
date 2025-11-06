@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useLayoutEffect } from 'react';
+﻿// playverse/playverse-mobile/src/screens/GameDetailScreen.tsx
+import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -8,11 +9,15 @@ import {
   Text,
   View,
   useWindowDimensions,
+  Modal,
+  Animated,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Linking from 'expo-linking';
 import WebView from 'react-native-webview';
+import type { WebViewHttpErrorEvent } from 'react-native-webview/lib/WebViewTypes';
+import YoutubeIframe from 'react-native-youtube-iframe';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -22,6 +27,12 @@ import { colors, spacing, typography, radius } from '../styles/theme';
 import { resolveAssetUrl } from '../lib/asset';
 import { convexHttp } from '../lib/convexClient';
 import { useAuth } from '../context/AuthContext';
+
+type TrailerInfo =
+  | { kind: 'none' }
+  | { kind: 'video'; url: string }
+  | { kind: 'web'; url: string; headers?: Record<string, string> }
+  | { kind: 'youtube'; videoId: string };
 
 export default function GameDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -63,7 +74,7 @@ export default function GameDetailScreen() {
 
   const errorMessage = useMemo(() => {
     if (!error) return undefined;
-    const raw = String(error.message ?? '');
+    const raw = String(error?.message ?? '');
     if (/ArgumentValidationError/i.test(raw)) {
       return 'No pudimos encontrar este juego en el catálogo. Verifica el enlace.';
     }
@@ -72,6 +83,10 @@ export default function GameDetailScreen() {
 
   const [igdbShots, setIgdbShots] = useState<string[] | null>(null);
   const [loadingShots, setLoadingShots] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [trailerError, setTrailerError] = useState(false);
+  const [youtubeReady, setYoutubeReady] = useState(false);
 
   useEffect(() => {
     if (!game?.title) return;
@@ -105,6 +120,156 @@ export default function GameDetailScreen() {
       cancelled = true;
     };
   }, [game?.title]);
+
+  const openImage = (uri: string) => {
+    setSelectedImage(uri);
+    fadeAnim.stopAnimation();
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeImage = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setSelectedImage(null);
+    });
+  };
+
+  const renderTrailerErrorCard = (openLink?: () => void) => (
+    <View style={[styles.card, styles.glowCard, styles.trailerFallback]}>
+      <Text style={styles.sectionLabel}>Trailer</Text>
+      <Text style={styles.helper}>
+        No pudimos cargar el trailer embebido. Podés verlo directamente en el navegador.
+      </Text>
+      {openLink ? (
+        <Pressable style={styles.trailerButton} onPress={openLink}>
+          <Ionicons name="open-outline" size={16} color={colors.accent} />
+          <Text style={styles.trailerButtonText}>Abrir trailer</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  const renderTrailerSection = () => {
+    if (trailerInfo.kind === 'video' && playerSource) {
+      return (
+        <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
+          <VideoView
+            style={[styles.video, { width: slideWidth }]}
+            player={player}
+            allowsFullscreen
+            allowsPictureInPicture
+            nativeControls
+          />
+        </View>
+      );
+    }
+
+    if (trailerInfo.kind === 'youtube') {
+      if (trailerError) {
+        return (
+          <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.lg }}>
+            {renderTrailerErrorCard(() =>
+              Linking.openURL(`https://www.youtube.com/watch?v=${trailerInfo.videoId}`)
+            )}
+          </View>
+        );
+      }
+      return (
+        <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
+          <View style={[styles.embedContainer, { width: slideWidth }]}>
+            {!youtubeReady ? (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : null}
+            <YoutubeIframe
+              videoId={trailerInfo.videoId}
+              height={220}
+              width={slideWidth}
+              play={false}
+              onReady={() => setYoutubeReady(true)}
+              onError={(err: string) => {
+                console.warn('[YouTubeIframe] error', err);
+                setYoutubeReady(false);
+                setTrailerError(true);
+              }}
+              webViewProps={{
+                allowsFullscreenVideo: true,
+                allowsInlineMediaPlayback: true,
+                originWhitelist: ['*'],
+                mediaPlaybackRequiresUserAction: false,
+                javaScriptEnabled: true,
+                domStorageEnabled: true,
+                onHttpError: (event: WebViewHttpErrorEvent) => {
+                  console.warn('[YouTubeIframe] http error', event.nativeEvent.statusCode);
+                  setYoutubeReady(false);
+                  setTrailerError(true);
+                },
+              }}
+            />
+          </View>
+        </View>
+      );
+    }
+
+    if (trailerInfo.kind === 'web') {
+      if (trailerError) {
+        return (
+          <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.lg }}>
+            {renderTrailerErrorCard(() => Linking.openURL(trailerInfo.url))}
+          </View>
+        );
+      }
+      return (
+        <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.lg }}>
+          <View style={[styles.embedContainer, { width: slideWidth }]}>
+            <WebView
+              source={
+                trailerInfo.headers
+                  ? { uri: trailerInfo.url, headers: trailerInfo.headers }
+                  : { uri: trailerInfo.url }
+              }
+              originWhitelist={['*']}
+              javaScriptEnabled
+              domStorageEnabled
+              allowsInlineMediaPlayback
+              allowsFullscreenVideo
+              mediaPlaybackRequiresUserAction={false}
+              userAgent="Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Mobile Safari/537.36"
+              startInLoadingState
+              renderLoading={() => (
+                <View style={[styles.slideFallback, { flex: 1 }]}>
+                  <ActivityIndicator color={colors.accent} />
+                </View>
+              )}
+              onError={() => setTrailerError(true)}
+              onHttpError={(event: WebViewHttpErrorEvent) => {
+                const { statusCode, description } = event.nativeEvent;
+                console.warn('[WebView] trailer http error', statusCode, description);
+                setTrailerError(true);
+              }}
+              style={{ flex: 1, backgroundColor: '#000' }}
+            />
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.card, styles.glowCard]}>
+        <Text style={styles.sectionLabel}>Trailer</Text>
+        <Text style={styles.helper}>Este juego no tiene trailer disponible por ahora.</Text>
+      </View>
+    );
+  };
 
   const gallery = useMemo(() => {
     if (!game && !initial) return [];
@@ -193,15 +358,14 @@ export default function GameDetailScreen() {
     (game as any)?.trailerUrl ||
     (initial as any)?.trailerUrl;
 
-  const trailerInfo = useMemo(() => {
+  const rawTrailerInfo = useMemo<TrailerInfo>(() => {
     const raw = trailerRaw ? resolveAssetUrl(trailerRaw) || trailerRaw : undefined;
     if (!raw) return { kind: 'none' as const };
 
     try {
       const ytId = extractYouTubeId(raw);
       if (ytId) {
-        const src = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=0&playsinline=1&modestbranding=1&rel=0&showinfo=0`;
-        return { kind: 'web' as const, url: src };
+        return { kind: 'youtube' as const, videoId: ytId };
       }
       const vmId = extractVimeoId(raw);
       if (vmId) {
@@ -214,14 +378,36 @@ export default function GameDetailScreen() {
       return { kind: 'web' as const, url: url.toString() };
     } catch {
       if (isLikelyYouTubeId(raw)) {
-        return { kind: 'web' as const, url: `https://www.youtube-nocookie.com/embed/${raw}` };
+        return { kind: 'youtube' as const, videoId: raw };
       }
       return { kind: 'none' as const };
     }
   }, [trailerRaw]);
 
+  const trailerInfo = rawTrailerInfo ?? { kind: 'none' as const };
+
+  const trailerKey =
+    trailerInfo.kind === 'youtube'
+      ? trailerInfo.videoId
+      : trailerInfo.kind === 'web' || trailerInfo.kind === 'video'
+      ? trailerInfo.url
+      : null;
+
+  useEffect(() => {
+    setTrailerError(false);
+  }, [trailerInfo.kind, trailerKey]);
+
+  useEffect(() => {
+    if (trailerInfo.kind === 'youtube') {
+      setYoutubeReady(false);
+    }
+  }, [trailerInfo.kind, trailerInfo.kind === 'youtube' ? trailerInfo.videoId : undefined]);
+
   const playerSource = useMemo(
-    () => (trailerInfo.kind === 'video' ? { uri: trailerInfo.url } : null),
+    () =>
+      trailerInfo.kind === 'video' && trailerInfo.url
+        ? { uri: trailerInfo.url }
+        : null,
     [trailerInfo]
   );
 
@@ -234,9 +420,10 @@ export default function GameDetailScreen() {
     if (trailerInfo.kind !== 'video') player.pause();
   }, [player, trailerInfo]);
 
-  const genres = useMemo(() => {
-    if (Array.isArray(game?.genres) && game.genres.length) return game.genres.join(' \u2022 ');
-    return undefined;
+  // Solo chips de géneros (sin subtítulo duplicado)
+  const genresArray = useMemo<string[]>(() => {
+    if (Array.isArray(game?.genres)) return game.genres.filter(Boolean);
+    return [];
   }, [game?.genres]);
 
   const releaseDate = useMemo(() => {
@@ -296,177 +483,199 @@ export default function GameDetailScreen() {
   const showWeeklyDiscount = hasDiscount && typeof baseWeeklyPrice === 'number';
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingBottom: spacing.xxl }}
-    >
-      {/* Header propio */}
-      <View style={styles.headerBar}>
-        <Pressable
-          onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Volver al inicio"
-        >
-          <Ionicons name="arrow-back" size={18} color={colors.accent} />
-        </Pressable>
-
-        <View style={styles.centerLogoWrap}>
-          <Image
-            source={require('../../assets/branding/pv-logo-h28.png')}
-            style={styles.centerLogo}
-            resizeMode="contain"
-          />
-        </View>
-
-        <Pressable
-          onPress={() => navigation.navigate(userId ? ('Notifications' as any) : ('Profile' as any))}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Ir a notificaciones"
-        >
-          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-          {userId && unreadCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
-
-      {/* HERO */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{game?.title || 'Juego'}</Text>
-        {genres ? <Text style={styles.subtitle}>{genres}</Text> : null}
-        <View style={styles.metaRow}>
-          {(game as any)?.plan === 'premium' ? (
-            <Text style={[styles.metaPill, styles.metaPlan]}>Premium</Text>
-          ) : (game as any)?.plan === 'free' ? (
-            <Text style={[styles.metaPill]}>Gratis</Text>
-          ) : null}
-          {releaseDate ? <Text style={styles.metaPill}>Estreno {releaseDate}</Text> : null}
-          {typeof igdbScore === 'number' ? (
-            <Text style={[styles.metaPill, styles.metaScore]}>IGDB {igdbScore.toFixed(1)}/5</Text>
-          ) : null}
-        </View>
-        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-      </View>
-
-      {/* GALLERY */}
+    <>
       <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        style={{ paddingHorizontal: spacing.xl }}
-        contentContainerStyle={{ gap: spacing.md }}
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingBottom: spacing.xxl }}
       >
-        {isLoading ? (
-          <View style={[styles.slide, styles.slideFallback, { width: slideWidth }]}>
-            <ActivityIndicator color={colors.accent} />
-          </View>
-        ) : gallery.length ? (
-          gallery.map((uri, index) => (
-            <Image key={`${uri}-${index}`} source={{ uri }} style={[styles.slide, { width: slideWidth }]} />
-          ))
-        ) : (
-          <View style={[styles.slide, styles.slideFallback, { width: slideWidth }]}>
-            <Text style={{ color: colors.accent }}>
-              {loadingShots ? 'Buscando imágenes...' : 'Sin imágenes disponibles'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+        {/* Header propio */}
+        <View style={styles.headerBar}>
+          <Pressable
+            onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Volver al inicio"
+          >
+            <Ionicons name="arrow-back" size={18} color={colors.accent} />
+          </Pressable>
 
-      {/* TRAILER */}
-      {trailerInfo.kind === 'video' && playerSource ? (
-        <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
-          <VideoView
-            style={[styles.video, { width: slideWidth }]}
-            player={player}
-            allowsFullscreen
-            allowsPictureInPicture
-            nativeControls
-          />
-        </View>
-      ) : trailerInfo.kind === 'web' ? (
-        <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
-          <View style={[styles.embedContainer, { width: slideWidth }]}>
-            <WebView
-              source={{ uri: trailerInfo.url }}
-              originWhitelist={['*']}
-              javaScriptEnabled
-              domStorageEnabled
-              allowsInlineMediaPlayback
-              allowsFullscreenVideo
-              mediaPlaybackRequiresUserAction={false}
-              style={{ flex: 1, backgroundColor: '#000' }}
+          <View style={styles.centerLogoWrap}>
+            <Image
+              source={require('../../assets/branding/pv-logo-h28.png')}
+              style={styles.centerLogo}
+              resizeMode="contain"
             />
           </View>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Trailer</Text>
-          <Text style={styles.helper}>Este juego no tiene trailer disponible por ahora.</Text>
-        </View>
-      )}
 
-      {/* PRICES */}
-      <View style={styles.card}>
-        {typeof basePurchasePrice === 'number' && typeof finalPurchasePrice === 'number' ? (
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Compra</Text>
-            {showPurchaseDiscount ? (
-              <>
-                <Text style={styles.priceOriginal}>${basePurchasePrice.toFixed(2)}</Text>
-                <Text style={styles.priceFinal}>${finalPurchasePrice.toFixed(2)}</Text>
-                <Text style={styles.discountPill}>-{discountPercent}%</Text>
-              </>
-            ) : (
-              <Text style={styles.priceFinal}>${finalPurchasePrice.toFixed(2)}</Text>
-            )}
+          <Pressable
+            onPress={() => navigation.navigate(userId ? ('Notifications' as any) : ('Profile' as any))}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Ir a notificaciones"
+          >
+            <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+            {userId && unreadCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
+
+        {/* HERO */}
+        <View style={styles.header}>
+          <Text style={styles.title}>{(game as any)?.title || 'Juego'}</Text>
+
+          {/* Chips de géneros (única representación) */}
+          {genresArray.length ? (
+            <View style={styles.genresRow}>
+              {genresArray.slice(0, 8).map((g, i) => (
+                <View key={`${g}-${i}`} style={styles.genreChip}>
+                  <Text style={styles.genreChipText}>{g}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.metaRow}>
+            {(game as any)?.plan === 'premium' ? (
+              <Text style={[styles.metaPill, styles.metaPlan]}>Premium</Text>
+            ) : (game as any)?.plan === 'free' ? (
+              <Text style={[styles.metaPill]}>Gratis</Text>
+            ) : null}
+            {releaseDate ? (
+              <Text style={[styles.metaPill, styles.metaPillAmber]}>
+                Estreno {releaseDate}
+              </Text>
+            ) : null}
+            {typeof igdbScore === 'number' ? (
+              <Text style={[styles.metaPill, styles.metaScore]}>IGDB {igdbScore.toFixed(1)}/5</Text>
+            ) : null}
+          </View>
+          {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+        </View>
+
+        {/* GALLERY */}
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={{ paddingHorizontal: spacing.xl }}
+          contentContainerStyle={{ gap: spacing.md }}
+        >
+          {isLoading ? (
+            <View style={[styles.slide, styles.slideFallback, { width: slideWidth }]}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : gallery.length ? (
+            gallery.map((uri, index) => (
+              <Pressable
+                key={`${uri}-${index}`}
+                onPress={() => openImage(uri)}
+                style={{ width: slideWidth }}
+              >
+                <Image source={{ uri }} style={[styles.slide, { width: slideWidth }]} />
+              </Pressable>
+            ))
+          ) : (
+            <View style={[styles.slide, styles.slideFallback, { width: slideWidth }]}>
+              <Text style={{ color: colors.accent }}>
+                {loadingShots ? 'Buscando imágenes...' : 'Sin imágenes disponibles'}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* TRAILER */}
+        {renderTrailerSection()}
+
+        {/* PRICES - glow único */}
+        <View style={[styles.card, styles.glowCard, styles.priceCard]}>
+          {typeof basePurchasePrice === 'number' && typeof finalPurchasePrice === 'number' ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Compra</Text>
+              <View style={styles.priceValues}>
+                {showPurchaseDiscount ? (
+                  <>
+                    <Text style={styles.priceOriginal}>${basePurchasePrice.toFixed(2)}</Text>
+                    <Text style={styles.priceFinal}>${finalPurchasePrice.toFixed(2)}</Text>
+                    <Text style={styles.discountPill}>-{discountPercent}%</Text>
+                  </>
+                ) : (
+                  <Text style={styles.priceFinal}>${finalPurchasePrice.toFixed(2)}</Text>
+                )}
+              </View>
+            </View>
+          ) : null}
+
+          {typeof baseWeeklyPrice === 'number' && typeof finalWeeklyPrice === 'number' ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Alquiler semanal</Text>
+              <View style={styles.priceValues}>
+                {showWeeklyDiscount ? (
+                  <>
+                    <Text style={styles.priceOriginal}>${baseWeeklyPrice.toFixed(2)}</Text>
+                    <Text style={styles.priceFinal}>${finalWeeklyPrice.toFixed(2)}</Text>
+                    <Text style={styles.discountPill}>-{discountPercent}%</Text>
+                  </>
+                ) : (
+                  <Text style={styles.priceFinal}>${finalWeeklyPrice.toFixed(2)}</Text>
+                )}
+              </View>
+            </View>
+          ) : null}
+
+          <Text style={styles.note}>Gestiona compras y suscripciones desde la web PlayVerse.</Text>
+        </View>
+
+        {(game as any)?.description ? (
+          <View style={[styles.card, styles.glowCard]}>
+            <Text style={styles.sectionLabelAmber}>Descripción</Text>
+            <Text style={styles.body}>{(game as any).description}</Text>
           </View>
         ) : null}
 
-        {typeof baseWeeklyPrice === 'number' && typeof finalWeeklyPrice === 'number' ? (
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Alquiler semanal</Text>
-            {showWeeklyDiscount ? (
-              <>
-                <Text style={styles.priceOriginal}>${baseWeeklyPrice.toFixed(2)}</Text>
-                <Text style={styles.priceFinal}>${finalWeeklyPrice.toFixed(2)}</Text>
-                <Text style={styles.discountPill}>-{discountPercent}%</Text>
-              </>
-            ) : (
-              <Text style={styles.priceFinal}>${finalWeeklyPrice.toFixed(2)}</Text>
-            )}
+        {(game as any)?.developers?.length || (game as any)?.publishers?.length ? (
+          <View style={[styles.card, styles.glowCard]}>
+            <Text style={styles.sectionLabelAmber}>Ficha técnica</Text>
+            {(game as any)?.developers?.length ? (
+              <Text style={styles.metaLine}>Desarrolladora: {(game as any).developers.join(', ')}</Text>
+            ) : null}
+            {(game as any)?.publishers?.length ? (
+              <Text style={styles.metaLine}>Distribuidora: {(game as any).publishers.join(', ')}</Text>
+            ) : null}
+            {(game as any)?.languages?.length ? (
+              <Text style={styles.metaLine}>Idiomas: {(game as any).languages.join(', ')}</Text>
+            ) : null}
           </View>
         ) : null}
+      </ScrollView>
 
-        <Text style={styles.note}>Gestiona compras y suscripciones desde la web PlayVerse.</Text>
-      </View>
-
-      {game?.description ? (
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Descripción</Text>
-          <Text style={styles.body}>{game.description}</Text>
-        </View>
-      ) : null}
-
-      {(game as any)?.developers?.length || (game as any)?.publishers?.length ? (
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Ficha técnica</Text>
-          {(game as any)?.developers?.length ? (
-            <Text style={styles.metaLine}>Desarrolladora: {(game as any).developers.join(', ')}</Text>
-          ) : null}
-          {(game as any)?.publishers?.length ? (
-            <Text style={styles.metaLine}>Distribuidora: {(game as any).publishers.join(', ')}</Text>
-          ) : null}
-          {(game as any)?.languages?.length ? (
-            <Text style={styles.metaLine}>Idiomas: {(game as any).languages.join(', ')}</Text>
-          ) : null}
-        </View>
-      ) : null}
-    </ScrollView>
+      <Modal visible={!!selectedImage} transparent onRequestClose={closeImage}>
+        <Pressable style={styles.lightboxBackdrop} onPress={closeImage}>
+          <Animated.View
+            style={[
+              styles.lightboxContent,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  {
+                    scale: fadeAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.95, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {selectedImage ? (
+              <Image source={{ uri: selectedImage }} style={styles.lightboxImage} />
+            ) : null}
+          </Animated.View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -511,6 +720,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
+    marginBottom: spacing.lg,
     gap: spacing.xs,
   },
   title: {
@@ -522,15 +732,40 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
   },
-  subtitle: {
-    color: '#A7C4CF',
-    fontSize: typography.body,
+
+  // Chips de géneros
+  genresRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: spacing.sm,
   },
+  genreChip: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: '#22d3ee',
+    backgroundColor: '#0F2D3A',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    shadowColor: '#22d3ee',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  genreChipText: {
+    color: '#22d3ee',
+    fontSize: typography.caption,
+    letterSpacing: 0.4,
+    fontWeight: '700',
+  },
+
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   metaPill: {
     color: '#D6EEF7',
@@ -543,6 +778,11 @@ const styles = StyleSheet.create({
     borderColor: '#1F546B',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
+  },
+  metaPillAmber: {
+    backgroundColor: '#2f2a0a',
+    borderColor: '#F2B705',
+    color: '#F2B705',
   },
   metaPlan: {
     backgroundColor: '#2f2a0a',
@@ -572,6 +812,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 16,
     elevation: 10,
+    overflow: 'hidden',
   },
   slideFallback: {
     alignItems: 'center',
@@ -605,7 +846,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
 
-  // CARD
+  // CARD base
   card: {
     backgroundColor: 'rgba(16, 36, 52, 0.65)',
     borderColor: '#1C4252',
@@ -615,10 +856,22 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.xl,
     marginTop: spacing.xl,
     gap: spacing.xs,
-    shadowColor: '#0ff',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 24,
+  },
+
+  // Glow anaranjado único
+  glowCard: {
+    borderColor: 'rgba(242, 183, 5, 0.55)',
+    shadowColor: '#F2B705',
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+    backgroundColor: 'rgba(12, 28, 36, 0.88)',
+  },
+
+  // Específico de precios
+  priceCard: {
+    gap: spacing.md,
   },
 
   helper: {
@@ -630,66 +883,132 @@ const styles = StyleSheet.create({
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  priceValues: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   priceLabel: {
-    color: '#C7E1EA',
+    color: '#FCE5A3',
     fontSize: typography.caption,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     fontWeight: '800',
-    backgroundColor: '#103447',
+    backgroundColor: 'rgba(242, 183, 5, 0.16)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: '#1F546B',
+    borderColor: 'rgba(242, 183, 5, 0.45)',
   },
   priceOriginal: {
-    color: '#8FA9B4',
+    color: '#6E8491',
     textDecorationLine: 'line-through',
     fontSize: typography.body,
   },
   priceFinal: {
-    color: '#F2B705',
-    fontSize: typography.h3,
+    color: '#FAD35D',
+    fontSize: typography.h2,
     fontWeight: '900',
     textShadowColor: 'rgba(242,183,5,0.35)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
   discountPill: {
-    backgroundColor: '#201a05',
-    color: '#F2B705',
-    paddingHorizontal: spacing.sm,
+    backgroundColor: 'rgba(33, 22, 4, 0.85)',
+    color: '#FFCE59',
+    paddingHorizontal: spacing.md,
     paddingVertical: 4,
     borderRadius: radius.pill,
     fontSize: typography.caption,
     fontWeight: '800',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
     borderWidth: 1,
-    borderColor: '#F2B705',
+    borderColor: 'rgba(242, 183, 5, 0.65)',
   },
   note: {
-    color: '#98B8C6',
-    marginTop: spacing.xs,
+    color: '#B9D2DB',
+    marginTop: spacing.sm,
+    fontSize: typography.caption,
   },
 
+  // Títulos
   sectionLabel: {
     color: '#D6EEF7',
     fontWeight: '800',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
     fontSize: typography.h3,
     textShadowColor: 'rgba(214,238,247,0.15)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
   },
+  sectionLabelAmber: {
+    color: '#F2B705',
+    fontWeight: '800',
+    marginBottom: spacing.sm,
+    fontSize: typography.h3,
+    textShadowColor: 'rgba(242,183,5,0.25)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+
   body: {
     color: '#CDE4ED',
-    lineHeight: 20,
+    lineHeight: 22,
     fontSize: typography.body,
   },
   metaLine: {
     color: '#A7C4CF',
+  },
+  trailerFallback: {
+    gap: spacing.sm,
+  },
+  trailerButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#103B49',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+  },
+  trailerButtonText: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(3,11,16,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  lightboxContent: {
+    width: '100%',
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    backgroundColor: '#051720',
+    borderWidth: 1,
+    borderColor: '#13485c',
+  },
+  lightboxImage: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    resizeMode: 'cover',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
 });
