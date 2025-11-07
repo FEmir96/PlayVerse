@@ -1,4 +1,4 @@
-﻿// app/checkout/premium/[id]/page.tsx
+// app/checkout/premium/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -67,15 +67,15 @@ const PLANS: Record<
     name: "Premium Anual",
     price: 89.99,
     priceLabel: "$89.99",
-    period: "/a├▒o",
+    period: "/año",
     description: "Ahorra $30",
   },
-  // Compatibilidad hacia atr├ís si llega a venir "lifetime" desde alg├║n enlace viejo
+  // Compatibilidad hacia atrás si llega a venir "lifetime" desde algún enlace viejo
   lifetime: {
     name: "Premium Lifetime",
     price: 239.99,
     priceLabel: "$239.99",
-    period: " ├║nico pago",
+    period: " único pago",
     description: "Acceso de por vida a todas las funciones Premium",
   },
 };
@@ -97,7 +97,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
   const sp = useSearchParams();
   const { toast } = useToast();
 
-  // Sesi├│n + store local
+  // Sesión + store local
   const { status, data: session } = useSession();
   const storeUser = useAuthStore((s) => s.user);
 
@@ -106,7 +106,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     storeUser?.email?.toLowerCase() ??
     null;
 
-  // Si no hay sesi├│n ÔåÆ login con return a esta ruta (con query intacta)
+  // Si no hay sesión → login con return a esta ruta (con query intacta)
   useEffect(() => {
     if (status === "loading") return;
     if (!loginEmail && !storeUser) {
@@ -120,21 +120,11 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     getUserByIdRef,
     params?.id ? ({ id: params.id as Id<"profiles"> } as any) : "skip"
   ) as
-    | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string; email?: string; freeTrialUsed?: boolean })
+    | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string; email?: string })
     | null
     | undefined;
-  const hasUsedTrial = Boolean((profile as any)?.freeTrialUsed);
 
-  useEffect(() => {
-    if (trialRequested && hasUsedTrial) {
-      toast({
-        title: "Prueba gratuita no disponible",
-        description: "La prueba gratuita solo puede usarse una vez por cuenta. Vamos a continuar con el pago.",
-      });
-    }
-  }, [trialRequested, hasUsedTrial, toast]);
-
-  // M├®todos desde DB si existe la query, si no mostramos UI manual
+  // Métodos desde DB si existe la query, si no mostramos UI manual
   const methods = useQuery(
     getPaymentMethodsRef as any,
     HAS_PM_QUERY && profile?._id ? { userId: profile._id } : "skip"
@@ -150,7 +140,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
   
-  // Estados de validaci├│n
+  // Estados de validación
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [showValidation, setShowValidation] = useState(false);
 
@@ -160,9 +150,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
 
   // Plan a partir de query
   const planKey = sp?.get("plan") ?? "monthly";
-  const trialRequested = sp?.get("trial") === "true";
-  const trialActive = trialRequested && !hasUsedTrial;
-  const requiresPayment = !trialActive;
+  const trial = sp?.get("trial") === "true";
   const plan = PLANS[planKey] ?? PLANS.monthly;
 
   // next opcional (para volver donde estabas tras upgrade)
@@ -215,18 +203,18 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
 
   const primaryPM = (methods && methods.length > 0 ? methods[0] : null) ?? pmFromProfile;
 
-  // Inicializar m├®todo seleccionado
+  // Inicializar método seleccionado
   useEffect(() => {
-    if (!requiresPayment) {
-      setUseSaved(false);
-      setMethodId(null);
-      return;
-    }
     if (useSaved && !methodId && Array.isArray(methods) && methods.length > 0) {
       setMethodId(String(methods[0]._id));
     }
     if (!useSaved) setMethodId(null);
-  }, [methods, methodId, useSaved, requiresPayment]);
+  }, [methods, methodId, useSaved]);
+
+  // Alinear el toggle con la disponibilidad real de métodos guardados
+  useEffect(() => {
+    setUseSaved((methods?.length ?? 0) > 0);
+  }, [methods]);
 
   const brandLabel = (b: string) =>
     b === "visa" ? "Visa" : b === "mastercard" ? "Mastercard" : b === "amex" ? "Amex" : "Tarjeta";
@@ -238,17 +226,25 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
     setValidationErrors({});
     setShowValidation(true);
 
-    // Validaci├│n: si us├ís guardadas, eleg├¡ una
+    // Validación: si usás guardadas, debe haber al menos una y estar seleccionada
+    if (useSaved && (!Array.isArray(methods) || methods.length === 0)) {
+      toast({
+        title: "No hay tarjetas guardadas",
+        description: "Destildá 'Usar tarjeta guardada' y completá los datos de tarjeta.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (useSaved && Array.isArray(methods) && methods.length > 0 && !methodId) {
       toast({
-        title: "Selecciona un m├®todo de pago",
+        title: "Selecciona un método de pago",
         description: "Debes elegir una tarjeta para continuar.",
         variant: "destructive",
       });
       return;
     }
 
-    // Validaci├│n tarjeta nueva
+    // Validación tarjeta nueva
     if (!useSaved) {
       const validation = validatePaymentForm({ holder, number, exp, cvc });
       
@@ -260,7 +256,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         setValidationErrors(errors);
         
         toast({
-          title: "Datos de tarjeta inv├ílidos",
+          title: "Datos de tarjeta inválidos",
           description: "Por favor corrige los errores marcados en rojo.",
           variant: "destructive",
         });
@@ -288,7 +284,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         provider: "manual",
       });
 
-      // 2) Subir a premium + seteo de expiraci├│n / suscripci├│n
+      // 2) Subir a premium + seteo de expiración / suscripción
       await upgradePlan({
         userId: profile._id,
         toRole: "premium",
@@ -302,13 +298,13 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         if (profile?.name) sessionStorage.setItem("pv_premium_welcome", profile.name);
       } catch {}
 
-      // 4) UX: si hay next, volvemos ah├¡; si no, success page
+      // 4) UX: si hay next, volvemos ahí; si no, success page
       if (nextParam) {
         const u = new URL(
           nextParam,
           typeof window !== "undefined" ? window.location.origin : "https://local"
         );
-        // flags ├║tiles para mostrar toasts arriba si quer├®s
+        // flags útiles para mostrar toasts arriba si querés
         u.searchParams.set("auth", "ok");
         u.searchParams.set("upgraded", "1");
         router.replace(u.pathname + u.search);
@@ -317,32 +313,32 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
       }
 
       toast({
-        title: `┬íBienvenido a Premium, ${profile?.name ?? "gamer"}!`,
-        description: "Tu suscripci├│n se activ├│ correctamente.",
+        title: `¡Bienvenido a Premium, ${profile?.name ?? "gamer"}!`,
+        description: "Tu suscripción se activó correctamente.",
       });
     } catch (e: any) {
       toast({
-        title: "No se pudo completar la suscripci├│n",
-        description: e?.message ?? "Intent├í nuevamente.",
+        title: "No se pudo completar la suscripción",
+        description: e?.message ?? "Intentá nuevamente.",
         variant: "destructive",
       });
     }
   };
 
-  // Loaders: sesi├│n o perfil (cuando hay sesi├│n)
+  // Loaders: sesión o perfil (cuando hay sesión)
   if (status === "loading" || (status === "authenticated" && typeof profile === "undefined")) {
     return (
       <div className="min-h-[60vh] grid place-items-center text-slate-300">
-        CargandoÔÇª
+        Cargando…
       </div>
     );
   }
 
-  // Si el perfil no existe (id inv├ílido)
+  // Si el perfil no existe (id inválido)
   if (status === "authenticated" && profile === null) {
     return (
       <div className="min-h-[60vh] grid place-items-center text-slate-300">
-        No encontramos tu perfil. Volv├® a intentarlo.
+        No encontramos tu perfil. Volvé a intentarlo.
       </div>
     );
   }
@@ -377,7 +373,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
               </svg>
             </div>
             <h1 className="text-3xl font-bold text-orange-400 mb-2">Checkout premium</h1>
-            <p className="text-slate-400">Est├ís a un paso de desbloquear la mejor experiencia gaming</p>
+            <p className="text-slate-400">Estás a un paso de desbloquear la mejor experiencia gaming</p>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-8">
@@ -393,7 +389,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                 </div>
                 <p className="text-slate-400 mb-1">{plan.description}</p>
 
-                {/* Ô¼ç´©Å NUEVO: Mostrar qui├®n compra */}
+                {/* ⬇️ NUEVO: Mostrar quién compra */}
                 <p className="text-slate-400 text-sm">
                   Comprador: <span className="text-slate-200">{profile?.name ?? "Usuario"}</span>
                   {profile?.email ? <> &nbsp;(<span className="text-slate-300">{profile.email}</span>)</> : null}
@@ -416,14 +412,14 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
               </div>
 
               <div className="text-sm text-slate-400">
-                Tu suscripci├│n se renovar├í autom├íticamente. Pod├®s cancelarla en cualquier momento desde tu perfil.
+                Tu suscripción se renovará automáticamente. Podés cancelarla en cualquier momento desde tu perfil.
               </div>
             </div>
 
             {/* Pago */}
             <div className="bg-slate-800/50 border border-orange-400/30 rounded-lg p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-white font-medium">M├®todo de pago</p>
+                <p className="text-white font-medium">Método de pago</p>
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={useSaved} onCheckedChange={(v) => setUseSaved(v === true)} />
                   Usar tarjeta guardada
@@ -435,7 +431,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                   Array.isArray(methods) && methods.length > 0 ? (
                     <div className="space-y-2">
                       {methods.map((pm) => {
-                        const label = `${brandLabel(pm.brand)} ÔÇóÔÇóÔÇóÔÇó ${pm.last4} ÔÇö ${String(
+                        const label = `${brandLabel(pm.brand)} •••• ${pm.last4} — ${String(
                           pm.expMonth
                         ).padStart(2, "0")}/${pm.expYear}`;
                         return (
@@ -460,7 +456,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                     </div>
                   ) : (
                     <div className="text-xs text-slate-400">
-                      No ten├®s tarjetas guardadas. Activ├í el formulario destildando arriba.
+                      No tenés tarjetas guardadas. Activá el formulario destildando arriba.
                     </div>
                   )
                 ) : (
@@ -488,7 +484,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                       <ValidationError error={showValidation ? validationErrors.holder : undefined} />
                     </div>
                     <div>
-                      <label className="text-slate-300 text-sm">N├║mero de tarjeta</label>
+                      <label className="text-slate-300 text-sm">Número de tarjeta</label>
                       <Input
                         value={number}
                         onChange={(e) => {
@@ -514,7 +510,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-slate-300 text-sm">Fecha de expiraci├│n</label>
+                        <label className="text-slate-300 text-sm">Fecha de expiración</label>
                         <Input
                           value={exp}
                           onChange={(e) => {
@@ -565,7 +561,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                     </div>
                     <div className="flex items-center gap-2 pt-1">
                       <Checkbox checked={rememberNew} onCheckedChange={(v) => setRememberNew(v === true)} />
-                      <span className="text-slate-300 text-sm">Guardar m├®todo de pago</span>
+                      <span className="text-slate-300 text-sm">Guardar método de pago</span>
                     </div>
                   </>
                 )}

@@ -201,25 +201,10 @@ export default function LoginPage() {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="remember"
-                  checked={formData.remember}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, remember: checked === true })
-                  }
-                />
-                <label htmlFor="remember" className="text-sm text-slate-300 cursor-pointer">
-                  Recuérdame
-                </label>
+                <Checkbox id="remember" checked={formData.remember} onCheckedChange={(checked) => setFormData({ ...formData, remember: checked === true })} />
+                <label htmlFor="remember" className="text-sm text-slate-300 cursor-pointer">Recuérdame</label>
               </div>
-              <div className="flex flex-col items-end gap-1 text-sm">
-                <Link href="/auth/forgot-password" className="text-orange-300 hover:text-orange-200">
-                  ¿Olvidaste tu contraseña?
-                </Link>
-                <Link href="/auth/register" className="text-orange-400 hover:text-orange-300">
-                  ¿No tenés cuenta?
-                </Link>
-              </div>
+              <Link href="/auth/forgot-password" className="text-sm text-orange-400 hover:text-orange-300">¿Olvidaste tu contraseña?</Link>
             </div>
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -255,9 +240,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-sm text-slate-400 mt-4">
-          ¿No tenés cuenta? Crea una al iniciar con Google/Microsoft.
-        </p>
+        <div className="text-center text-sm text-slate-400 mt-4">
+          ¿No tenés cuenta? <Link href="/auth/register" className="text-orange-400 hover:text-orange-300 font-medium">Crear cuenta</Link>
+        </div>
       </div>
     </div>
   );

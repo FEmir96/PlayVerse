@@ -1,4 +1,4 @@
-﻿// app/perfil/page.tsx
+// app/perfil/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -57,7 +57,6 @@ const savePaymentMethodRef =
   (api as any)["mutations/savePaymentMethod"]
     .savePaymentMethod as FunctionReference<"mutation">;
 
-// Si existe query de métodos de pago, la usamos; si no, degrade a perfil
 const HAS_PM_QUERY = Boolean(
   (api as any)["queries/getPaymentMethods"]?.getPaymentMethods
 );
@@ -67,30 +66,12 @@ const getPaymentMethodsRef = HAS_PM_QUERY
   : ((api as any)["queries/getUserByEmail"]
       .getUserByEmail as FunctionReference<"query">);
 
-// NUEVO: setAutoRenew (principal) + fallbacks
-const setAutoRenewRef =
-  ((api as any)["mutations/setAutoRenew"]?.setAutoRenew as FunctionReference<"mutation">) ||
-  ((api as any)["mutations/profiles"]?.setAutoRenew as FunctionReference<"mutation">) ||
-  ((api as any)["mutations/subscriptions"]?.setAutoRenew as FunctionReference<"mutation">) ||
-  null;
+// ⬇️ NUEVO: cancelar premium
+const cancelPremiumRef =
+  (api as any)["mutations/cancelPremiumPlan"]
+    .cancelPremiumPlan as FunctionReference<"mutation">;
 
-// Fallback desactivar (si no existe setAutoRenew)
-const cancelAutoRenewRef =
-  ((api as any)["mutations/cancelPremiumPlan"]?.cancelPremiumPlan as FunctionReference<"mutation">) ||
-  ((api as any)["mutations/profiles"]?.cancelAutoRenew as FunctionReference<"mutation">) ||
-  ((api as any)["mutations/cancelAutoRenew"]?.cancelAutoRenew as FunctionReference<"mutation">) ||
-  null;
-
-// Fallback activar (si no existe setAutoRenew)
-const activateAutoRenewRef =
-  ((api as any)["mutations/activatePremiumAutoRenew"]?.activatePremiumAutoRenew as FunctionReference<"mutation">) ||
-  ((api as any)["mutations/profiles"]?.activateAutoRenew as FunctionReference<"mutation">) ||
-  ((api as any)["mutations/activateAutoRenew"]?.activateAutoRenew as FunctionReference<"mutation">) ||
-  null;
-
-// ───────────────────────────────────────────────────────────────────────────────
-// Tipos UI
-// ───────────────────────────────────────────────────────────────────────────────
+// ——— Tipos UI ———
 type PaymentMethodUI = {
   id: string | number;
   brand: "visa" | "mastercard" | "amex" | "otro";
@@ -328,9 +309,7 @@ export default function ProfilePage() {
     }
   };
 
-  // ───────────────────────────────────────────────────────────────────────────────
-  // Métodos de pago (form + borrado)
-  // ───────────────────────────────────────────────────────────────────────────────
+  // ——— Modal "Agregar método de pago" ———
   const [payOpen, setPayOpen] = useState(false);
   const [pmBrand, setPmBrand] = useState<PaymentMethodUI["brand"]>("visa");
   const [pmNumber, setPmNumber] = useState("");
@@ -349,24 +328,6 @@ export default function ProfilePage() {
   const [pendingDeleteLabel, setPendingDeleteLabel] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [removedIds, setRemovedIds] = useState<Array<string | number>>([]);
-// Paginación de alquileres
-const [activePage, setActivePage] = useState(0);
-const [expiredPage, setExpiredPage] = useState(0);
-const PAGE_SIZE = 4;
-// Paginación de compras
-const [purchasesPage, setPurchasesPage] = useState(0);
-const PAGE_SIZE_PURCHASE = 5;
-
-// Resetear página si cambian compras o el perfil
-useEffect(() => {
-  setPurchasesPage(0);
-}, [purchases, convexProfile?._id]);
-
-// Si cambian rentals o el perfil, reseteamos
-useEffect(() => {
-  setActivePage(0);
-  setExpiredPage(0);
-}, [rentals, convexProfile?._id]);
 
   function maskCard(num: string) {
     const clean = num.replace(/\D/g, "");
@@ -435,26 +396,12 @@ useEffect(() => {
     role === "admin" ? <ShieldAlert className="w-3 h-3 mr-1" /> : <Crown className="w-3 h-3 mr-1" />;
   const roleLabel = role === "admin" ? "Admin" : role === "premium" ? "Premium" : "Free";
 
-  // === Auto-renew: estado efectivo (DB + override optimista) ===
-  const [autoRenewOverride, setAutoRenewOverride] = useState<boolean | null>(null);
-  useEffect(() => {
-    setAutoRenewOverride(null); // resetea override cuando cambie el perfil
-  }, [convexProfile?._id, (convexProfile as any)?.premiumAutoRenew]);
+  // ⬇️ NUEVO: cancelación
+  const cancelPremium = useMutation(cancelPremiumRef);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
-  const effectiveAutoRenew: boolean =
-    (autoRenewOverride ?? (convexProfile as any)?.premiumAutoRenew) ?? false;
-
-  // Mutaciones (si existen)
-  const setAutoRenew = setAutoRenewRef ? useMutation(setAutoRenewRef) : null;
-  const cancelAutoRenew = cancelAutoRenewRef ? useMutation(cancelAutoRenewRef) : null;
-  const activateAutoRenew = activateAutoRenewRef ? useMutation(activateAutoRenewRef) : null;
-
-  // Modal genérico de confirmación
-  const [confirmAutoRenewOpen, setConfirmAutoRenewOpen] = useState(false);
-  const [autoRenewMode, setAutoRenewMode] = useState<"activate" | "cancel">("cancel");
-  const [autoRenewWorking, setAutoRenewWorking] = useState(false);
-
-  // Avisos de vencimiento (solo UI)
+  // ⬇️ NUEVO: aviso por toast cuando está por vencer o ya venció (solo UI)
   useEffect(() => {
     const exp = (convexProfile as any)?.premiumExpiresAt as number | undefined;
     if (!exp) return;
@@ -638,7 +585,7 @@ useEffect(() => {
                         <p className="text-white font-medium">Plan Premium</p>
                         <p className="text-slate-400 text-sm">
                           Renovación automática {(convexProfile as any)?.premiumPlan === "lifetime" ? "no aplica (lifetime)" :
-                            (effectiveAutoRenew ? "activa" : "desactivada")}
+                            ((convexProfile as any)?.premiumAutoRenew ? "activa" : "desactivada")}
                         </p>
                         {(convexProfile as any)?.premiumExpiresAt && (convexProfile as any)?.premiumPlan !== "lifetime" ? (
                           <p className="text-slate-400 text-xs mt-1">
@@ -649,34 +596,22 @@ useEffect(() => {
                       <Badge className="bg-orange-400 text-slate-900">Activo</Badge>
                     </div>
                     <Separator className="bg-slate-700" />
-
-                    {(convexProfile as any)?.premiumPlan === "lifetime" ? (
-                      <Button disabled className="w-full bg-slate-700 text-slate-400">
-                        Lifetime: no requiere renovación
-                      </Button>
-                    ) : effectiveAutoRenew ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => { setAutoRenewMode("cancel"); setConfirmAutoRenewOpen(true); }}
-                        className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
-                      >
-                        Cancelar renovación automática
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => { setAutoRenewMode("activate"); setConfirmAutoRenewOpen(true); }}
-                        className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 shadow-md ring-1 ring-orange-400/40 hover:shadow-lg hover:ring-orange-400/60 transition"
-                      >
-                        Activar renovación automática
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => setConfirmCancelOpen(true)}
+                      className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
+                    >
+                      Cancelar renovación automática
+                    </Button>
                   </>
                 ) : (
                   <>
                     <p className="text-slate-300 text-sm">
                       Pasate a Premium para desbloquear la biblioteca completa, sin anuncios y con descuentos.
                     </p>
-                    <Link href="/premium">
+                    <Link
+                      href="/premium"
+                    >
                       <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900">
                         Suscribirme ahora
                       </Button>
@@ -739,170 +674,87 @@ useEffect(() => {
           {/* Second Row - Games Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Purchased Games */}
-            {/* Purchased Games */}
-<Card className="bg-slate-800 border-slate-700">
-  <CardHeader className="flex flex-row items-center justify-between">
-    <CardTitle className="text-orange-400 flex items-center gap-2">
-      <Gamepad2 className="w-5 h-5" />
-      Juegos Comprados
-    </CardTitle>
-    {/* Enlace a /mis-juegos?tab=purchases */}
-    <Link href="/mis-juegos?tab=purchases" prefetch>
-      <Button
-        size="sm"
-        className="
-          rounded-full bg-transparent
-          text-amber-300 border border-amber-300/30
-          hover:bg-amber-400/15 hover:text-amber-200
-        "
-      >
-        <Settings className="w-4 h-4 mr-2" />
-        Administrar mis juegos
-      </Button>
-    </Link>
-  </CardHeader>
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-orange-400 flex items-center gap-2">
+                  <Gamepad2 className="w-5 h-5" />
+                  Juegos Comprados
+                </CardTitle>
+                {/* 👉 Enlaza a /mis-juegos?tab=purchases con estilo amable (sin hover blanco) */}
+                <Link href="/mis-juegos?tab=purchases" prefetch>
+                  <Button
+                    size="sm"
+                    className="
+                      rounded-full bg-transparent
+                      text-amber-300 border border-amber-300/30
+                      hover:bg-amber-400/15 hover:text-amber-200
+                    "
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Administrar mis juegos
+                  </Button>
+                </Link>
+              </CardHeader>
 
-  <CardContent>
-    {(() => {
-      // Ordenar por fecha (más reciente primero) y paginar
-      const list = Array.isArray(uniquePurchases) ? uniquePurchases : [];
-      const sorted = [...list].sort((a: any, b: any) => {
-        const ax = typeof a?.createdAt === "number" ? a.createdAt : 0;
-        const bx = typeof b?.createdAt === "number" ? b.createdAt : 0;
-        return bx - ax; // desc
-      });
+              <CardContent>
+                <div className="space-y-3">
+                  {(uniquePurchases ?? []).map((p) => {
+                    const title = p.game?.title || p.title || "Juego";
+                    const cover = p.game?.cover_url || p.cover_url || "/placeholder.svg";
+                    const when =
+                      typeof p.createdAt === "number"
+                        ? new Date(p.createdAt).toLocaleDateString()
+                        : null;
 
-      const totalPurchasePages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-      const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
-      const safePurchasesPage = clamp(purchasesPage, 0, totalPurchasePages - 1);
-
-const sliceByPage = <T,>(arr: T[], page: number) =>
-  arr.slice(page * PAGE_SIZE_PURCHASE, page * PAGE_SIZE_PURCHASE + PAGE_SIZE_PURCHASE);
-
-      const pagePurchases = sliceByPage(sorted, safePurchasesPage);
-
-      return (
-        <>
-          {sorted.length ? (
-            <>
-              <div className="space-y-3">
-                {pagePurchases.map((p: any) => {
-                  const title = p.game?.title || p.title || "Juego";
-                  const cover = p.game?.cover_url || p.cover_url || "/placeholder.svg";
-                  const when =
-                    typeof p.createdAt === "number"
-                      ? new Date(p.createdAt).toLocaleDateString()
-                      : null;
-
-                  return (
-                    <div key={p._id} className="bg-slate-700 rounded-lg p-4 flex items-center gap-4">
-                      <img src={cover} alt={title} className="w-16 h-16 rounded-lg object-cover" />
-                      <div className="flex-1">
-                        <h3 className="text-white font-medium">{title}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                          <span className="text-emerald-400 text-sm">
-                            {when ? `Comprado el ${when}` : `Compra registrada`}
-                          </span>
+                    return (
+                      <div key={p._id} className="bg-slate-700 rounded-lg p-4 flex items-center gap-4">
+                        <img src={cover} alt={title} className="w-16 h-16 rounded-lg object-cover" />
+                        <div className="flex-1">
+                          <h3 className="text-white font-medium">{title}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            <span className="text-emerald-400 text-sm">
+                              {when ? `Comprado el ${when}` : `Compra registrada`}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
 
-              {/* Paginación (Compras) */}
-              <div className="flex items-center justify-between mt-3">
-                <Button
-                  variant="outline"
-                  className="border-slate-600 text-slate-300 bg-transparent"
-                  disabled={safePurchasesPage === 0}
-                  onClick={() => setPurchasesPage((p) => Math.max(0, p - 1))}
-                >
-                  Anterior
-                </Button>
-                <span className="text-xs text-slate-400">
-                  Página {safePurchasesPage + 1} de {totalPurchasePages}
-                </span>
-                <Button
-                  className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/30"
-                  disabled={safePurchasesPage >= totalPurchasePages - 1}
-                  onClick={() => setPurchasesPage((p) => Math.min(totalPurchasePages - 1, p + 1))}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </>
-          ) : (
-            <p className="text-slate-400 text-sm">Aún no hay compras registradas.</p>
-          )}
-        </>
-      );
-    })()}
-  </CardContent>
-</Card>
+                  {(!purchases || purchases.length === 0) && (
+                    <p className="text-slate-400 text-sm">Aún no hay compras registradas.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
+            {/* Rented Games */}
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-orange-400 flex items-center gap-2">
+                  <Star className="w-5 h-5" />
+                  Juegos Alquilados
+                </CardTitle>
+                {/* 👉 Enlaza a /mis-juegos?tab=rentals con estilo amable (sin hover blanco) */}
+                <Link href="/mis-juegos?tab=rentals" prefetch>
+                  <Button
+                    size="sm"
+                    className="
+                      rounded-full bg-transparent
+                      text-sky-300 border border-sky-400/30
+                      hover:bg-sky-400/15 hover:text-white
+                    "
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Administrar mis juegos
+                  </Button>
+                </Link>
+              </CardHeader>
 
-{/* Rented Games */}
-<Card className="bg-slate-800 border-slate-700">
-  <CardHeader className="flex flex-row items-center justify-between">
-    <CardTitle className="text-orange-400 flex items-center gap-2">
-      <Star className="w-5 h-5" />
-      Juegos Alquilados
-    </CardTitle>
-    <Link href="/mis-juegos?tab=rentals" prefetch>
-      <Button
-        size="sm"
-        className="
-          rounded-full bg-transparent
-          text-sky-300 border border-sky-400/30
-          hover:bg-sky-400/15 hover:text-white
-        "
-      >
-        <Settings className="w-4 h-4 mr-2" />
-        Administrar mis juegos
-      </Button>
-    </Link>
-  </CardHeader>
-
-  <CardContent>
-    {(() => {
-      const now = Date.now();
-      const all = Array.isArray(rentals) ? rentals : [];
-
-      const activeRentals = all.filter(
-        (r) => typeof r.expiresAt === "number" && r.expiresAt > now
-      );
-      const expiredRentals = all.filter(
-        (r) => typeof r.expiresAt === "number" && r.expiresAt <= now
-      );
-
-      // Helpers de paginación
-      const totalActivePages = Math.max(1, Math.ceil(activeRentals.length / PAGE_SIZE));
-      const totalExpiredPages = Math.max(1, Math.ceil(expiredRentals.length / PAGE_SIZE));
-
-      const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
-      const safeActivePage = clamp(activePage, 0, totalActivePages - 1);
-      const safeExpiredPage = clamp(expiredPage, 0, totalExpiredPages - 1);
-
-      const sliceByPage = <T,>(arr: T[], page: number) =>
-        arr.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-
-      const pageActive = sliceByPage(activeRentals, safeActivePage);
-      const pageExpired = sliceByPage(expiredRentals, safeExpiredPage);
-
-      return (
-        <div className="space-y-8">
-          {/* ACTUALES */}
-          <div>
-            <h4 className="text-sky-300 text-sm font-semibold mb-3">
-              Alquileres activos ({activeRentals.length})
-            </h4>
-
-            {activeRentals.length ? (
-              <>
+              <CardContent>
                 <div className="space-y-3">
-                  {pageActive.map((r) => {
+                  {(rentals ?? []).map((r) => {
                     const title = r.game?.title || r.title || "Juego";
                     const cover = r.game?.cover_url || r.cover_url || "/placeholder.svg";
                     const exp =
@@ -916,120 +768,22 @@ const sliceByPage = <T,>(arr: T[], page: number) =>
                         <div className="flex-1">
                           <h3 className="text-white font-medium">{title}</h3>
                           <div className="flex items-center gap-2 mt-1">
-                            <Calendar className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400 text-sm">
-                              {exp ? `Válido hasta ${exp}` : "Vigente"}
+                            <Calendar className="w-3 h-3 text-red-400" />
+                            <span className="text-red-400 text-sm">
+                              {exp ? `Expira el ${exp}` : `Expira pronto`}
                             </span>
                           </div>
                         </div>
                       </div>
                     );
                   })}
+
+                  {(!rentals || rentals.length === 0) && (
+                    <p className="text-slate-400 text-sm">Aún no tenés alquileres activos.</p>
+                  )}
                 </div>
-
-                {/* Paginación (Activos) */}
-                <div className="flex items-center justify-between mt-3">
-                  <Button
-                    variant="outline"
-                    className="border-slate-600 text-slate-300 bg-transparent"
-                    disabled={safeActivePage === 0}
-                    onClick={() => setActivePage((p) => Math.max(0, p - 1))}
-                  >
-                    Anterior
-                  </Button>
-                  <span className="text-xs text-slate-400">
-                    Página {safeActivePage + 1} de {totalActivePages}
-                  </span>
-                  <Button
-                    className="bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/30"
-                    disabled={safeActivePage >= totalActivePages - 1}
-                    onClick={() => setActivePage((p) => Math.min(totalActivePages - 1, p + 1))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-slate-400 text-sm">No tenés alquileres activos.</p>
-            )}
-          </div>
-
-          <Separator className="bg-slate-700" />
-
-          {/* VENCIDOS */}
-          <div>
-            <h4 className="text-rose-400 text-sm font-semibold mb-3">
-              Alquileres vencidos ({expiredRentals.length})
-            </h4>
-
-            {expiredRentals.length ? (
-              <>
-                <div className="space-y-3">
-                  {pageExpired.map((r) => {
-                    const title = r.game?.title || r.title || "Juego";
-                    const cover = r.game?.cover_url || r.cover_url || "/placeholder.svg";
-                    const exp =
-                      typeof r.expiresAt === "number"
-                        ? new Date(r.expiresAt).toLocaleDateString()
-                        : null;
-
-                    return (
-                      <div
-                        key={r._id}
-                        className="bg-slate-700/60 rounded-lg p-4 flex items-center gap-4 opacity-80"
-                      >
-                        <img
-                          src={cover}
-                          alt={title}
-                          className="w-16 h-16 rounded-lg object-cover grayscale"
-                        />
-                        <div className="flex-1">
-                          <h3 className="text-slate-400 font-medium">{title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Calendar className="w-3 h-3 text-rose-400" />
-                            <span className="text-rose-400 text-sm">
-                              {exp ? `Venció el ${exp}` : `Expirado`}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Paginación (Vencidos) */}
-                <div className="flex items-center justify-between mt-3">
-                  <Button
-                    variant="outline"
-                    className="border-slate-600 text-slate-300 bg-transparent"
-                    disabled={safeExpiredPage === 0}
-                    onClick={() => setExpiredPage((p) => Math.max(0, p - 1))}
-                  >
-                    Anterior
-                  </Button>
-                  <span className="text-xs text-slate-400">
-                    Página {safeExpiredPage + 1} de {totalExpiredPages}
-                  </span>
-                  <Button
-                    className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-400/30"
-                    disabled={safeExpiredPage >= totalExpiredPages - 1}
-                    onClick={() => setExpiredPage((p) => Math.min(totalExpiredPages - 1, p + 1))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-slate-400 text-sm">No tenés alquileres vencidos.</p>
-            )}
-          </div>
-        </div>
-      );
-    })()}
-  </CardContent>
-</Card>
-
-
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -1045,7 +799,7 @@ const sliceByPage = <T,>(arr: T[], page: number) =>
               </Button>
             </div>
             <div className="flex items-center justify-center">
-              <img src={currentAvatar} alt="Avatar" className="max-h-[60vh] max-w-full rounded-lg object-contain" />
+              <img src={currentAvatar} alt="Avatar" className="max-h:[60vh] max-w-full rounded-lg object-contain" />
             </div>
           </div>
         </div>
@@ -1141,77 +895,42 @@ const sliceByPage = <T,>(arr: T[], page: number) =>
         </div>
       )}
 
-      {/* === MODAL: Confirmar activar/cancelar auto-renew === */}
-      {confirmAutoRenewOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!autoRenewWorking) setConfirmAutoRenewOpen(false); }}>
+      {/* === MODAL: Confirmar cancelación de renovación automática === */}
+      {confirmCancelOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-orange-400 font-semibold">
-                {autoRenewMode === "cancel" ? "Cancelar renovación automática" : "Activar renovación automática"}
-              </h3>
-              <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!autoRenewWorking) setConfirmAutoRenewOpen(false); }}>
+              <h3 className="text-orange-400 font-semibold">Cancelar renovación automática</h3>
+              <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
-            {autoRenewMode === "cancel" ? (
-              <p className="text-slate-300 mb-4">
-                Mantendrás el acceso Premium hasta la fecha de vencimiento actual. ¿Confirmás desactivar la
-                renovación automática para los próximos ciclos?
-              </p>
-            ) : (
-              <p className="text-slate-300 mb-4">
-                Vas a reactivar la renovación automática para los próximos ciclos. ¿Confirmás activarla?
-              </p>
-            )}
+            <p className="text-slate-300 mb-4">Cumplida la fecha de expiración, perderás el acceso a todos los beneficios de PlayVerse Premium y no se te renovará automáticamente ¿Seguro que deseas continuar?</p>
 
             <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setConfirmAutoRenewOpen(false)} className="text-slate-300">Volver</Button>
+              <Button variant="ghost" onClick={() => setConfirmCancelOpen(false)} className="text-slate-300">Cancelar</Button>
               <Button
-                className={
-                  autoRenewMode === "cancel"
-                    ? "bg-red-500 hover:bg-red-600 text-white"
-                    : "bg-orange-400 hover:bg-orange-500 text-slate-900 shadow-md ring-1 ring-orange-400/40 hover:shadow-lg hover:ring-orange-400/60 transition"
-                }
+                className="bg-red-500 hover:bg-red-600 text-white"
                 onClick={async () => {
                   if (!convexProfile?._id) return;
-                  setAutoRenewWorking(true);
+                  setCancelling(true);
                   try {
-                    if (setAutoRenew) {
-                      // Ruta principal
-                      const desired = autoRenewMode === "activate";
-                      await (setAutoRenew as any)({ userId: convexProfile._id, autoRenew: desired, reason: "user_click" });
-                      setAutoRenewOverride(desired); // Optimista
-                      toast({
-                        title: desired ? "Renovación automática activada" : "Renovación automática cancelada",
-                        description: desired
-                          ? "Tu suscripción intentará renovarse automáticamente al vencimiento."
-                          : "Tu cuenta mantendrá el acceso hasta el vencimiento actual.",
-                      });
-                    } else {
-                      // Fallbacks (por si no existe setAutoRenew)
-                      if (autoRenewMode === "cancel") {
-                        if (!cancelAutoRenew) throw new Error("No existe mutación de cancelación");
-                        await (cancelAutoRenew as any)({ userId: convexProfile._id, reason: "user_click" });
-                        setAutoRenewOverride(false);
-                        toast({ title: "Renovación automática cancelada", description: "Se aplicó el cambio correctamente." });
-                      } else {
-                        if (!activateAutoRenew) throw new Error("No existe mutación de activación");
-                        await (activateAutoRenew as any)({ userId: convexProfile._id });
-                        setAutoRenewOverride(true);
-                        toast({ title: "Renovación automática activada", description: "Se aplicó el cambio correctamente." });
-                      }
-                    }
-                    setConfirmAutoRenewOpen(false);
+                    await (cancelPremium as any)({ userId: convexProfile._id, reason: "user_click" });
+                    toast({
+                      title: "Renovación automática cancelada",
+                      description: "Tu cuenta mantendrá el acceso hasta el vencimiento actual.",
+                    });
+                    setConfirmCancelOpen(false);
                   } catch (e: any) {
-                    toast({ title: "No se pudo aplicar el cambio", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
+                    toast({ title: "No se pudo cancelar", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
                   } finally {
-                    setAutoRenewWorking(false);
+                    setCancelling(false);
                   }
                 }}
-                disabled={autoRenewWorking}
+                disabled={cancelling}
               >
-                {autoRenewWorking ? "Procesando..." : "Confirmar"}
+                {cancelling ? "Cancelando..." : "Confirmar"}
               </Button>
             </div>
           </div>
@@ -1221,7 +940,7 @@ const sliceByPage = <T,>(arr: T[], page: number) =>
       {/* === MODAL: Agregar método de pago === */}
       {payOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setPayOpen(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={handlePaymentSubmit} className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-lg">
+          <form onClick={(e) => e.stopPropagation()} onSubmit={handlePaymentSubmit} className="bg-slate-900 border border-slate-700 rounded-xl p-5 w/full max-w-lg">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-orange-400 font-semibold">Agregar método de pago</h3>
               <Button type="button" variant="ghost" size="icon" className="text-slate-300" onClick={() => setPayOpen(false)}>
