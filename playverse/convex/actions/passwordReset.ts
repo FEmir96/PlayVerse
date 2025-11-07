@@ -88,6 +88,7 @@ export const requestPasswordReset = action({
     const baseUrl = resolveBaseUrl(appUrl);
     const resetUrl = new URL("/auth/reset-password", baseUrl);
     resetUrl.searchParams.set("token", token);
+    resetUrl.searchParams.set("email", normalizedEmail);
 
     const html = buildPasswordResetEmail({
       name: profile.name,

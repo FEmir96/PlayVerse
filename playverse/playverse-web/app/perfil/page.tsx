@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
@@ -53,6 +54,9 @@ const getUserPurchasesRef =
 const updateProfileRef =
   (api as any).auth.updateProfile as FunctionReference<"mutation">;
 
+const changePasswordRef =
+  (api as any).auth.changePassword as FunctionReference<"mutation">;
+
 const savePaymentMethodRef =
   (api as any)["mutations/savePaymentMethod"]
     .savePaymentMethod as FunctionReference<"mutation">;
@@ -71,6 +75,11 @@ const cancelPremiumRef =
   (api as any)["mutations/cancelPremiumPlan"]
     .cancelPremiumPlan as FunctionReference<"mutation">;
 
+const setAutoRenewRef =
+  (api as any)["mutations/setAutoRenew"]?.setAutoRenew as
+    | FunctionReference<"mutation">
+    | undefined;
+
 // ——— Tipos UI ———
 type PaymentMethodUI = {
   id: string | number;
@@ -78,6 +87,30 @@ type PaymentMethodUI = {
   last4: string;
   expMonth: number;
   expYear: number;
+};
+
+type RentalItemUI = {
+  _id: string;
+  game?: {
+    _id?: string;
+    slug?: string;
+    title?: string;
+    cover_url?: string;
+  };
+  gameId?: string;
+  expiresAt?: number | null;
+  title?: string;
+  cover_url?: string;
+};
+
+type RentalWithStatus = RentalItemUI & { isExpired: boolean };
+
+type PurchaseItemUI = {
+  _id: string;
+  game?: { title?: string; cover_url?: string };
+  createdAt?: number;
+  title?: string;
+  cover_url?: string;
 };
 
 // Helpers de formateo (solo UI)
@@ -146,7 +179,6 @@ export default function ProfilePage() {
   // 3) Edición local
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState("");
-  const [editedPassword, setEditedPassword] = useState("");
 
   // Avatar + FAB + menú
   const [avatarHover, setAvatarHover] = useState(false);
@@ -154,6 +186,12 @@ export default function ProfilePage() {
   const [avatarUploadOpen, setAvatarUploadOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [avatarInput, setAvatarInput] = useState<string>("");
+
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarWrapRef = useRef<HTMLDivElement | null>(null);
@@ -196,11 +234,11 @@ export default function ProfilePage() {
 
   // 5) Guardado en Convex (perfil)
   const updateProfile = useMutation(updateProfileRef);
+  const changePassword = useMutation(changePasswordRef);
   const canSave =
     isEditing &&
     convexProfile?._id &&
     (editedName.trim() !== (convexProfile?.name ?? "") ||
-      editedPassword.length > 0 ||
       avatarInput !== (convexProfile as any)?.avatarUrl);
 
   const handleSave = async () => {
@@ -209,12 +247,10 @@ export default function ProfilePage() {
       await updateProfile({
         userId: convexProfile._id,
         name: editedName.trim() || undefined,
-        newPassword: editedPassword || undefined,
         avatarUrl: avatarInput || undefined,
       });
       toast({ title: "Perfil actualizado", description: "Tus cambios se guardaron correctamente." });
       setIsEditing(false);
-      setEditedPassword("");
     } catch (e: any) {
       toast({ title: "No se pudo guardar", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
     }
@@ -222,7 +258,6 @@ export default function ProfilePage() {
 
   const handleCancel = () => {
     setEditedName(convexProfile?.name ?? "");
-    setEditedPassword("");
     setAvatarInput((convexProfile as any)?.avatarUrl ?? "");
     setIsEditing(false);
   };
@@ -231,16 +266,12 @@ export default function ProfilePage() {
   const rentals = useQuery(
     getUserRentalsRef,
     convexProfile?._id ? { userId: convexProfile._id } : "skip"
-  ) as
-    | Array<{ _id: string; game?: { title?: string; cover_url?: string }; expiresAt?: number | null; title?: string; cover_url?: string; }>
-    | undefined;
+  ) as RentalItemUI[] | undefined;
 
   const purchases = useQuery(
     getUserPurchasesRef,
     convexProfile?._id ? { userId: convexProfile._id } : "skip"
-  ) as
-    | Array<{ _id: string; game?: { title?: string; cover_url?: string }; createdAt?: number; title?: string; cover_url?: string; }>
-    | undefined;
+  ) as PurchaseItemUI[] | undefined;
 
   const uniquePurchases = useMemo(() => {
     const arr = Array.isArray(purchases) ? (purchases as any[]) : [];
@@ -255,6 +286,121 @@ export default function ProfilePage() {
     }
     return out;
   }, [purchases]);
+
+  const PURCHASES_PER_PAGE = 5;
+  const RENTALS_PER_PAGE = 5;
+
+  const [purchasesPage, setPurchasesPage] = useState(0);
+  const [rentalsPage, setRentalsPage] = useState(0);
+
+  const dedupedRentals = useMemo(() => {
+    const arr = Array.isArray(rentals) ? (rentals as RentalItemUI[]) : [];
+    const map = new Map<string, RentalItemUI>();
+
+    const k = (item: RentalItemUI) => {
+      const raw =
+        item.game?._id ??
+        (item as any).gameId ??
+        item.game?.slug ??
+        item.title ??
+        item._id;
+      return String(raw || "").trim().toLowerCase() || `__id:${item._id}`;
+    };
+
+    for (const item of arr) {
+      const key = k(item);
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, item);
+        continue;
+      }
+      const currentExp = typeof existing.expiresAt === "number" ? existing.expiresAt : 0;
+      const incomingExp = typeof item.expiresAt === "number" ? item.expiresAt : 0;
+      if (incomingExp > currentExp) {
+        map.set(key, item);
+      }
+    }
+    return Array.from(map.values());
+  }, [rentals]);
+
+  const rentalsByStatus = useMemo(() => {
+    const arr = dedupedRentals;
+    const now = Date.now();
+    const active: RentalWithStatus[] = [];
+    const expired: RentalWithStatus[] = [];
+
+    for (const item of arr) {
+      const expiredFlag =
+        typeof item.expiresAt === "number" && item.expiresAt > 0 && item.expiresAt <= now;
+      const decorated: RentalWithStatus = { ...item, isExpired: expiredFlag };
+      if (expiredFlag) expired.push(decorated);
+      else active.push(decorated);
+    }
+
+    const sortAsc = (list: RentalWithStatus[]) =>
+      list.sort((a, b) => {
+        const aExp = typeof a.expiresAt === "number" ? a.expiresAt : Number.POSITIVE_INFINITY;
+        const bExp = typeof b.expiresAt === "number" ? b.expiresAt : Number.POSITIVE_INFINITY;
+        return aExp - bExp;
+      });
+    const sortDesc = (list: RentalWithStatus[]) =>
+      list.sort((a, b) => {
+        const aExp = typeof a.expiresAt === "number" ? a.expiresAt : Number.NEGATIVE_INFINITY;
+        const bExp = typeof b.expiresAt === "number" ? b.expiresAt : Number.NEGATIVE_INFINITY;
+        return bExp - aExp;
+      });
+
+    return {
+      active: sortAsc(active),
+      expired: sortDesc(expired),
+      ordered: [...active, ...expired],
+    };
+  }, [dedupedRentals]);
+
+  const activeRentals = rentalsByStatus.active;
+  const expiredRentals = rentalsByStatus.expired;
+  const orderedRentals = rentalsByStatus.ordered;
+
+  const purchasesList = Array.isArray(uniquePurchases) ? uniquePurchases : [];
+  const totalPurchasePages = Math.max(
+    1,
+    Math.ceil(purchasesList.length / PURCHASES_PER_PAGE)
+  );
+  const totalRentalPages = Math.max(1, Math.ceil(orderedRentals.length / RENTALS_PER_PAGE));
+
+  const clampedPurchasesPage = Math.min(purchasesPage, totalPurchasePages - 1);
+  const clampedRentalsPage = Math.min(rentalsPage, totalRentalPages - 1);
+
+  const paginatedPurchases = purchasesList.slice(
+    clampedPurchasesPage * PURCHASES_PER_PAGE,
+    clampedPurchasesPage * PURCHASES_PER_PAGE + PURCHASES_PER_PAGE
+  );
+  const paginatedRentals = orderedRentals.slice(
+    clampedRentalsPage * RENTALS_PER_PAGE,
+    clampedRentalsPage * RENTALS_PER_PAGE + RENTALS_PER_PAGE
+  );
+  const paginatedActiveRentals = paginatedRentals.filter((item) => !item.isExpired);
+  const paginatedExpiredRentals = paginatedRentals.filter((item) => item.isExpired);
+
+  useEffect(() => {
+    if (purchasesPage !== clampedPurchasesPage) {
+      setPurchasesPage(clampedPurchasesPage);
+    }
+  }, [purchasesPage, clampedPurchasesPage]);
+
+  useEffect(() => {
+    if (rentalsPage !== clampedRentalsPage) {
+      setRentalsPage(clampedRentalsPage);
+    }
+  }, [rentalsPage, clampedRentalsPage]);
+
+  useEffect(() => {
+    setPurchasesPage(0);
+  }, [purchasesList.length]);
+
+  useEffect(() => {
+    setRentalsPage(0);
+  }, [orderedRentals.length]);
 
   // Nombre e imagen “finales” para UI
   const displayName = useMemo(
@@ -292,7 +438,7 @@ export default function ProfilePage() {
     const seed = (loginEmail || displayName || "playverse").replace(/[^a-z0-9]/gi, "");
     return Array.from({ length: 6 }).map((_, i) => {
       const s = `${seed}-${i + 1}`;
-      return `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${encodeURIComponent(s)}&radius=50`;
+      return `https://api.dicebear.com/8.x/bottts-neutral/png?seed=${encodeURIComponent(s)}&radius=50&format=png`;
     });
   }, [loginEmail, displayName]);
 
@@ -395,11 +541,151 @@ export default function ProfilePage() {
   const roleIcon =
     role === "admin" ? <ShieldAlert className="w-3 h-3 mr-1" /> : <Crown className="w-3 h-3 mr-1" />;
   const roleLabel = role === "admin" ? "Admin" : role === "premium" ? "Premium" : "Free";
+  const premiumPlan = (convexProfile as any)?.premiumPlan;
+  const isLifetimePlan = premiumPlan === "lifetime";
+  const premiumAutoRenew = isLifetimePlan ? false : (convexProfile as any)?.premiumAutoRenew !== false;
 
   // ⬇️ NUEVO: cancelación
   const cancelPremium = useMutation(cancelPremiumRef);
+  const setAutoRenew = setAutoRenewRef ? useMutation(setAutoRenewRef) : null;
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [autoRenewLoading, setAutoRenewLoading] = useState(false);
+
+  const performAutoRenewMutation = async (nextValue: boolean) => {
+    if (!convexProfile?._id) {
+      throw new Error("No se encontró el perfil del usuario.");
+    }
+    if (setAutoRenew) {
+      return (setAutoRenew as any)({
+        userId: convexProfile._id,
+        autoRenew: nextValue,
+        reason: nextValue ? "user_reactivate" : "user_cancel",
+      });
+    }
+    if (!nextValue) {
+      return (cancelPremium as any)({
+        userId: convexProfile._id,
+        reason: "user_cancel",
+      });
+    }
+    throw new Error("No se puede reactivar la renovacion automatica en este entorno.");
+  };
+
+  const handleReactivateAutoRenew = async () => {
+    setAutoRenewLoading(true);
+    try {
+      await performAutoRenewMutation(true);
+      toast({
+        title: "Renovacion automatica activada",
+        description: "Tu proxima factura se generara automaticamente.",
+      });
+      setReactivateModalOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "No se pudo reactivar",
+        description: err?.message ?? "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setAutoRenewLoading(false);
+    }
+  };
+
+  const resetPasswordForm = () => {
+    setCurrentPasswordInput("");
+    setNewPasswordInput("");
+    setConfirmPasswordInput("");
+  };
+
+  const openPasswordModal = () => {
+    resetPasswordForm();
+    setPasswordModalOpen(true);
+  };
+
+  const closePasswordModal = () => {
+    if (changingPassword) return;
+    setPasswordModalOpen(false);
+    resetPasswordForm();
+  };
+
+  const handlePasswordSubmit = async (e?: FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
+    if (!convexProfile?._id) {
+      toast({
+        title: "No encontramos tu perfil",
+        description: "Volve a iniciar sesion e intentalo de nuevo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentPasswordInput || !newPasswordInput || !confirmPasswordInput) {
+      toast({
+        title: "Completa los campos",
+        description: "Necesitamos la clave actual y la nueva.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPasswordInput !== confirmPasswordInput) {
+      toast({
+        title: "Las contrasenas no coinciden",
+        description: "Revisa la confirmacion e intentalo de nuevo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPasswordInput.length < 6) {
+      toast({
+        title: "Contrasena muy corta",
+        description: "Necesita al menos 6 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const result = await (changePassword as any)({
+        userId: convexProfile._id,
+        currentPassword: currentPasswordInput,
+        newPassword: newPasswordInput,
+      });
+
+      if (!result?.ok) {
+        const errorMap: Record<string, string> = {
+          invalid_current: "La clave actual no coincide.",
+          weak_password: "La nueva contrasena necesita al menos 6 caracteres.",
+          same_password: "Usa una contrasena diferente a la actual.",
+          no_password: "Tu cuenta no tiene contrasena local.",
+        };
+        const message =
+          errorMap[result?.error as keyof typeof errorMap] ??
+          "No se pudo cambiar la contrasena.";
+        toast({ title: "No se pudo cambiar", description: message, variant: "destructive" });
+        return;
+      }
+
+      toast({
+        title: "Contrasena actualizada",
+        description: "Ya podes usar la nueva clave.",
+      });
+      setPasswordModalOpen(false);
+      resetPasswordForm();
+    } catch (err: any) {
+      toast({
+        title: "No se pudo cambiar",
+        description: err?.message ?? "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   // ⬇️ NUEVO: aviso por toast cuando está por vencer o ya venció (solo UI)
   useEffect(() => {
@@ -541,21 +827,20 @@ export default function ProfilePage() {
                 </div>
 
                 <div>
-                  <Label className="text-slate-300">Contraseña</Label>
-                  {isEditing ? (
-                    <Input
-                      type="password"
-                      placeholder="Nueva contraseña (opcional)"
-                      value={editedPassword}
-                      onChange={(e) => setEditedPassword(e.target.value)}
-                      className="bg-slate-700 border-slate-600 text-white mt-1"
-                    />
-                  ) : (
-                    <div className="flex items-center gap-2 mt-1">
+                  <Label className="text-slate-300">Contrasena</Label>
+                  <div className="flex flex-wrap items-center gap-3 mt-1">
+                    <div className="flex items-center gap-2">
                       <Lock className="w-4 h-4 text-slate-400" />
                       <p className="text-slate-400">••••••••</p>
                     </div>
-                  )}
+                    <Button
+                      type="button"
+                      onClick={openPasswordModal}
+                      className="bg-amber-500/90 hover:bg-amber-400 text-slate-900 text-sm font-semibold px-4 py-1.5 rounded-full shadow focus-visible:ring-2 focus-visible:ring-amber-300"
+                    >
+                      Cambiar contrasena
+                    </Button>
+                  </div>
                 </div>
 
                 {isEditing && (
@@ -584,8 +869,7 @@ export default function ProfilePage() {
                       <div>
                         <p className="text-white font-medium">Plan Premium</p>
                         <p className="text-slate-400 text-sm">
-                          Renovación automática {(convexProfile as any)?.premiumPlan === "lifetime" ? "no aplica (lifetime)" :
-                            ((convexProfile as any)?.premiumAutoRenew ? "activa" : "desactivada")}
+                          Renovacion automatica {isLifetimePlan ? "no aplica (lifetime)" : premiumAutoRenew ? "activa" : "desactivada"}
                         </p>
                         {(convexProfile as any)?.premiumExpiresAt && (convexProfile as any)?.premiumPlan !== "lifetime" ? (
                           <p className="text-slate-400 text-xs mt-1">
@@ -595,14 +879,30 @@ export default function ProfilePage() {
                       </div>
                       <Badge className="bg-orange-400 text-slate-900">Activo</Badge>
                     </div>
-                    <Separator className="bg-slate-700" />
-                    <Button
-                      variant="outline"
-                      onClick={() => setConfirmCancelOpen(true)}
-                      className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
-                    >
-                      Cancelar renovación automática
-                    </Button>
+                    {!isLifetimePlan ? (
+                      <>
+                        <Separator className="bg-slate-700" />
+                        {premiumAutoRenew ? (
+                          <Button
+                            variant="outline"
+                            onClick={() => setConfirmCancelOpen(true)}
+                            className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
+                          >
+                            Cancelar renovacion automatica
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => setReactivateModalOpen(true)}
+                            disabled={autoRenewLoading}
+                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 disabled:opacity-70"
+                          >
+                            {autoRenewLoading ? "Reactivando..." : "Reactivar renovacion automatica"}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-slate-400 text-xs">Este plan lifetime no necesita renovacion.</p>
+                    )}
                   </>
                 ) : (
                   <>
@@ -698,7 +998,7 @@ export default function ProfilePage() {
 
               <CardContent>
                 <div className="space-y-3">
-                  {(uniquePurchases ?? []).map((p) => {
+                  {paginatedPurchases.map((p) => {
                     const title = p.game?.title || p.title || "Juego";
                     const cover = p.game?.cover_url || p.cover_url || "/placeholder.svg";
                     const when =
@@ -722,10 +1022,39 @@ export default function ProfilePage() {
                     );
                   })}
 
-                  {(!purchases || purchases.length === 0) && (
-                    <p className="text-slate-400 text-sm">Aún no hay compras registradas.</p>
+                  {purchasesList.length === 0 && (
+                    <p className="text-slate-400 text-sm">Aun no hay compras registradas.</p>
                   )}
                 </div>
+                {totalPurchasePages > 1 && (
+                  <div className="flex items-center justify-between pt-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPurchasesPage((prev) => Math.max(prev - 1, 0))}
+                      disabled={clampedPurchasesPage === 0}
+                      className="text-slate-300 hover:text-white"
+                    >
+                      Anterior
+                    </Button>
+                    <span className="text-xs text-slate-400">
+                      Pagina {clampedPurchasesPage + 1} de {totalPurchasePages}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setPurchasesPage((prev) =>
+                          Math.min(prev + 1, totalPurchasePages - 1)
+                        )
+                      }
+                      disabled={clampedPurchasesPage >= totalPurchasePages - 1}
+                      className="text-slate-300 hover:text-white"
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -753,40 +1082,210 @@ export default function ProfilePage() {
               </CardHeader>
 
               <CardContent>
-                <div className="space-y-3">
-                  {(rentals ?? []).map((r) => {
-                    const title = r.game?.title || r.title || "Juego";
-                    const cover = r.game?.cover_url || r.cover_url || "/placeholder.svg";
-                    const exp =
-                      typeof r.expiresAt === "number"
-                        ? new Date(r.expiresAt).toLocaleDateString()
-                        : null;
-
-                    return (
-                      <div key={r._id} className="bg-slate-700 rounded-lg p-4 flex items-center gap-4">
-                        <img src={cover} alt={title} className="w-16 h-16 rounded-lg object-cover" />
-                        <div className="flex-1">
-                          <h3 className="text-white font-medium">{title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Calendar className="w-3 h-3 text-red-400" />
-                            <span className="text-red-400 text-sm">
-                              {exp ? `Expira el ${exp}` : `Expira pronto`}
-                            </span>
-                          </div>
-                        </div>
+                <div className="space-y-5">
+                  {activeRentals.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          Alquileres activos ({activeRentals.length})
+                        </p>
                       </div>
-                    );
-                  })}
+                      {paginatedActiveRentals.map((r) => {
+                        const title = r.game?.title || r.title || "Juego";
+                        const cover = r.game?.cover_url || r.cover_url || "/placeholder.svg";
+                        const exp =
+                          typeof r.expiresAt === "number"
+                            ? new Date(r.expiresAt).toLocaleDateString()
+                            : null;
 
-                  {(!rentals || rentals.length === 0) && (
-                    <p className="text-slate-400 text-sm">Aún no tenés alquileres activos.</p>
+                        return (
+                          <div key={r._id} className="bg-slate-700 rounded-lg p-4 flex items-center gap-4">
+                            <img src={cover} alt={title} className="w-16 h-16 rounded-lg object-cover" />
+                            <div className="flex-1">
+                              <h3 className="text-white font-medium">{title}</h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Calendar className="w-3 h-3 text-emerald-400" />
+                                <span className="text-emerald-300 text-sm">
+                                  {exp ? `Expira el ${exp}` : `Expira pronto`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {paginatedActiveRentals.length === 0 && (
+                        <p className="text-slate-500 text-sm">No hay alquileres activos en esta pagina.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-sm">Aun no tenes alquileres activos.</p>
+                  )}
+
+                  {expiredRentals.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t border-slate-700/60">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">
+                          Alquileres vencidos ({expiredRentals.length})
+                        </p>
+                      </div>
+                      {paginatedExpiredRentals.map((r) => {
+                        const title = r.game?.title || r.title || "Juego";
+                        const cover = r.game?.cover_url || r.cover_url || "/placeholder.svg";
+                        const exp =
+                          typeof r.expiresAt === "number"
+                            ? new Date(r.expiresAt).toLocaleDateString()
+                            : null;
+
+                        return (
+                          <div
+                            key={`${r._id}-expired`}
+                            className="bg-slate-700/50 rounded-lg p-4 flex items-center gap-4 border border-slate-700/60 text-slate-400"
+                          >
+                            <img
+                              src={cover}
+                              alt={title}
+                              className="w-16 h-16 rounded-lg object-cover opacity-60 grayscale"
+                            />
+                            <div className="flex-1">
+                              <h3 className="text-slate-300 font-medium">{title}</h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Calendar className="w-3 h-3 text-slate-500" />
+                                <span className="text-slate-400 text-sm">
+                                  {exp ? `Vencio el ${exp}` : `Vencio recientemente`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {paginatedExpiredRentals.length === 0 && (
+                        <p className="text-slate-500 text-sm">No hay alquileres vencidos en esta pagina.</p>
+                      )}
+                    </div>
                   )}
                 </div>
+
+                {totalRentalPages > 1 && (
+                  <div className="flex items-center justify-between pt-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRentalsPage((prev) => Math.max(prev - 1, 0))}
+                      disabled={clampedRentalsPage === 0}
+                      className="text-slate-300 hover:text-white"
+                    >
+                      Anterior
+                    </Button>
+                    <span className="text-xs text-slate-400">
+                      Pagina {clampedRentalsPage + 1} de {totalRentalPages}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setRentalsPage((prev) =>
+                          Math.min(prev + 1, totalRentalPages - 1)
+                        )
+                      }
+                      disabled={clampedRentalsPage >= totalRentalPages - 1}
+                      className="text-slate-300 hover:text-white"
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      {/* === MODAL: Cambiar contrasena === */}
+      {passwordModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={closePasswordModal}
+        >
+          <form
+            onSubmit={handlePasswordSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-md space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-orange-400 font-semibold">Cambiar contrasena</h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-slate-300"
+                onClick={closePasswordModal}
+                disabled={changingPassword}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <p className="text-sm text-slate-400">
+              Ingresa la clave actual y elegi una nueva. Por seguridad debe ser distinta a la anterior.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <Label className="text-slate-300">Clave actual</Label>
+                <Input
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPasswordInput}
+                  onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white mt-1"
+                  disabled={changingPassword}
+                />
+              </div>
+              <div>
+                <Label className="text-slate-300">Nueva contrasena</Label>
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white mt-1"
+                  disabled={changingPassword}
+                />
+              </div>
+              <div>
+                <Label className="text-slate-300">Confirmar nueva contrasena</Label>
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPasswordInput}
+                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white mt-1"
+                  disabled={changingPassword}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closePasswordModal}
+                disabled={changingPassword}
+                className="border-amber-500/60 text-amber-400 hover:bg-amber-500/10"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={changingPassword}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-900"
+              >
+                {changingPassword ? "Guardando..." : "Aceptar"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* === MODAL: Ver foto === */}
       {avatarViewOpen && (
@@ -895,12 +1394,12 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* === MODAL: Confirmar cancelación de renovación automática === */}
+      {/* === MODAL: Confirmar cancelación de renovacion automatica === */}
       {confirmCancelOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-orange-400 font-semibold">Cancelar renovación automática</h3>
+              <h3 className="text-orange-400 font-semibold">Cancelar renovacion automatica</h3>
               <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
                 <X className="w-5 h-5" />
               </Button>
@@ -913,17 +1412,20 @@ export default function ProfilePage() {
               <Button
                 className="bg-red-500 hover:bg-red-600 text-white"
                 onClick={async () => {
-                  if (!convexProfile?._id) return;
                   setCancelling(true);
                   try {
-                    await (cancelPremium as any)({ userId: convexProfile._id, reason: "user_click" });
+                    await performAutoRenewMutation(false);
                     toast({
-                      title: "Renovación automática cancelada",
-                      description: "Tu cuenta mantendrá el acceso hasta el vencimiento actual.",
+                      title: "Renovacion automatica cancelada",
+                      description: "Tu cuenta mantiene el acceso hasta el vencimiento actual.",
                     });
                     setConfirmCancelOpen(false);
                   } catch (e: any) {
-                    toast({ title: "No se pudo cancelar", description: e?.message ?? "Intentá nuevamente.", variant: "destructive" });
+                    toast({
+                      title: "No se pudo cancelar",
+                      description: e?.message ?? "Intenta nuevamente.",
+                      variant: "destructive",
+                    });
                   } finally {
                     setCancelling(false);
                   }
@@ -931,6 +1433,37 @@ export default function ProfilePage() {
                 disabled={cancelling}
               >
                 {cancelling ? "Cancelando..." : "Confirmar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === MODAL: Confirmar reactivacion de renovacion automatica === */}
+      {reactivateModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!autoRenewLoading) setReactivateModalOpen(false); }}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-orange-400 font-semibold">Reactivar renovacion automatica</h3>
+              <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!autoRenewLoading) setReactivateModalOpen(false); }}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <p className="text-slate-300 mb-4">
+              Vamos a volver a facturar tu plan en forma automatica al renovar. Estas seguro de continuar?
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setReactivateModalOpen(false)} className="text-slate-300" disabled={autoRenewLoading}>
+                Cancelar
+              </Button>
+              <Button
+                className="bg-amber-500 hover:bg-amber-400 text-slate-900"
+                onClick={handleReactivateAutoRenew}
+                disabled={autoRenewLoading}
+              >
+                {autoRenewLoading ? "Reactivando..." : "Confirmar"}
               </Button>
             </div>
           </div>

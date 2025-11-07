@@ -21,13 +21,15 @@ export function resolveAssetUrl(input?: string | null): string | undefined {
   if (/^data:/i.test(raw)) return raw;
 
   // http(s)
-  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw)) {
+    return normalizeDicebear(raw);
+  }
 
   // protocolo omitido (//images.igdb.com/...)
-  if (/^\/\//.test(raw)) return `https:${raw}`;
+  if (/^\/\//.test(raw)) return normalizeDicebear(`https:${raw}`);
 
   // host solo (images.igdb.com/igdb/image/upload/...)
-  if (/^images\.igdb\.com/i.test(raw)) return `https://${raw}`;
+  if (/^images\.igdb\.com/i.test(raw)) return normalizeDicebear(`https://${raw}`);
 
   // No resoluble (paths relativos, etc.)
   return undefined;
@@ -40,3 +42,14 @@ const Asset = {
   resolveAssetUrl,
 };
 export default Asset;
+
+function normalizeDicebear(url: string): string {
+  if (!/^https?:\/\/api\.dicebear\.com/i.test(url)) return url;
+  let next = url.replace(/\/svg(?=[/?]|$)/i, "/png");
+  if (/([?&])format=/i.test(next)) {
+    next = next.replace(/format=[^&]+/i, "format=png");
+  } else {
+    next += (next.includes("?") ? "&" : "?") + "format=png";
+  }
+  return next;
+}

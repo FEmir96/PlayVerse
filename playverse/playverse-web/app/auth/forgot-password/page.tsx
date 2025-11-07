@@ -1,46 +1,66 @@
 ﻿"use client";
 
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
 
-// Verificar si el email existe (sin enviar correo aún)
-import { useQuery } from "convex/react";
+import { useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "checking" | "success" | "error">("idle");
   const [error, setError] = useState<string>("");
-  const [emailToCheck, setEmailToCheck] = useState<string | null>(null);
+  const [submittedEmail, setSubmittedEmail] = useState<string>("");
 
-  const queryArg = useMemo(() => (emailToCheck ? { email: emailToCheck } : "skip"), [emailToCheck]);
-  const profile = useQuery(api.queries.getUserByEmail.getUserByEmail as any, queryArg) as any;
+  const requestReset = useAction(api.actions.passwordReset.requestPasswordReset as any);
 
-  useEffect(() => {
-    if (!emailToCheck) return;
-    if (profile === undefined) return; // cargando
-    if (profile && profile.email) {
-      setStatus("success");
-      setError("");
-    } else {
-      setStatus("error");
-      setError("No existe ninguna cuenta creada con ese email. Probá a crear una cuenta.");
-    }
-    setEmailToCheck(null);
-  }, [profile, emailToCheck]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
+      setError("Ingresa un email valido.");
+      setStatus("error");
+      return;
+    }
+
     setError("");
     setStatus("checking");
-    setEmailToCheck(email.trim().toLowerCase());
+
+    try {
+      const appUrl = typeof window !== "undefined" ? window.location.origin : undefined;
+      const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : undefined;
+      const result = await requestReset({
+        email: normalized,
+        appUrl,
+        userAgent,
+      });
+
+      if (!result?.ok) {
+        const message =
+          {
+            invalid_email: "El email no es valido.",
+            not_found: "No encontramos ninguna cuenta con ese email.",
+            send_failed: "No pudimos enviar el correo. Intenta nuevamente.",
+          }[result?.error as string] ?? "No pudimos enviar el correo. Intenta nuevamente.";
+        setError(message);
+        setStatus("error");
+        return;
+      }
+
+      setSubmittedEmail(normalized);
+      setStatus("success");
+    } catch (err: any) {
+      setError(err?.message ?? "No pudimos enviar el correo. Intenta nuevamente.");
+      setStatus("error");
+    }
   };
 
   if (status === "success") {
+    const displayEmail = submittedEmail || email;
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
@@ -60,7 +80,7 @@ export default function ForgotPasswordPage() {
             </div>
             <h2 className="text-xl font-semibold text-orange-400 mb-2">¡Solicitud registrada!</h2>
             <p className="text-slate-300 mb-6">
-              Si la dirección <strong>{email}</strong> está registrada, te enviaremos un correo con un enlace para restablecer tu contraseña. Revisá tu bandeja de entrada y spam.
+              Si la dirección <strong>{displayEmail}</strong> está registrada, te enviaremos un correo con un enlace para restablecer tu contraseña. Revisá tu bandeja de entrada y spam.
             </p>
             <Link href="/auth/login">
               <Button className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold">Volver al login</Button>
