@@ -1,6 +1,7 @@
 // convex/mutations/upgradePlan.ts
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
+import { api } from "../_generated/api";
 
 type Plan = "monthly" | "quarterly" | "annual" | "lifetime";
 
@@ -31,33 +32,39 @@ export const upgradePlan = mutation({
 
       // Trial => +7 días antes de empezar el período
       const trialMs = applyTrial ? 7 * 24 * 60 * 60 * 1000 : 0;
+      const trialEndsAt = applyTrial ? now + trialMs : undefined;
       const start = new Date(now);
 
       let expiresAt: number | undefined = undefined;
       let autoRenew = true;
 
-      if (p !== "lifetime") {
+      if (applyTrial && trialEndsAt) {
+        expiresAt = trialEndsAt;
+      } else if (p !== "lifetime") {
         const months = p === "annual" ? 12 : p === "quarterly" ? 3 : 1;
         const end = new Date(start);
         end.setMonth(end.getMonth() + months);
-        if (trialMs > 0) {
-          end.setTime(end.getTime() + trialMs);
-        }
         expiresAt = end.getTime();
       } else {
         autoRenew = false;
       }
 
       // Guardar en perfil (opcionales en schema)
-      await (ctx.db as any).patch(userId, {
+      const profilePatch: Record<string, unknown> = {
         premiumPlan: p,
         premiumAutoRenew: autoRenew,
         premiumExpiresAt: expiresAt,
-        ...(applyTrial ? { freeTrialUsed: true } : {}),
-      });
+        trialEndsAt: trialEndsAt,
+      };
+      if (applyTrial) {
+        profilePatch.freeTrialUsed = true;
+      } else {
+        profilePatch.trialEndsAt = undefined;
+      }
+      await (ctx.db as any).patch(userId, profilePatch);
 
       // Registrar suscripción (histórico)
-      await (ctx.db as any).insert("subscriptions", {
+      const subscriptionId = await (ctx.db as any).insert("subscriptions", {
         userId,
         plan: p,
         startAt: start.getTime(),
@@ -82,6 +89,16 @@ export const upgradePlan = mutation({
           ...(applyTrial ? { meta: { trial: true } } : {}),
         });
       } catch {}
+
+      if (applyTrial && trialEndsAt) {
+        try {
+          await ctx.scheduler?.runAt(
+            trialEndsAt,
+            (api as any).mutations.completeTrialCharge,
+            { userId, plan: p, trialEndsAt, subscriptionId }
+          );
+        } catch {}
+      }
     }
 
     return { ok: true, role: toRole, trialApplied: applyTrial };

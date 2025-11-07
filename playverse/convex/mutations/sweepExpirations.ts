@@ -38,6 +38,7 @@ async function downgradeProfile(ctx: any, userId: Id<"profiles">) {
     premiumPlan: undefined,
     premiumExpiresAt: undefined,
     premiumAutoRenew: undefined,
+    trialEndsAt: undefined,
   });
   await ensurePlanExpiredNotification(ctx, userId);
 }

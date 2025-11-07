@@ -1,10 +1,13 @@
-﻿// convex/lib/emailTemplates.ts
+// convex/lib/emailTemplates.ts
 
 export type BaseOpts = {
   userName?: string | null;
   gameTitle: string;
   coverUrl?: string | null;
   amount: number;
+  basePrice?: number;
+  discountAmount?: number;
+  finalPrice?: number;
   currency?: string;
   method?: string;
   orderId?: string | null;
@@ -34,7 +37,7 @@ function esc(s: string) {
   ));
 }
 
-/* ========= Helpers de assets e Ã­conos ========= */
+/* ========= Helpers de assets e Aconos ========= */
 
 function assetsBase(): string {
   const env = (process.env.ASSETS_BASE_URL || "").trim();
@@ -125,14 +128,14 @@ function layout(title: string, intro: string, inner: string, appUrl?: string | n
     </div>
 
     <p style="text-align:center;color:${COLORS.footer};font-size:12px;margin-top:12px;line-height:1.5">
-      Â© ${new Date().getFullYear()} PlayVerse Â· Este es un correo automÃ¡tico, no respondas a este mensaje.<br/>
-      Si necesitÃ¡s ayuda, visitÃ¡ nuestro centro de ayuda dentro de la app.
+      &copy; ${new Date().getFullYear()} PlayVerse - Este es un correo automatico, no respondas a este mensaje.<br/>
+      Si necesitas ayuda, visita nuestro centro de ayuda dentro de la app.
     </p>
   </body>
 </html>`;
 }
 
-/* ========= Cabecera compacta tÃ­tulo + miniatura ========= */
+/* ========= Cabecera compacta tAtulo + miniatura ========= */
 
 function titleWithThumb(title: string, coverUrl?: string | null) {
   if (!coverUrl) {
@@ -160,10 +163,49 @@ function titleWithThumb(title: string, coverUrl?: string | null) {
   `;
 }
 
-/* ========= Bloque de informaciÃ³n principal ========= */
+/* ========= Bloque de informaciAn principal ========= */
 
 function infoBlock(opts: BaseOpts, extraRows = "") {
-  const money = opts.amount.toLocaleString("en-US", { style: "currency", currency: opts.currency ?? "USD" });
+  const currency = opts.currency ?? "USD";
+  const finalValue =
+    typeof opts.finalPrice === "number" ? opts.finalPrice : opts.amount;
+  const baseValue =
+    typeof opts.basePrice === "number" ? opts.basePrice : undefined;
+  const discountValue =
+    typeof opts.discountAmount === "number"
+      ? opts.discountAmount
+      : baseValue !== undefined
+      ? baseValue - finalValue
+      : undefined;
+
+  const finalMoney = finalValue.toLocaleString("en-US", {
+    style: "currency",
+    currency,
+  });
+  const baseMoney =
+    baseValue !== undefined
+      ? baseValue.toLocaleString("en-US", { style: "currency", currency })
+      : null;
+  const discountMoney =
+    discountValue !== undefined
+      ? discountValue.toLocaleString("en-US", { style: "currency", currency })
+      : null;
+
+  const showDiscount =
+    baseValue !== undefined && baseValue > finalValue + 0.009;
+
+  const amountBlock = showDiscount
+    ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-left:6px">
+         <span style="text-decoration:line-through;opacity:.7;font-size:12px">${baseMoney}</span>
+         <span style="color:${COLORS.accent};font-weight:900;font-size:15px">${finalMoney}</span>
+         ${
+           discountMoney
+             ? `<span style="font-size:12px;opacity:.85;color:${COLORS.accent}">Ahorro: ${discountMoney}</span>`
+             : ""
+         }
+       </div>`
+    : `<span style="color:${COLORS.accent};font-weight:900;margin-left:6px">${finalMoney}</span>`;
+
   const method = opts.method ?? "Tarjeta";
   const order = opts.orderId ? `<div style="margin-top:8px;color:${COLORS.accent};font-size:12px"><strong>ID de pedido:</strong> ${esc(opts.orderId)}</div>` : "";
   const cta = opts.appUrl
@@ -173,7 +215,7 @@ function infoBlock(opts: BaseOpts, extraRows = "") {
     : "";
 
   const iconAmount = iconImg(ICONS.amount, "Monto", 18, "opacity:.9;margin-right:6px");
-  const iconMethod = iconImg(ICONS.method, "MÃ©todo", 18, "opacity:.9;margin-right:6px");
+  const iconMethod = iconImg(ICONS.method, "Metodo", 18, "opacity:.9;margin-right:6px");
 
   return `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:16px">
@@ -184,17 +226,17 @@ function infoBlock(opts: BaseOpts, extraRows = "") {
           <td align="left"  style="width:50%;padding:7px 0">
             ${iconAmount}
             <strong style="color:${COLORS.accent}">Monto:</strong>
-            <span style="color:${COLORS.accent};font-weight:900;margin-left:6px">${money}</span>
+            ${amountBlock}
           </td>
           <td align="right" style="width:50%;padding:7px 0">
             ${iconMethod}
-            <strong style="color:${COLORS.accent}">MÃ©todo:</strong>
+            <strong style="color:${COLORS.accent}">Metodo:</strong>
             <span style="margin-left:6px;color:${COLORS.accent};font-weight:700">${esc(method)}</span>
           </td>
         </tr>
         ${extraRows
       ? `<tr><td colspan="2" style="padding-top:10px">
-                 <div style="display:flex;gap:14px;flex-wrap:wrap;color:${COLORS.accent};font-size:14px">${extraRows}</div>
+                 <div style="display:flex;flex-wrap:wrap;gap:12px 10px;color:${COLORS.accent};font-size:14px">${extraRows}</div>
                </td></tr>`
       : ""
     }
@@ -219,12 +261,18 @@ export function buildRentalEmail(opts: BaseOpts) {
     const chips: string[] = [];
     if (typeof opts.weeks === "number") {
       const ico = iconImg(ICONS.weeks, "Semanas", 16, "opacity:.9;margin-right:6px");
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Semanas:</strong>&nbsp;${opts.weeks}</span></div>`);
+      chips.push(`<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="display:flex;align-items:center">${ico}<strong style="color:${COLORS.accent}">Semanas:</strong></div>
+        <span style="padding-left:22px">${opts.weeks}</span>
+      </div>`);
     }
     if (typeof opts.expiresAt === "number") {
       const ico = iconImg(ICONS.expires, "Vence", 16, "opacity:.9;margin-right:6px");
       const expires = new Date(opts.expiresAt).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Vence:</strong>&nbsp;${expires}</span></div>`);
+      chips.push(`<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="display:flex;align-items:center">${ico}<strong style="color:${COLORS.accent}">Vence:</strong></div>
+        <span style="padding-left:22px">${expires}</span>
+      </div>`);
     }
     return chips.join("");
   })();
@@ -239,18 +287,24 @@ export function buildExtendEmail(opts: BaseOpts) {
     const chips: string[] = [];
     if (typeof opts.weeks === "number") {
       const ico = iconImg(ICONS.weeks, "Semanas", 16, "opacity:.9;margin-right:6px");
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Semanas:</strong>+&nbsp;${opts.weeks}</span></div>`);
+      chips.push(`<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="display:flex;align-items:center">${ico}<strong style="color:${COLORS.accent}">Semanas:</strong></div>
+        <span style="padding-left:22px">+ ${opts.weeks}</span>
+      </div>`);
     }
     if (typeof opts.expiresAt === "number") {
       const ico = iconImg(ICONS.expires, "Nuevo venc.", 16, "opacity:.9;margin-right:6px");
       const expires = new Date(opts.expiresAt).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-      chips.push(`<div style="display:flex;align-items:center"><span>${ico}<strong style="color:${COLORS.accent}">Nuevo venc.:</strong>&nbsp;${expires}</span></div>`);
+      chips.push(`<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="display:flex;align-items:center">${ico}<strong style="color:${COLORS.accent}">Nuevo venc.:</strong></div>
+        <span style="padding-left:22px">${expires}</span>
+      </div>`);
     }
     return chips.join("");
   })();
 
   const inner = infoBlock(opts, extra);
-  return layout("ExtensiÃ³n confirmada", intro, inner, opts.appUrl);
+  return layout("ExtensiAn confirmada", intro, inner, opts.appUrl);
 }
 
 /* ---- Email para compras de carrito ---- */
@@ -258,6 +312,9 @@ export type CartEmailItem = {
   title: string;
   coverUrl?: string | null;
   amount: number;
+  basePrice?: number;
+  discountAmount?: number;
+  finalPrice?: number;
 };
 
 export function buildCartEmail(opts: {
@@ -268,10 +325,45 @@ export function buildCartEmail(opts: {
   appUrl?: string | null;
 }) {
   const cur = opts.currency || "USD";
-  const total = opts.items.reduce((a, it) => a + (it.amount || 0), 0);
+  const total = opts.items.reduce(
+    (a, it) => a + (typeof it.finalPrice === "number" ? it.finalPrice : it.amount || 0),
+    0
+  );
 
   const rows = opts.items.map((it) => {
-    const money = it.amount.toLocaleString("en-US", { style: "currency", currency: cur });
+    const finalValue = typeof it.finalPrice === "number" ? it.finalPrice : it.amount;
+    const baseValue =
+      typeof it.basePrice === "number" ? it.basePrice : undefined;
+    const discountValue =
+      typeof it.discountAmount === "number"
+        ? it.discountAmount
+        : baseValue !== undefined
+        ? baseValue - finalValue
+        : undefined;
+
+    const finalMoney = finalValue.toLocaleString("en-US", { style: "currency", currency: cur });
+    const baseMoney =
+      baseValue !== undefined
+        ? baseValue.toLocaleString("en-US", { style: "currency", currency: cur })
+        : null;
+    const discountMoney =
+      discountValue !== undefined
+        ? discountValue.toLocaleString("en-US", { style: "currency", currency: cur })
+        : null;
+
+    const showDiscount = baseValue !== undefined && baseValue > finalValue + 0.009;
+    const amountBlock = showDiscount
+      ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+            <span style="text-decoration:line-through;opacity:.7;font-size:11px">${baseMoney}</span>
+            <span style="color:${COLORS.accent};font-weight:900">${finalMoney}</span>
+            ${
+              discountMoney
+                ? `<span style="font-size:11px;opacity:.8;color:${COLORS.accent}">Ahorro: ${discountMoney}</span>`
+                : ""
+            }
+         </div>`
+      : `<span style="color:${COLORS.accent};font-weight:900">${finalMoney}</span>`;
+
     return `
       <tr>
         <td style="padding:10px 12px">
@@ -284,12 +376,12 @@ export function buildCartEmail(opts: {
             </tr>
           </table>
         </td>
-        <td align="right" style="padding:10px 12px;color:${COLORS.accent};font-weight:900">${money}</td>
+        <td align="right" style="padding:10px 12px">${amountBlock}</td>
       </tr>`;
   }).join("");
 
   const iconAmount = iconImg(ICONS.amount, "Total", 18, "opacity:.95;margin-right:6px");
-  const iconMethod = iconImg(ICONS.method, "MÃ©todo", 16, "opacity:.9;margin-right:6px");
+  const iconMethod = iconImg(ICONS.method, "Metodo", 16, "opacity:.9;margin-right:6px");
 
   const inner = `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;overflow:hidden">
@@ -298,7 +390,7 @@ export function buildCartEmail(opts: {
         <tr><td colspan="2" style="height:1px;background:${COLORS.border}"></td></tr>
         <tr>
           <td style="padding:12px;color:${COLORS.accent};font-weight:800">
-            ${iconMethod}<span style="vertical-align:middle"><strong style="color:${COLORS.accent}">MÃ©todo:</strong>&nbsp;${esc(opts.method || "Tarjeta guardada")}</span>
+            ${iconMethod}<span style="vertical-align:middle"><strong style="color:${COLORS.accent}">Metodo:</strong>&nbsp;${esc(opts.method || "Tarjeta guardada")}</span>
           </td>
           <td align="right" style="padding:12px;color:${COLORS.accent};font-weight:900">
             ${iconAmount}<span style="vertical-align:middle">${total.toLocaleString("en-US", { style: "currency", currency: cur })}</span>
@@ -311,7 +403,7 @@ export function buildCartEmail(opts: {
     </div>` : ""}
   `;
 
-  const intro = `Hola ${esc(opts.userName ?? "jugador/a")}, confirmamos tu compra de varios Ã­tems en PlayVerse.`;
+  const intro = `Hola ${esc(opts.userName ?? "jugador/a")}, confirmamos tu compra de varios items en PlayVerse.`;
   return layout("Compra confirmada (Carrito)", intro, inner, opts.appUrl);
 }
 
@@ -331,13 +423,13 @@ export function buildContactAdminEmail(opts: {
       <div style="color:${COLORS.accent};font-size:16px;font-weight:800;margin-bottom:8px">${esc(opts.subject ?? "Sin asunto")}</div>
       <div style="color:${COLORS.textSoft};white-space:pre-wrap;line-height:1.6">${esc(opts.message ?? "")}</div>
       <div style="margin-top:12px;color:${COLORS.textMuted};font-size:12px;line-height:1.55">
-        <div><strong>Nombre:</strong> ${esc(opts.name ?? "â€”")}</div>
-        <div><strong>Email:</strong> ${esc(opts.email ?? "â€”")}</div>
+        <div><strong>Nombre:</strong> ${esc(opts.name ?? "a")}</div>
+        <div><strong>Email:</strong> ${esc(opts.email ?? "a")}</div>
         ${when ? `<div><strong>Fecha:</strong> ${when}</div>` : ""}
       </div>
     </div>
   `;
-  return layout("Nueva consulta â€” PlayVerse", intro, inner, opts.appUrl);
+  return layout("Nueva consulta a PlayVerse", intro, inner, opts.appUrl);
 }
 
 /* ---- Email de acuse para el usuario ---- */
@@ -347,7 +439,7 @@ export function buildContactUserEmail(opts: {
   message?: string | null;
   appUrl?: string | null;
 }) {
-  const intro = `Hola ${esc(opts.name ?? "jugador/a")}, Â¡gracias por contactarte con PlayVerse! Recibimos tu mensaje y te responderemos a la brevedad.`;
+  const intro = `Hola ${esc(opts.name ?? "jugador/a")}, gracias por contactarte con PlayVerse. Recibimos tu mensaje y te responderemos a la brevedad.`;
   const inner = `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:16px">
       <div style="color:${COLORS.accent};font-size:16px;font-weight:800;margin-bottom:8px">${esc(opts.subject ?? "Tu consulta")}</div>
@@ -359,7 +451,7 @@ export function buildContactUserEmail(opts: {
       ` : ""}
     </div>
   `;
-  return layout("Â¡Gracias por tu mensaje!", intro, inner, opts.appUrl);
+  return layout("Gracias por tu mensaje", intro, inner, opts.appUrl);
 }
 
 export function buildPasswordResetEmail(opts: {

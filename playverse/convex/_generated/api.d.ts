@@ -33,6 +33,7 @@ import type * as ads from "../ads.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as games from "../games.js";
+import type * as lib_avatars from "../lib/avatars.js";
 import type * as lib_diffGame from "../lib/diffGame.js";
 import type * as lib_emailTemplates from "../lib/emailTemplates.js";
 import type * as lib_gameCore from "../lib/gameCore.js";
@@ -42,6 +43,7 @@ import type * as lib_igdb_auth from "../lib/igdb/auth.js";
 import type * as lib_igdb_client from "../lib/igdb/client.js";
 import type * as lib_igdb_token from "../lib/igdb/token.js";
 import type * as lib_notifyTargets from "../lib/notifyTargets.js";
+import type * as lib_pricing from "../lib/pricing.js";
 import type * as lib_rawg_age from "../lib/rawg/age.js";
 import type * as lib_rawg_client from "../lib/rawg/client.js";
 import type * as mutations_addFavorite from "../mutations/addFavorite.js";
@@ -56,6 +58,7 @@ import type * as mutations_applyIgdbRating from "../mutations/applyIgdbRating.js
 import type * as mutations_authLogin from "../mutations/authLogin.js";
 import type * as mutations_cancelPremiumPlan from "../mutations/cancelPremiumPlan.js";
 import type * as mutations_cart from "../mutations/cart.js";
+import type * as mutations_completeTrialCharge from "../mutations/completeTrialCharge.js";
 import type * as mutations_contact from "../mutations/contact.js";
 import type * as mutations_createGame from "../mutations/createGame.js";
 import type * as mutations_createUser from "../mutations/createUser.js";
@@ -167,6 +170,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
   games: typeof games;
+  "lib/avatars": typeof lib_avatars;
   "lib/diffGame": typeof lib_diffGame;
   "lib/emailTemplates": typeof lib_emailTemplates;
   "lib/gameCore": typeof lib_gameCore;
@@ -176,6 +180,7 @@ declare const fullApi: ApiFromModules<{
   "lib/igdb/client": typeof lib_igdb_client;
   "lib/igdb/token": typeof lib_igdb_token;
   "lib/notifyTargets": typeof lib_notifyTargets;
+  "lib/pricing": typeof lib_pricing;
   "lib/rawg/age": typeof lib_rawg_age;
   "lib/rawg/client": typeof lib_rawg_client;
   "mutations/addFavorite": typeof mutations_addFavorite;
@@ -190,6 +195,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/authLogin": typeof mutations_authLogin;
   "mutations/cancelPremiumPlan": typeof mutations_cancelPremiumPlan;
   "mutations/cart": typeof mutations_cart;
+  "mutations/completeTrialCharge": typeof mutations_completeTrialCharge;
   "mutations/contact": typeof mutations_contact;
   "mutations/createGame": typeof mutations_createGame;
   "mutations/createUser": typeof mutations_createUser;

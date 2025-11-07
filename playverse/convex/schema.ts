@@ -11,6 +11,7 @@ export default defineSchema({
     passwordHash: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
     premiumSince: v.optional(v.number()),
+    trialEndsAt: v.optional(v.number()),
 
     premiumPlan: v.optional(
       v.union(
@@ -87,6 +88,10 @@ export default defineSchema({
     userId: v.id("profiles"),
     gameId: v.id("games"),
     type: v.union(v.literal("rental"), v.literal("purchase")),
+    basePrice: v.optional(v.number()),
+    discountRate: v.optional(v.number()),
+    discountAmount: v.optional(v.number()),
+    finalPrice: v.optional(v.number()),
     expiresAt: v.optional(v.number()), // usado para rentals
     createdAt: v.number(),
   })

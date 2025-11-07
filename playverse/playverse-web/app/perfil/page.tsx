@@ -544,6 +544,11 @@ export default function ProfilePage() {
   const premiumPlan = (convexProfile as any)?.premiumPlan;
   const isLifetimePlan = premiumPlan === "lifetime";
   const premiumAutoRenew = isLifetimePlan ? false : (convexProfile as any)?.premiumAutoRenew !== false;
+  const trialEndsAt = typeof (convexProfile as any)?.trialEndsAt === "number" ? (convexProfile as any).trialEndsAt : null;
+  const trialActive = Boolean(trialEndsAt && trialEndsAt > Date.now());
+  const trialEndLabel = trialActive ? new Date(trialEndsAt as number).toLocaleDateString() : null;
+  const cancelAutoLabel = trialActive ? "Cancelar prueba gratuita" : "Cancelar renovacion automatica";
+  const reactivateAutoLabel = trialActive ? "Reactivar prueba gratuita" : "Reactivar renovacion automatica";
 
   // ⬇️ NUEVO: cancelación
   const cancelPremium = useMutation(cancelPremiumRef);
@@ -876,6 +881,11 @@ export default function ProfilePage() {
                             Vence el {new Date((convexProfile as any).premiumExpiresAt).toLocaleDateString()}
                           </p>
                         ) : null}
+                        {trialActive && trialEndLabel && (
+                          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 text-amber-100 text-sm p-3">
+                            Prueba gratuita activa hasta {trialEndLabel}. Si no cancelas antes de esa fecha, cobraremos el plan seleccionado de forma automatica.
+                          </div>
+                        )}
                       </div>
                       <Badge className="bg-orange-400 text-slate-900">Activo</Badge>
                     </div>
@@ -888,7 +898,7 @@ export default function ProfilePage() {
                             onClick={() => setConfirmCancelOpen(true)}
                             className="w-full border-red-500 text-red-400 hover:bg-red-500 hover:text-white bg-transparent"
                           >
-                            Cancelar renovacion automatica
+                            {cancelAutoLabel}
                           </Button>
                         ) : (
                           <Button
@@ -896,7 +906,7 @@ export default function ProfilePage() {
                             disabled={autoRenewLoading}
                             className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 disabled:opacity-70"
                           >
-                            {autoRenewLoading ? "Reactivando..." : "Reactivar renovacion automatica"}
+                            {autoRenewLoading ? "Reactivando..." : reactivateAutoLabel}
                           </Button>
                         )}
                       </>
@@ -1399,13 +1409,17 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-orange-400 font-semibold">Cancelar renovacion automatica</h3>
+              <h3 className="text-orange-400 font-semibold">{trialActive ? "Cancelar prueba gratuita" : "Cancelar renovacion automatica"}</h3>
               <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!cancelling) setConfirmCancelOpen(false); }}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
-            <p className="text-slate-300 mb-4">Cumplida la fecha de expiración, perderás el acceso a todos los beneficios de PlayVerse Premium y no se te renovará automáticamente ¿Seguro que deseas continuar?</p>
+            <p className="text-slate-300 mb-4">
+              {trialActive
+                ? "Si cancelas ahora, tu cuenta volvera a Free de inmediato y no se realizara ningun cobro."
+                : "Cumplida la fecha de expiracion, perderas el acceso a los beneficios de PlayVerse Premium y no se renovara automaticamente. Seguro que deseas continuar?"}
+            </p>
 
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => setConfirmCancelOpen(false)} className="text-slate-300">Cancelar</Button>
@@ -1416,8 +1430,10 @@ export default function ProfilePage() {
                   try {
                     await performAutoRenewMutation(false);
                     toast({
-                      title: "Renovacion automatica cancelada",
-                      description: "Tu cuenta mantiene el acceso hasta el vencimiento actual.",
+                      title: trialActive ? "Prueba cancelada" : "Renovacion automatica cancelada",
+                      description: trialActive
+                        ? "Volviste a Free. Si cambias de opinion podes suscribirte cuando quieras."
+                        : "Tu cuenta mantiene el acceso hasta el vencimiento actual.",
                     });
                     setConfirmCancelOpen(false);
                   } catch (e: any) {
@@ -1444,14 +1460,16 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => { if (!autoRenewLoading) setReactivateModalOpen(false); }}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-orange-400 font-semibold">Reactivar renovacion automatica</h3>
+              <h3 className="text-orange-400 font-semibold">{reactivateAutoLabel}</h3>
               <Button variant="ghost" size="icon" className="text-slate-300" onClick={() => { if (!autoRenewLoading) setReactivateModalOpen(false); }}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
             <p className="text-slate-300 mb-4">
-              Vamos a volver a facturar tu plan en forma automatica al renovar. Estas seguro de continuar?
+              {trialActive
+                ? "Tu prueba volvera a estar activa y programaremos el cobro del plan mensual dentro de 7 dias."
+                : "Vamos a volver a facturar tu plan en forma automatica al renovar. Estas seguro de continuar?"}
             </p>
 
             <div className="flex justify-end gap-3">

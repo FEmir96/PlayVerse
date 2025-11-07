@@ -42,6 +42,30 @@ function getTransporter() {
   return cachedTransporter;
 }
 
+function parseList(raw?: string) {
+  return (raw || "")
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function resolveCopyRecipients(from: string) {
+  const envSources = [
+    process.env.MAIL_COPY,
+    process.env.MAIL_BCC,
+    process.env.MAIL_ADMIN,
+  ];
+  for (const source of envSources) {
+    const parsed = parseList(source);
+    if (parsed.length) return parsed;
+  }
+
+  const match = from.match(/<([^>]+)>/);
+  const email = match ? match[1] : from;
+  if (/^[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+$/.test(email)) return [email];
+  return [];
+}
+
 export const sendReceiptEmail = action({
   args: {
     to: v.string(),
@@ -57,12 +81,17 @@ export const sendReceiptEmail = action({
       normalizeFrom(process.env.SMTP_USER) ||
       "PlayVerse <no-reply@playverse.com>";
 
+    const copyRecipients = resolveCopyRecipients(from).filter(
+      (addr) => addr.toLowerCase() !== to.toLowerCase()
+    );
+
     const info = await transporter.sendMail({
       from,
       to,
       subject,
       html,
       replyTo: replyTo?.trim() || undefined,
+      bcc: copyRecipients.length ? copyRecipients : undefined,
     });
 
     return { ok: true as const, messageId: info.messageId, to, subject };

@@ -1,7 +1,7 @@
 // app/checkout/premium/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
@@ -116,13 +116,56 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
   }, [status, loginEmail, storeUser, router, pathname, sp]);
 
   // Perfil por ID (ruta fuerte)
-  const profile = useQuery(
-    getUserByIdRef,
-    params?.id ? ({ id: params.id as Id<"profiles"> } as any) : "skip"
-  ) as
-    | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string; email?: string })
-    | null
-    | undefined;
+const profile = useQuery(
+  getUserByIdRef,
+  params?.id ? ({ id: params.id as Id<"profiles"> } as any) : "skip"
+) as
+  | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string; email?: string })
+  | null
+  | undefined;
+
+// Plan y helpers derivados de la URL
+const planKey = sp?.get("plan") ?? "monthly";
+const trial = sp?.get("trial") === "true";
+const plan = PLANS[planKey] ?? PLANS.monthly;
+
+const nextParam = safeInternalNext(sp?.get("next") ?? null);
+
+const formatMoney = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  const profileTrialUsed = Boolean((profile as any)?.freeTrialUsed);
+  const profileTrialEndsAt =
+    typeof (profile as any)?.trialEndsAt === "number" ? (profile as any).trialEndsAt : null;
+  const profileRole = (profile as any)?.role;
+
+  const trialCheckoutEnabled =
+    Boolean(trial) &&
+    Boolean(profile) &&
+    profileRole !== "premium" &&
+    !profileTrialUsed &&
+    !(profileTrialEndsAt && profileTrialEndsAt > Date.now());
+
+  const todayCharge = trialCheckoutEnabled ? 0 : plan.price;
+  const todayChargeLabel = formatMoney(todayCharge);
+  const trialNextChargeLabel = useMemo(() => {
+    if (!trialCheckoutEnabled) return null;
+    const date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    return date.toLocaleDateString();
+  }, [trialCheckoutEnabled]);
+
+  const warnedTrialRef = useRef(false);
+  useEffect(() => {
+    if (warnedTrialRef.current) return;
+    if (trial && !trialCheckoutEnabled) {
+      warnedTrialRef.current = true;
+      toast({
+        title: "Prueba gratuita ya utilizada",
+        description: "Elegí cualquiera de nuestros planes para seguir disfrutando de PlayVerse Premium.",
+      });
+      router.replace("/premium");
+    }
+  }, [trial, trialCheckoutEnabled, router, toast]);
 
   // Métodos desde DB si existe la query, si no mostramos UI manual
   const methods = useQuery(
@@ -147,17 +190,6 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
   const savePaymentMethod = useMutation(savePaymentMethodRef);
   const makePayment = useMutation(makePaymentRef);
   const upgradePlan = useMutation(upgradePlanRef);
-
-  // Plan a partir de query
-  const planKey = sp?.get("plan") ?? "monthly";
-  const trial = sp?.get("trial") === "true";
-  const plan = PLANS[planKey] ?? PLANS.monthly;
-
-  // next opcional (para volver donde estabas tras upgrade)
-  const nextParam = safeInternalNext(sp?.get("next") ?? null);
-
-  const formatMoney = (n: number) =>
-    n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
   // Normalizador de marcas
   const normalizeBrand = (b?: string): PM["brand"] => {
@@ -276,10 +308,9 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         });
       }
 
-      // 1) Registrar pago (mock/provider manual)
       const payRes = await makePayment({
         userId: profile._id,
-        amount: plan.price,
+        amount: todayCharge,
         currency: "USD",
         provider: "manual",
       });
@@ -290,7 +321,7 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
         toRole: "premium",
         plan: planKey,
         paymentId: (payRes as any)?.paymentId,
-        trial: Boolean(trial),
+        trial: Boolean(trialCheckoutEnabled),
       });
 
       // 3) Toast futuro en success
@@ -409,10 +440,27 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                     </div>
                   ))}
                 </div>
+
+                {trialCheckoutEnabled && (
+                  <div className="mt-4 bg-amber-500/10 border border-amber-400/30 rounded-lg p-4 text-sm text-amber-100">
+                    <p className="font-semibold">Prueba gratuita de 7 dias</p>
+                    <p className="mt-1 text-amber-100/80">
+                      Hoy pagas {todayChargeLabel}. Si no cancelas, cobraremos {plan.priceLabel} el{" "}
+                      {trialNextChargeLabel ?? "dia 7"}.
+                    </p>
+                  </div>
+                )}
+                {!trialCheckoutEnabled && trial && (
+                  <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-100">
+                    Esta cuenta ya utilizo la prueba gratuita, por lo que aplicaremos el precio completo del plan seleccionado.
+                  </div>
+                )}
               </div>
 
               <div className="text-sm text-slate-400">
-                Tu suscripción se renovará automáticamente. Podés cancelarla en cualquier momento desde tu perfil.
+                {trialCheckoutEnabled
+                  ? "Hoy no se realizara ningun cargo. Guardaremos tu metodo para cobrar el plan mensual dentro de 7 dias si no cancelas desde tu perfil."
+                  : "Tu suscripcion se renovara automaticamente. Podes cancelarla en cualquier momento desde tu perfil."}
               </div>
             </div>
 
@@ -571,7 +619,9 @@ export default function PremiumCheckoutPage({ params }: { params: { id: string }
                 onClick={onPay}
                 className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3 text-lg"
               >
-                Pagar {formatMoney(plan.price)} y suscribirse
+                {trialCheckoutEnabled
+                  ? "Iniciar prueba gratuita"
+                  : `Pagar ${formatMoney(plan.price)} y suscribirse`}
               </Button>
             </div>
           </div>

@@ -22,6 +22,7 @@ async function ensureForUserImpl(ctx: any, userId: Id<"profiles">) {
       premiumPlan: undefined,
       premiumExpiresAt: undefined,
       premiumAutoRenew: undefined,
+      trialEndsAt: undefined,
     });
 
     const activeSubs = await ctx.db

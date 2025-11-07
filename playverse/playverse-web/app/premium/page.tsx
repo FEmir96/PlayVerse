@@ -1,4 +1,4 @@
-﻿// app/premium/page.tsx
+// app/premium/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -228,8 +228,13 @@ export default function PremiumPage() {
                 ? "bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8 py-4 text-lg"
                 : "bg-slate-700 text-slate-400 font-semibold px-8 py-4 text-lg cursor-not-allowed"}
             >
-              {trialAvailable ? "Prueba gratuita de 7 días" : "Prueba gratuita no disponible"}
+              {trialAvailable ? "Prueba gratuita de 7 dias" : "Prueba gratuita no disponible"}
             </Button>
+            {trialAvailable && (
+              <p className="text-slate-300 text-sm mt-3">
+                No se cobrara nada hoy. Si no cancelas dentro de 7 dias, activaremos tu plan mensual automaticamente.
+              </p>
+            )}
           </div>
         </div>
       </div>

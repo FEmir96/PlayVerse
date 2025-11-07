@@ -46,6 +46,7 @@ export const cancelPremiumPlan = mutation({
     // Desactivar la renovación automática en el perfil
     await ctx.db.patch(userId, {
       premiumAutoRenew: false,
+      trialEndsAt: undefined,
     });
 
     // Registrar evento en upgrades (sin cambiar rol)

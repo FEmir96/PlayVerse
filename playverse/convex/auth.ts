@@ -3,6 +3,7 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import bcrypt from "bcryptjs";
 import { sha256Hex } from "./lib/hash";
+import { randomAvatarUrl } from "./lib/avatars";
 
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -55,6 +56,7 @@ export const createUser = mutation({
     }
     const passwordHash = bcrypt.hashSync(password, 10);
     const now = Date.now();
+    const avatarUrl = randomAvatarUrl(normalizedEmail);
     const _id = await db.insert("profiles", {
       name,
       email: normalizedEmail,
@@ -62,6 +64,7 @@ export const createUser = mutation({
       createdAt: now,
       passwordHash,
       freeTrialUsed: false,
+      avatarUrl,
     });
     return { ok: true, profile: { _id, name, email: normalizedEmail, role, createdAt: now } } as const;
   },
@@ -105,13 +108,14 @@ export const oauthUpsert = mutation({
       .unique();
 
     if (!existing) {
+      const fallbackAvatar = args.avatarUrl ?? randomAvatarUrl(email);
       const _id = await db.insert("profiles", {
         name: args.name ?? "",
         email,
         role: "free",
         createdAt: Date.now(),
         passwordHash: undefined,
-        avatarUrl: args.avatarUrl,
+        avatarUrl: fallbackAvatar,
         freeTrialUsed: false,
       });
       return { created: true, _id };
@@ -120,7 +124,9 @@ export const oauthUpsert = mutation({
     const patch: Record<string, unknown> = {};
     if (args.name && args.name !== existing.name) patch.name = args.name;
     const hasAvatar = Boolean((existing as any).avatarUrl && String((existing as any).avatarUrl).trim() !== "");
-    if (!hasAvatar && args.avatarUrl) patch.avatarUrl = args.avatarUrl;
+    if (!hasAvatar) {
+      patch.avatarUrl = args.avatarUrl ?? randomAvatarUrl(email);
+    }
 
     if (Object.keys(patch).length) {
       await db.patch(existing._id, patch);
