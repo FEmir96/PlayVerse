@@ -12,7 +12,6 @@ export default defineSchema({
     avatarUrl: v.optional(v.string()),
     premiumSince: v.optional(v.number()),
 
-    // ⬇️ NUEVO: gestión de suscripciones (opcionales, no rompen nada)
     premiumPlan: v.optional(
       v.union(
         v.literal("monthly"),
@@ -21,8 +20,9 @@ export default defineSchema({
         v.literal("lifetime")
       )
     ),
-    premiumExpiresAt: v.optional(v.number()),   // epoch ms (no se setea para lifetime)
-    premiumAutoRenew: v.optional(v.boolean()),  // true por defecto excepto lifetime
+    premiumExpiresAt: v.optional(v.number()),
+    premiumAutoRenew: v.optional(v.boolean()),
+    freeTrialUsed: v.optional(v.boolean()),
   }).index("by_email", ["email"]),
 
   games: defineTable({
@@ -30,20 +30,14 @@ export default defineSchema({
     description: v.optional(v.string()),
     cover_url: v.optional(v.string()),
     trailer_url: v.optional(v.string()),
-
-    // extra media (opcionales)
     extraTrailerUrl: v.optional(v.string()),
     extraImages: v.optional(v.array(v.string())),
-
     plan: v.union(v.literal("free"), v.literal("premium")),
     createdAt: v.number(),
     genres: v.optional(v.array(v.string())),
-
-    // precios (opcionales)
     weeklyPrice: v.optional(v.number()),
     purchasePrice: v.optional(v.number()),
 
-    // IGDB / rating / popscore (opcionales)
     igdbId: v.optional(v.number()),
     igdbSlug: v.optional(v.string()),
     igdbRating: v.optional(v.number()),
@@ -54,31 +48,28 @@ export default defineSchema({
     popscore: v.optional(v.number()),
     lastIgdbSyncAt: v.optional(v.number()),
 
-    // Metadatos extra IGDB
     firstReleaseDate: v.optional(v.number()),
     developers: v.optional(v.array(v.string())),
     publishers: v.optional(v.array(v.string())),
     languages: v.optional(v.array(v.string())),
 
-    // Age rating
     ageRatingSystem: v.optional(v.string()),
     ageRatingCode: v.optional(v.string()),
     ageRatingLabel: v.optional(v.string()),
 
-    // soporte juegos embebidos
     embed_url: v.optional(v.string()),
     embedUrl: v.optional(v.string()),
     embed_allow: v.optional(v.string()),
     embedAllow: v.optional(v.string()),
     embed_sandbox: v.optional(v.string()),
     embedSandbox: v.optional(v.string()),
+
     updatedAt: v.optional(v.number()),
   })
     .index("by_title", ["title"])
     .index("by_createdAt", ["createdAt"])
     .index("by_popscore", ["popscore"]),
 
-  // SCORES
   scores: defineTable({
     userId: v.id("profiles"),
     userEmail: v.string(),
@@ -91,24 +82,28 @@ export default defineSchema({
     .index("by_user_game", ["userId", "gameId"])
     .index("by_game", ["gameId"]),
 
-transactions: defineTable({
-  userId: v.id("profiles"),
-  gameId: v.id("games"),
-  type: v.union(v.literal("rental"), v.literal("purchase")),
-  expiresAt: v.optional(v.number()),
-  createdAt: v.number(),
-})
-  .index("by_user", ["userId"])
-  .index("by_user_type", ["userId", "type"])
-  .index("by_game", ["gameId"])
-  // NUEVO: hace posible barridos por fecha sin table-scan
-  .index("by_expiresAt", ["expiresAt"]),
+  // ✅ IMPORTANTE: restauramos transactions con type rental|purchase
+  transactions: defineTable({
+    userId: v.id("profiles"),
+    gameId: v.id("games"),
+    type: v.union(v.literal("rental"), v.literal("purchase")),
+    expiresAt: v.optional(v.number()), // usado para rentals
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_type", ["userId", "type"])
+    .index("by_game", ["gameId"])
+    .index("by_expiresAt", ["expiresAt"]),
 
   payments: defineTable({
     userId: v.id("profiles"),
     amount: v.number(),
     currency: v.string(),
-    status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
     provider: v.optional(v.string()),
     createdAt: v.number(),
   })
@@ -121,13 +116,9 @@ transactions: defineTable({
     toRole: v.union(v.literal("free"), v.literal("premium"), v.literal("admin")),
     effectiveAt: v.optional(v.number()),
     paymentId: v.optional(v.id("payments")),
-
-    // ⬇️ NUEVO: compat con tu cancelPremium existente
-    status: v.optional(v.string()),      // "canceled" | "expired" | etc.
+    status: v.optional(v.string()),
     reason: v.optional(v.string()),
     createdAt: v.optional(v.number()),
-
-    // 👇 Compatibilidad con docs existentes
     expiresAt: v.optional(v.number()),
     plan: v.optional(
       v.union(
@@ -150,7 +141,12 @@ transactions: defineTable({
 
   paymentMethods: defineTable({
     userId: v.id("profiles"),
-    brand: v.union(v.literal("visa"), v.literal("mastercard"), v.literal("amex"), v.literal("otro")),
+    brand: v.union(
+      v.literal("visa"),
+      v.literal("mastercard"),
+      v.literal("amex"),
+      v.literal("otro")
+    ),
     last4: v.string(),
     expMonth: v.number(),
     expYear: v.number(),
@@ -180,7 +176,6 @@ transactions: defineTable({
     .index("by_title", ["title"])
     .index("by_priority", ["priority"]),
 
-  // Notificaciones por usuario
   notifications: defineTable({
     userId: v.id("profiles"),
     type: v.union(
@@ -190,8 +185,6 @@ transactions: defineTable({
       v.literal("achievement"),
       v.literal("purchase"),
       v.literal("game-update"),
-
-      // ⬇️ NUEVO: avisos de plan
       v.literal("plan-expired"),
       v.literal("plan-renewed"),
       v.literal("plan-expiring")
@@ -223,7 +216,7 @@ transactions: defineTable({
     deviceId: v.optional(v.string()),
     lastUsedAt: v.optional(v.number()),
     createdAt: v.number(),
-    updatedAt: v.number(),
+    updatedAt: v.optional(v.number()),
     disabledAt: v.optional(v.number()),
   })
     .index("by_token", ["token"])
@@ -231,7 +224,6 @@ transactions: defineTable({
     .index("by_email", ["email"])
     .index("by_deviceId", ["deviceId"]),
 
-  // ⬇️ NUEVO: historial de suscripciones
   subscriptions: defineTable({
     userId: v.id("profiles"),
     plan: v.union(
@@ -240,27 +232,24 @@ transactions: defineTable({
       v.literal("annual"),
       v.literal("lifetime")
     ),
-    startAt: v.number(),                 // fecha de inicio (ms)
-    expiresAt: v.optional(v.number()),   // fecha de vencimiento (ms)
+    startAt: v.number(),
+    expiresAt: v.optional(v.number()),
     status: v.union(
       v.literal("active"),
       v.literal("canceled"),
       v.literal("expired")
     ),
-    autoRenew: v.boolean(),              // renovación automática S/N
+    autoRenew: v.boolean(),
     paymentId: v.optional(v.id("payments")),
     createdAt: v.number(),
-    updatedAt: v.optional(v.number()),   // 👈 para tus patches
+    updatedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])
     .index("by_expiresAt", ["expiresAt"]),
 
-  // ────────────────────────────────────────────
-  // ⬇️ NUEVO: House Ads (anuncios propios)
-  // ────────────────────────────────────────────
   houseAds: defineTable({
-    key: v.string(), // identificador lógico único por campaña
+    key: v.string(),
     active: v.boolean(),
     slots: v.array(v.union(v.literal("onLogin"), v.literal("prePlay"))),
     title: v.string(),
@@ -271,10 +260,10 @@ transactions: defineTable({
     imageUrl: v.optional(v.string()),
     videoUrl: v.optional(v.string()),
     theme: v.optional(v.union(v.literal("dark"), v.literal("light"))),
-    skipAfterSec: v.optional(v.number()), // default 7 en server
-    dismissible: v.optional(v.boolean()), // default true
-    weight: v.optional(v.number()),       // default 1
-    frequencyPerDay: v.optional(v.number()), // impresiones máximas por usuario/día
+    skipAfterSec: v.optional(v.number()),
+    dismissible: v.optional(v.boolean()),
+    weight: v.optional(v.number()),
+    frequencyPerDay: v.optional(v.number()),
     startAt: v.optional(v.number()),
     endAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -300,28 +289,37 @@ transactions: defineTable({
     .index("by_user_time", ["userId", "createdAt"])
     .index("by_ad_time", ["adId", "createdAt"]),
 
-    contactMessages: defineTable({
+  contactMessages: defineTable({
     name: v.string(),
     email: v.string(),
     subject: v.string(),
     message: v.string(),
     profileId: v.optional(v.id("profiles")),
     userAgent: v.optional(v.string()),
-    status: v.optional(v.string()), // "new" | "read" | "closed"
+    status: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_email", ["email"])
     .index("by_createdAt", ["createdAt"]),
 
-  // 🛒 Carrito
   cartItems: defineTable({
     userId: v.id("profiles"),
     gameId: v.id("games"),
     createdAt: v.number(),
   })
-    // permite q.eq("userId", userId)
     .index("by_user", ["userId", "createdAt"])
-    // permite q.eq("userId", userId).eq("gameId", gameId)
     .index("by_user_game", ["userId", "gameId"]),
-});
 
+  passwordResetTokens: defineTable({
+    profileId: v.id("profiles"),
+    tokenHash: v.string(),
+    expiresAt: v.number(),
+    usedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    requestIp: v.optional(v.string()),
+    requestUserAgent: v.optional(v.string()),
+  })
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_profile", ["profileId", "createdAt"])
+    .index("by_profile_unused", ["profileId", "usedAt"]),
+});

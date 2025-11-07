@@ -3,8 +3,7 @@ import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 
 /**
- * Cancela Premium => role: "free" y deja rastro en 'upgrades'.
- * Además marca la suscripción activa (si existe) como "canceled".
+ * Desactiva la renovación automática manteniendo el acceso premium vigente.
  */
 export const cancelPremiumPlan = mutation({
   args: {
@@ -15,17 +14,22 @@ export const cancelPremiumPlan = mutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("Usuario no encontrado");
 
-    const prevRole = (user as any)?.role ?? "free";
     const now = Date.now();
+    const currentRole = (user as any)?.role ?? "free";
 
-    // Marcar suscripción activa como cancelada (si existe)
+    // Ajustar suscripción activa (solo marca auto-renew en falso)
     try {
       const actives = await (ctx.db as any)
         .query("subscriptions")
-        .filter((q: any) => q.and(
-          q.eq(q.field("userId"), userId),
-          q.eq(q.field("status"), "active")
-        ))
+        .filter((q: any) =>
+          q.and(
+            q.eq(q.field("userId"), userId),
+            q.or(
+              q.eq(q.field("status"), "active"),
+              q.eq(q.field("status"), "canceled")
+            )
+          )
+        )
         .collect();
 
       if (actives?.length) {
@@ -33,30 +37,34 @@ export const cancelPremiumPlan = mutation({
           (a: any, b: any) => (b.startAt ?? 0) - (a.startAt ?? 0)
         )[0];
         await (ctx.db as any).patch(latest._id, {
-          status: "canceled",
-          // opcional: cortar expiración al momento de cancelar
-          // expiresAt: now,
+          autoRenew: false,
+          updatedAt: now,
         });
       }
     } catch {}
 
-    // Cambiar rol si no era free
-    if (prevRole !== "free") {
-      await ctx.db.patch(userId, { role: "free" });
-    }
+    // Desactivar la renovación automática en el perfil
+    await ctx.db.patch(userId, {
+      premiumAutoRenew: false,
+    });
 
-    // Registrar en upgrades (schema ahora soporta campos extra)
+    // Registrar evento en upgrades (sin cambiar rol)
     try {
       await (ctx.db as any).insert("upgrades", {
         userId,
-        fromRole: prevRole,
-        toRole: "free",
-        status: "canceled",
+        fromRole: currentRole,
+        toRole: currentRole,
+        status: "auto-renew-canceled",
         reason,
         createdAt: now,
+        meta: { autoRenew: false },
       });
     } catch {}
 
-    return { ok: true as const, newRole: "free" as const, alreadyFree: prevRole === "free" };
+    return {
+      ok: true as const,
+      role: currentRole as "free" | "premium" | "admin",
+      autoRenew: false as const,
+    };
   },
 });

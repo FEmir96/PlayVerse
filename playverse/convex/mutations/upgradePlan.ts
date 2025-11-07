@@ -16,6 +16,10 @@ export const upgradePlan = mutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("Usuario no encontrado");
 
+    const now = Date.now();
+    const alreadyUsedTrial = Boolean((user as any)?.freeTrialUsed);
+    const applyTrial = Boolean(trial && !alreadyUsedTrial);
+
     // 1) Cambiar rol si es distinto
     if (user.role !== toRole) {
       await ctx.db.patch(userId, { role: toRole });
@@ -24,11 +28,10 @@ export const upgradePlan = mutation({
     // 2) Si toRole === "premium", setear expiración y registrar suscripción
     if (toRole === "premium") {
       const p: Plan = (plan as Plan) || "monthly";
-      const now = Date.now();
 
       // Trial => +7 días antes de empezar el período
-      const trialMs = trial ? 7 * 24 * 60 * 60 * 1000 : 0;
-      const start = new Date(now + trialMs);
+      const trialMs = applyTrial ? 7 * 24 * 60 * 60 * 1000 : 0;
+      const start = new Date(now);
 
       let expiresAt: number | undefined = undefined;
       let autoRenew = true;
@@ -37,6 +40,9 @@ export const upgradePlan = mutation({
         const months = p === "annual" ? 12 : p === "quarterly" ? 3 : 1;
         const end = new Date(start);
         end.setMonth(end.getMonth() + months);
+        if (trialMs > 0) {
+          end.setTime(end.getTime() + trialMs);
+        }
         expiresAt = end.getTime();
       } else {
         autoRenew = false;
@@ -47,6 +53,7 @@ export const upgradePlan = mutation({
         premiumPlan: p,
         premiumAutoRenew: autoRenew,
         premiumExpiresAt: expiresAt,
+        ...(applyTrial ? { freeTrialUsed: true } : {}),
       });
 
       // Registrar suscripción (histórico)
@@ -59,6 +66,7 @@ export const upgradePlan = mutation({
         status: "active",
         paymentId,
         createdAt: now,
+        ...(trialMs > 0 ? { updatedAt: now } : {}),
       });
 
       // Dejar rastro en upgrades
@@ -71,10 +79,11 @@ export const upgradePlan = mutation({
           paymentId,
           status: "upgraded",
           createdAt: now,
+          ...(applyTrial ? { meta: { trial: true } } : {}),
         });
       } catch {}
     }
 
-    return { ok: true, role: toRole };
+    return { ok: true, role: toRole, trialApplied: applyTrial };
   },
 });

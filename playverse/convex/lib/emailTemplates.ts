@@ -1,4 +1,4 @@
-// convex/lib/emailTemplates.ts
+﻿// convex/lib/emailTemplates.ts
 
 export type BaseOpts = {
   userName?: string | null;
@@ -34,7 +34,7 @@ function esc(s: string) {
   ));
 }
 
-/* ========= Helpers de assets e íconos ========= */
+/* ========= Helpers de assets e Ã­conos ========= */
 
 function assetsBase(): string {
   const env = (process.env.ASSETS_BASE_URL || "").trim();
@@ -125,14 +125,14 @@ function layout(title: string, intro: string, inner: string, appUrl?: string | n
     </div>
 
     <p style="text-align:center;color:${COLORS.footer};font-size:12px;margin-top:12px;line-height:1.5">
-      © ${new Date().getFullYear()} PlayVerse · Este es un correo automático, no respondas a este mensaje.<br/>
-      Si necesitás ayuda, visitá nuestro centro de ayuda dentro de la app.
+      Â© ${new Date().getFullYear()} PlayVerse Â· Este es un correo automÃ¡tico, no respondas a este mensaje.<br/>
+      Si necesitÃ¡s ayuda, visitÃ¡ nuestro centro de ayuda dentro de la app.
     </p>
   </body>
 </html>`;
 }
 
-/* ========= Cabecera compacta título + miniatura ========= */
+/* ========= Cabecera compacta tÃ­tulo + miniatura ========= */
 
 function titleWithThumb(title: string, coverUrl?: string | null) {
   if (!coverUrl) {
@@ -160,7 +160,7 @@ function titleWithThumb(title: string, coverUrl?: string | null) {
   `;
 }
 
-/* ========= Bloque de información principal ========= */
+/* ========= Bloque de informaciÃ³n principal ========= */
 
 function infoBlock(opts: BaseOpts, extraRows = "") {
   const money = opts.amount.toLocaleString("en-US", { style: "currency", currency: opts.currency ?? "USD" });
@@ -173,7 +173,7 @@ function infoBlock(opts: BaseOpts, extraRows = "") {
     : "";
 
   const iconAmount = iconImg(ICONS.amount, "Monto", 18, "opacity:.9;margin-right:6px");
-  const iconMethod = iconImg(ICONS.method, "Método", 18, "opacity:.9;margin-right:6px");
+  const iconMethod = iconImg(ICONS.method, "MÃ©todo", 18, "opacity:.9;margin-right:6px");
 
   return `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:16px">
@@ -188,7 +188,7 @@ function infoBlock(opts: BaseOpts, extraRows = "") {
           </td>
           <td align="right" style="width:50%;padding:7px 0">
             ${iconMethod}
-            <strong style="color:${COLORS.accent}">Método:</strong>
+            <strong style="color:${COLORS.accent}">MÃ©todo:</strong>
             <span style="margin-left:6px;color:${COLORS.accent};font-weight:700">${esc(method)}</span>
           </td>
         </tr>
@@ -250,7 +250,7 @@ export function buildExtendEmail(opts: BaseOpts) {
   })();
 
   const inner = infoBlock(opts, extra);
-  return layout("Extensión confirmada", intro, inner, opts.appUrl);
+  return layout("ExtensiÃ³n confirmada", intro, inner, opts.appUrl);
 }
 
 /* ---- Email para compras de carrito ---- */
@@ -289,7 +289,7 @@ export function buildCartEmail(opts: {
   }).join("");
 
   const iconAmount = iconImg(ICONS.amount, "Total", 18, "opacity:.95;margin-right:6px");
-  const iconMethod = iconImg(ICONS.method, "Método", 16, "opacity:.9;margin-right:6px");
+  const iconMethod = iconImg(ICONS.method, "MÃ©todo", 16, "opacity:.9;margin-right:6px");
 
   const inner = `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;overflow:hidden">
@@ -298,7 +298,7 @@ export function buildCartEmail(opts: {
         <tr><td colspan="2" style="height:1px;background:${COLORS.border}"></td></tr>
         <tr>
           <td style="padding:12px;color:${COLORS.accent};font-weight:800">
-            ${iconMethod}<span style="vertical-align:middle"><strong style="color:${COLORS.accent}">Método:</strong>&nbsp;${esc(opts.method || "Tarjeta guardada")}</span>
+            ${iconMethod}<span style="vertical-align:middle"><strong style="color:${COLORS.accent}">MÃ©todo:</strong>&nbsp;${esc(opts.method || "Tarjeta guardada")}</span>
           </td>
           <td align="right" style="padding:12px;color:${COLORS.accent};font-weight:900">
             ${iconAmount}<span style="vertical-align:middle">${total.toLocaleString("en-US", { style: "currency", currency: cur })}</span>
@@ -311,7 +311,7 @@ export function buildCartEmail(opts: {
     </div>` : ""}
   `;
 
-  const intro = `Hola ${esc(opts.userName ?? "jugador/a")}, confirmamos tu compra de varios ítems en PlayVerse.`;
+  const intro = `Hola ${esc(opts.userName ?? "jugador/a")}, confirmamos tu compra de varios Ã­tems en PlayVerse.`;
   return layout("Compra confirmada (Carrito)", intro, inner, opts.appUrl);
 }
 
@@ -331,13 +331,13 @@ export function buildContactAdminEmail(opts: {
       <div style="color:${COLORS.accent};font-size:16px;font-weight:800;margin-bottom:8px">${esc(opts.subject ?? "Sin asunto")}</div>
       <div style="color:${COLORS.textSoft};white-space:pre-wrap;line-height:1.6">${esc(opts.message ?? "")}</div>
       <div style="margin-top:12px;color:${COLORS.textMuted};font-size:12px;line-height:1.55">
-        <div><strong>Nombre:</strong> ${esc(opts.name ?? "—")}</div>
-        <div><strong>Email:</strong> ${esc(opts.email ?? "—")}</div>
+        <div><strong>Nombre:</strong> ${esc(opts.name ?? "â€”")}</div>
+        <div><strong>Email:</strong> ${esc(opts.email ?? "â€”")}</div>
         ${when ? `<div><strong>Fecha:</strong> ${when}</div>` : ""}
       </div>
     </div>
   `;
-  return layout("Nueva consulta — PlayVerse", intro, inner, opts.appUrl);
+  return layout("Nueva consulta â€” PlayVerse", intro, inner, opts.appUrl);
 }
 
 /* ---- Email de acuse para el usuario ---- */
@@ -347,7 +347,7 @@ export function buildContactUserEmail(opts: {
   message?: string | null;
   appUrl?: string | null;
 }) {
-  const intro = `Hola ${esc(opts.name ?? "jugador/a")}, ¡gracias por contactarte con PlayVerse! Recibimos tu mensaje y te responderemos a la brevedad.`;
+  const intro = `Hola ${esc(opts.name ?? "jugador/a")}, Â¡gracias por contactarte con PlayVerse! Recibimos tu mensaje y te responderemos a la brevedad.`;
   const inner = `
     <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:16px">
       <div style="color:${COLORS.accent};font-size:16px;font-weight:800;margin-bottom:8px">${esc(opts.subject ?? "Tu consulta")}</div>
@@ -359,7 +359,38 @@ export function buildContactUserEmail(opts: {
       ` : ""}
     </div>
   `;
-  return layout("¡Gracias por tu mensaje!", intro, inner, opts.appUrl);
+  return layout("Â¡Gracias por tu mensaje!", intro, inner, opts.appUrl);
+}
+
+export function buildPasswordResetEmail(opts: {
+  name?: string | null;
+  resetUrl: string;
+  expiresMinutes: number;
+  appUrl?: string | null;
+}) {
+  const friendly = esc((opts.name ?? '').trim() || 'jugador/a');
+  const safeUrl = esc(opts.resetUrl);
+  const intro = `Hola ${friendly}, recibimos una solicitud para restablecer tu contrasena de PlayVerse.`;
+  const inner = `
+    <div style="background:${COLORS.bgOuter};border:1px solid ${COLORS.border};border-radius:12px;padding:20px">
+      <p style="color:${COLORS.textSoft};line-height:1.6;margin:0 0 18px 0">
+        Haz clic en el siguiente boton para crear una nueva contrasena. El enlace vence en ${opts.expiresMinutes} minutos por seguridad.
+      </p>
+      <div style="text-align:center;margin:22px 0">
+        <a href="${safeUrl}" style="display:inline-block;background:${COLORS.brand};color:#0b0f19;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:800;letter-spacing:.3px">
+          Restablecer contrasena
+        </a>
+      </div>
+      <p style="color:${COLORS.textSoft};line-height:1.6;margin:0 0 12px 0">
+        Si no solicitaste este cambio, ignora este correo y tu cuenta seguira protegida.
+      </p>
+      <p style="color:${COLORS.footer};font-size:12px;margin:12px 0 0 0">
+        Si el boton no funciona, copia y pega este enlace en tu navegador:<br/>
+        <span style="word-break:break-all;color:${COLORS.accent}">${safeUrl}</span>
+      </p>
+    </div>
+  `;
+  return layout('Restablece tu contrasena', intro, inner, opts.appUrl);
 }
 
 export default {
@@ -369,4 +400,6 @@ export default {
   buildCartEmail,
   buildContactAdminEmail,
   buildContactUserEmail,
+  buildPasswordResetEmail,
 };
+

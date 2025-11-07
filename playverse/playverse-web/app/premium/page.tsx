@@ -1,10 +1,11 @@
-// app/premium/page.tsx
+﻿// app/premium/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 // Sesión + store local
 import { useSession } from "next-auth/react";
@@ -95,6 +96,7 @@ export default function PremiumPage() {
   const router = useRouter();
   const search = useSearchParams();
   const pathname = usePathname() || "/premium";
+  const { toast } = useToast();
 
   // Estado UI
   const [selectedPlan, setSelectedPlan] = useState("annual");
@@ -108,10 +110,12 @@ export default function PremiumPage() {
   const profile = useQuery(
     getUserByEmailRef,
     loginEmail ? { email: loginEmail } : "skip"
-  ) as ({ _id?: string; role?: "free" | "premium" | "admin" } | null | undefined);
+  ) as ({ _id?: string; role?: "free" | "premium" | "admin"; freeTrialUsed?: boolean } | null | undefined);
 
   const role: "free" | "premium" | "admin" = (profile?.role as any) || "free";
   const profileLoaded = loginEmail ? profile !== undefined : true;
+  const freeTrialUsed = Boolean((profile as any)?.freeTrialUsed);
+  const trialAvailable = role !== "premium" && !freeTrialUsed;
 
   // Lectura de intent del querystring
   const intent = search.get("intent") || null;
@@ -126,10 +130,8 @@ export default function PremiumPage() {
     if (intent !== "subscribe") return;
     if (redirectedOnce.current) return;
 
-    // Mientras carga la sesión, esperamos
     if (status === "loading") return;
 
-    // Si no hay sesión → mandar a login con next=esta misma URL (para continuar después)
     if (!loginEmail) {
       redirectedOnce.current = true;
       const nextUrl = `${pathname}?${search.toString()}`;
@@ -137,25 +139,23 @@ export default function PremiumPage() {
       return;
     }
 
-    // Si hay sesión, esperamos a tener rol
     if (!profileLoaded) return;
 
-    // Con rol en mano: premium → Home | free/admin → Checkout Premium con ID
     redirectedOnce.current = true;
     if (role === "premium") {
       router.replace("/");
     } else {
       const id = (profile as any)?._id;
       if (id) {
-        router.replace(`/checkout/premium/${id}?plan=${planParam}${trial ? "&trial=true" : ""}`);
+        const params = new URLSearchParams({ plan: planParam });
+        if (trial && trialAvailable) params.set("trial", "true");
+        router.replace(`/checkout/premium/${id}?${params.toString()}`);
       } else {
-        // fallback defensivo
         router.replace(`/premium`);
       }
     }
-  }, [intent, status, loginEmail, profileLoaded, role, planParam, trial, router, pathname, search, profile]);
+  }, [intent, status, loginEmail, profileLoaded, role, planParam, trial, trialAvailable, router, pathname, search, profile]);
 
-  // Guard anti-flash: no renderizar Premium mientras decide a dónde ir
   const isRedirecting =
     intent === "subscribe" &&
     (status === "loading" || !loginEmail || (loginEmail && !profileLoaded));
@@ -168,10 +168,9 @@ export default function PremiumPage() {
     );
   }
 
-  // Handlers
   const pushSubscribeIntent = (planId: string, withTrial = false) => {
     const q = new URLSearchParams({ intent: "subscribe", plan: planId });
-    if (withTrial) q.set("trial", "true");
+    if (withTrial && trialAvailable) q.set("trial", "true");
     router.push(`/premium?${q.toString()}`);
   };
 
@@ -181,11 +180,19 @@ export default function PremiumPage() {
   };
 
   const handleFreeTrial = () => {
+    if (!trialAvailable) {
+      toast({
+        title: "Prueba gratuita no disponible",
+        description: role === "premium"
+          ? "Tu cuenta ya es Premium."
+          : "La prueba gratuita solo se puede usar una vez por cuenta.",
+      });
+      return;
+    }
     setSelectedPlan("monthly");
     pushSubscribeIntent("monthly", true);
   };
 
-  // Render UI
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Hero Section */}
@@ -216,12 +223,12 @@ export default function PremiumPage() {
             <Button
               onClick={handleFreeTrial}
               size="lg"
-              className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8 py-4 text-lg"
+              disabled={!trialAvailable}
+              className={trialAvailable
+                ? "bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8 py-4 text-lg"
+                : "bg-slate-700 text-slate-400 font-semibold px-8 py-4 text-lg cursor-not-allowed"}
             >
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292z" />
-              </svg>
-              Prueba gratuita de 7 días
+              {trialAvailable ? "Prueba gratuita de 7 días" : "Prueba gratuita no disponible"}
             </Button>
           </div>
         </div>
@@ -253,62 +260,42 @@ export default function PremiumPage() {
           <h2 className="text-3xl font-bold text-white mb-4">Elige tu plan</h2>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {premiumPlans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`relative bg-slate-800/50 border rounded-xl p-8 transition-all duration-300 hover:scale-105 ${
-                plan.popular
-                  ? "border-orange-400 shadow-lg shadow-orange-400/20"
-                  : "border-slate-600 hover:border-orange-400/50"
-              }`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-orange-400 text-slate-900 px-4 py-1 font-semibold">Más popular</Badge>
-                </div>
-              )}
-
-              <div className="text-center mb-6">
-                <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-                <div className="mb-2">
-                  <span className="text-4xl font-bold text-teal-400">{plan.price}</span>
-                  <span className="text-slate-400">{plan.period}</span>
-                </div>
-                {"originalPrice" in plan && (plan as any).originalPrice && (
-                  <div className="text-sm text-slate-500 line-through mb-1">{(plan as any).originalPrice}</div>
-                )}
-                <p className="text-slate-400 text-sm">{plan.description}</p>
-              </div>
-
-              <div className="space-y-3 mb-8">
-                {plan.features.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-teal-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span className="text-slate-300">{feature}</span>
-                  </div>
-                ))}
-              </div>
-
-              <Button
-                onClick={() => handleSubscribe(plan.id)}
-                className={`w-full font-semibold py-3 ${
-                  plan.popular
-                    ? "bg-orange-400 hover:bg-orange-500 text-slate-900"
-                    : "bg-transparent border border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900"
+        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          {premiumPlans.map((plan) => {
+            const isSelected = selectedPlan === plan.id;
+            return (
+              <div
+                key={plan.id}
+                className={`border rounded-2xl p-6 bg-slate-800/40 border-slate-700 hover:border-orange-400 transition ${
+                  isSelected ? "shadow-lg shadow-orange-500/20" : ""
                 }`}
-                variant={plan.popular ? "default" : "outline"}
               >
-                Suscribirse
-              </Button>
-            </div>
-          ))}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-2xl font-bold text-white">{plan.name}</h3>
+                  {plan.popular && <Badge className="bg-orange-400 text-slate-900">Popular</Badge>}
+                </div>
+                <p className="text-4xl font-bold text-teal-400 mb-2">{plan.price}</p>
+                <p className="text-slate-400 mb-6">{plan.description}</p>
+
+                <ul className="space-y-2 text-slate-300 text-sm mb-8">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-2">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  onClick={() => handleSubscribe(plan.id)}
+                  variant={isSelected ? "default" : "outline"}
+                  className={isSelected ? "w-full bg-orange-400 text-slate-900" : "w-full border-orange-400 text-orange-400"}
+                >
+                  Elegir plan
+                </Button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -318,15 +305,26 @@ export default function PremiumPage() {
           <div className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold text-white mb-4">¿Listo para la experiencia Premium?</h2>
             <p className="text-slate-300 mb-8 text-lg">
-              Únete a miles de gamers que ya disfrutan de la mejor experiencia gaming sin límites.
+              Únete a miles de gamers que ya disfrutan de la mejor experiencia sin límites.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
                 onClick={handleFreeTrial}
                 size="lg"
-                className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8"
+                disabled={!trialAvailable}
+                className={trialAvailable
+                  ? "bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold px-8"
+                  : "bg-slate-700 text-slate-400 font-semibold px-8 cursor-not-allowed"}
               >
-                Comenzar prueba gratuita
+                {trialAvailable ? "Comenzar prueba gratuita" : "Prueba gratuita ya usada"}
+              </Button>
+              <Button
+                onClick={() => handleSubscribe("annual")}
+                size="lg"
+                variant="outline"
+                className="border-orange-400 text-orange-300 font-semibold px-8"
+              >
+                Ver planes completos
               </Button>
             </div>
           </div>

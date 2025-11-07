@@ -4,19 +4,60 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
+import { useAction } from "convex/react"
+import type { FunctionReference } from "convex/server"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import Image from "next/image"
+import { api } from "@convex"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const requestReset = useAction(
+    (api as any)["actions/passwordReset"]
+      .requestPasswordReset as FunctionReference<"action">
+  )
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle password reset logic here
-    console.log("Password reset requested for:", email)
-    setIsSubmitted(true)
+    setError(null)
+
+    const trimmed = email.trim().toLowerCase()
+    if (!trimmed) {
+      setError("Ingresá un email válido.")
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const result = await (requestReset as any)({
+        email: trimmed,
+        appUrl: typeof window !== "undefined" ? window.location.origin : undefined,
+      })
+
+      if (!result?.ok) {
+        const code = result?.error
+        if (code === "not_found") {
+          setError("No encontramos una cuenta registrada con ese email.")
+        } else if (code === "invalid_email") {
+          setError("Ingresá un email válido.")
+        } else {
+          setError("No pudimos enviar el correo. Intentalo nuevamente en unos minutos.")
+        }
+        return
+      }
+
+      setIsSubmitted(true)
+    } catch (err: any) {
+      setError(err?.message ?? "Ocurrió un error inesperado. Probá nuevamente.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (isSubmitted) {
@@ -103,15 +144,22 @@ export default function ForgotPasswordPage() {
               />
             </div>
 
+            {error ? (
+              <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-md px-3 py-2">
+                {error}
+              </p>
+            ) : null}
+
             <Button
               type="submit"
-              className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3"
+              disabled={submitting}
+              className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-semibold py-3 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                 <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
               </svg>
-              Enviar instrucciones
+              {submitting ? "Enviando..." : "Enviar instrucciones"}
             </Button>
           </form>
 

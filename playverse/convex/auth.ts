@@ -1,7 +1,10 @@
-// convex/auth.ts
+﻿// convex/auth.ts
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import bcrypt from "bcryptjs";
+import { sha256Hex } from "./lib/hash";
+
+const MIN_PASSWORD_LENGTH = 6;
 
 export const updateProfile = mutation({
   args: {
@@ -22,6 +25,9 @@ export const updateProfile = mutation({
       patch.avatarUrl = avatarUrl;
     }
     if (typeof newPassword === "string" && newPassword.length > 0) {
+      if (newPassword.length < MIN_PASSWORD_LENGTH) {
+        throw new Error("La contraseña debe tener al menos 6 caracteres");
+      }
       patch.passwordHash = bcrypt.hashSync(newPassword, 10);
     }
     if (Object.keys(patch).length > 0) {
@@ -55,6 +61,7 @@ export const createUser = mutation({
       role,
       createdAt: now,
       passwordHash,
+      freeTrialUsed: false,
     });
     return { ok: true, profile: { _id, name, email: normalizedEmail, role, createdAt: now } } as const;
   },
@@ -105,6 +112,7 @@ export const oauthUpsert = mutation({
         createdAt: Date.now(),
         passwordHash: undefined,
         avatarUrl: args.avatarUrl,
+        freeTrialUsed: false,
       });
       return { created: true, _id };
     }
@@ -120,3 +128,125 @@ export const oauthUpsert = mutation({
     return { created: false, _id: existing._id };
   },
 });
+
+export const createPasswordResetToken = mutation({
+  args: {
+    profileId: v.id("profiles"),
+    tokenHash: v.string(),
+    expiresAt: v.number(),
+    requestIp: v.optional(v.string()),
+    requestUserAgent: v.optional(v.string()),
+  },
+  handler: async ({ db }, { profileId, tokenHash, expiresAt, requestIp, requestUserAgent }) => {
+    const profile = await db.get(profileId);
+    if (!profile) throw new Error("Perfil no encontrado");
+
+    const now = Date.now();
+
+    let existing: any[] = [];
+    try {
+      existing = await db
+        .query("passwordResetTokens")
+        .withIndex("by_profile", (q: any) => q.eq("profileId", profileId))
+        .collect();
+    } catch {
+      const all = await db.query("passwordResetTokens").collect();
+      existing = all.filter((t: any) => String(t.profileId) === String(profileId));
+    }
+
+    for (const token of existing) {
+      if (!token.usedAt && (token.expiresAt ?? 0) > now) {
+        await db.patch(token._id, { expiresAt: now - 1 });
+      }
+    }
+
+    const finalExpires = Math.max(expiresAt, now + 5 * 60 * 1000);
+
+    const tokenId = await db.insert("passwordResetTokens", {
+      profileId,
+      tokenHash,
+      expiresAt: finalExpires,
+      createdAt: now,
+      requestIp,
+      requestUserAgent,
+    });
+
+    return { ok: true as const, tokenId, expiresAt: finalExpires };
+  },
+});
+
+export const resetPasswordWithToken = mutation({
+  args: {
+    token: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async ({ db }, { token, newPassword }) => {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return { ok: false as const, error: "weak_password" as const };
+    }
+
+    const tokenHash = await sha256Hex(token);
+    let stored: any | null = null;
+
+    try {
+      stored = await db
+        .query("passwordResetTokens")
+        .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
+        .unique();
+    } catch {
+      const all = await db.query("passwordResetTokens").collect();
+      stored =
+        all.find((t: any) => String(t.tokenHash) === tokenHash) ?? null;
+    }
+
+    if (!stored) return { ok: false as const, error: "invalid_token" as const };
+    if (stored.usedAt) return { ok: false as const, error: "token_used" as const };
+    if (stored.expiresAt <= Date.now()) {
+      return { ok: false as const, error: "token_expired" as const, expiresAt: stored.expiresAt };
+    }
+
+    const profile = await db.get(stored.profileId);
+    if (!profile) return { ok: false as const, error: "user_not_found" as const };
+
+    const passwordHash = bcrypt.hashSync(newPassword, 10);
+    await db.patch(profile._id, { passwordHash });
+    await db.patch(stored._id, { usedAt: Date.now() });
+
+    return { ok: true as const };
+  },
+});
+
+export const changePassword = mutation({
+  args: {
+    userId: v.id("profiles"),
+    currentPassword: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async ({ db }, { userId, currentPassword, newPassword }) => {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return { ok: false as const, error: "weak_password" as const };
+    }
+
+    const profile = await db.get(userId);
+    if (!profile) throw new Error("Perfil no encontrado");
+    if (!profile.passwordHash) {
+      return { ok: false as const, error: "no_password" as const };
+    }
+
+    const matches = bcrypt.compareSync(currentPassword, profile.passwordHash);
+    if (!matches) {
+      return { ok: false as const, error: "invalid_current" as const };
+    }
+
+    const samePassword = bcrypt.compareSync(newPassword, profile.passwordHash);
+    if (samePassword) {
+      return { ok: false as const, error: "same_password" as const };
+    }
+
+    const passwordHash = bcrypt.hashSync(newPassword, 10);
+    await db.patch(userId, { passwordHash });
+
+    return { ok: true as const };
+  },
+});
+

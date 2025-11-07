@@ -22,6 +22,7 @@ import type * as actions_fillUpcomingCoversFromIGDB from "../actions/fillUpcomin
 import type * as actions_getIGDBScreenshots from "../actions/getIGDBScreenshots.js";
 import type * as actions_massBackfillAgeRatings from "../actions/massBackfillAgeRatings.js";
 import type * as actions_notifications_scheduleRentalExpiryReminders from "../actions/notifications/scheduleRentalExpiryReminders.js";
+import type * as actions_passwordReset from "../actions/passwordReset.js";
 import type * as actions_pushy from "../actions/pushy.js";
 import type * as actions_refreshIGDBBatch from "../actions/refreshIGDBBatch.js";
 import type * as actions_refreshIGDBRatingForGame from "../actions/refreshIGDBRatingForGame.js";
@@ -35,6 +36,7 @@ import type * as games from "../games.js";
 import type * as lib_diffGame from "../lib/diffGame.js";
 import type * as lib_emailTemplates from "../lib/emailTemplates.js";
 import type * as lib_gameCore from "../lib/gameCore.js";
+import type * as lib_hash from "../lib/hash.js";
 import type * as lib_igdb_ageRatings from "../lib/igdb/ageRatings.js";
 import type * as lib_igdb_auth from "../lib/igdb/auth.js";
 import type * as lib_igdb_client from "../lib/igdb/client.js";
@@ -72,6 +74,7 @@ import type * as mutations_restoreGameTitles from "../mutations/restoreGameTitle
 import type * as mutations_savePaymentMethod from "../mutations/savePaymentMethod.js";
 import type * as mutations_scores_submitScore from "../mutations/scores/submitScore.js";
 import type * as mutations_seed from "../mutations/seed.js";
+import type * as mutations_setAutoRenew from "../mutations/setAutoRenew.js";
 import type * as mutations_setGameCoverUrl from "../mutations/setGameCoverUrl.js";
 import type * as mutations_setGameDetails from "../mutations/setGameDetails.js";
 import type * as mutations_setGameTrailerUrl from "../mutations/setGameTrailerUrl.js";
@@ -118,6 +121,7 @@ import type * as queries_listGamesMinimal from "../queries/listGamesMinimal.js";
 import type * as queries_listGamesWithoutCover from "../queries/listGamesWithoutCover.js";
 import type * as queries_listGamesWithoutDetails from "../queries/listGamesWithoutDetails.js";
 import type * as queries_listGamesWithoutTrailer from "../queries/listGamesWithoutTrailer.js";
+import type * as queries_passwordReset from "../queries/passwordReset.js";
 import type * as queries_scores_getMyBestByGame from "../queries/scores/getMyBestByGame.js";
 import type * as queries_scores_topByGame from "../queries/scores/topByGame.js";
 import type * as queries_searchGames from "../queries/searchGames.js";
@@ -152,6 +156,7 @@ declare const fullApi: ApiFromModules<{
   "actions/getIGDBScreenshots": typeof actions_getIGDBScreenshots;
   "actions/massBackfillAgeRatings": typeof actions_massBackfillAgeRatings;
   "actions/notifications/scheduleRentalExpiryReminders": typeof actions_notifications_scheduleRentalExpiryReminders;
+  "actions/passwordReset": typeof actions_passwordReset;
   "actions/pushy": typeof actions_pushy;
   "actions/refreshIGDBBatch": typeof actions_refreshIGDBBatch;
   "actions/refreshIGDBRatingForGame": typeof actions_refreshIGDBRatingForGame;
@@ -165,6 +170,7 @@ declare const fullApi: ApiFromModules<{
   "lib/diffGame": typeof lib_diffGame;
   "lib/emailTemplates": typeof lib_emailTemplates;
   "lib/gameCore": typeof lib_gameCore;
+  "lib/hash": typeof lib_hash;
   "lib/igdb/ageRatings": typeof lib_igdb_ageRatings;
   "lib/igdb/auth": typeof lib_igdb_auth;
   "lib/igdb/client": typeof lib_igdb_client;
@@ -202,6 +208,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/savePaymentMethod": typeof mutations_savePaymentMethod;
   "mutations/scores/submitScore": typeof mutations_scores_submitScore;
   "mutations/seed": typeof mutations_seed;
+  "mutations/setAutoRenew": typeof mutations_setAutoRenew;
   "mutations/setGameCoverUrl": typeof mutations_setGameCoverUrl;
   "mutations/setGameDetails": typeof mutations_setGameDetails;
   "mutations/setGameTrailerUrl": typeof mutations_setGameTrailerUrl;
@@ -248,6 +255,7 @@ declare const fullApi: ApiFromModules<{
   "queries/listGamesWithoutCover": typeof queries_listGamesWithoutCover;
   "queries/listGamesWithoutDetails": typeof queries_listGamesWithoutDetails;
   "queries/listGamesWithoutTrailer": typeof queries_listGamesWithoutTrailer;
+  "queries/passwordReset": typeof queries_passwordReset;
   "queries/scores/getMyBestByGame": typeof queries_scores_getMyBestByGame;
   "queries/scores/topByGame": typeof queries_scores_topByGame;
   "queries/searchGames": typeof queries_searchGames;
