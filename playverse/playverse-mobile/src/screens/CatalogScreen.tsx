@@ -48,12 +48,11 @@ export default function CatalogScreen() {
   const { data: allGames, loading, refetch } = useConvexQuery<Game[]>(
     ALL_GAMES_NAMES as unknown as string[],
     {},
-    { refreshMs: 20000 }
   );
   const { data: notifications } = useConvexQuery<any[]>(
     'notifications:getForUser',
     userId ? { userId, limit: 20 } : ({} as any),
-    { enabled: !!userId, refreshMs: 20000 }
+    { enabled: !!userId, refreshMs: 40000 }
   );
   const unreadCount = useMemo(() => {
     if (!userId) return 0;
@@ -163,6 +162,7 @@ export default function CatalogScreen() {
                   }}
                   onPress={() => gameId && nav.navigate('GameDetail', { gameId: String(gameId), initial: row })}
                   showPrices
+                  compactPrices
                 />
               </View>
             );

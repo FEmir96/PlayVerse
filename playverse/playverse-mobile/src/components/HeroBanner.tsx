@@ -44,8 +44,8 @@ export default function HeroBanner() {
 }
 
 const styles = StyleSheet.create({
-  container: { height: 280, backgroundColor: colors.background },
-  gradient: { flex: 1, position: 'relative', borderRadius: radius.lg, overflow: 'hidden' },
+  container: { height: 260, backgroundColor: colors.background },
+  gradient: { flex: 1, position: 'relative', overflow: 'hidden' },
   backgroundElements: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   decorativeImage: { position: 'absolute' },
   mushroom: { width: 30, height: 30, top: 40, right: 60 },
@@ -57,6 +57,6 @@ const styles = StyleSheet.create({
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl, zIndex: 1 },
   title: { fontSize: 32, fontWeight: 'bold', marginBottom: spacing.md, textAlign: 'center', color: colors.accent },
   subtitle: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: spacing.lg, opacity: 0.9, color: colors.textPrimary },
-  exploreButton: { paddingHorizontal: 32, paddingVertical: 12, borderRadius: 25, backgroundColor: colors.accent },
+  exploreButton: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 25, backgroundColor: colors.accent, marginBottom: spacing.lg },
   buttonText: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
 });

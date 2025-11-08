@@ -14,7 +14,7 @@ export default function PremiumScreen() {
   const benefits = [
     { icon: 'download', title: 'Acceso ilimitado', description: 'Descarga y juega todos los juegos sin restricciones' },
     { icon: 'hand-left', title: 'Cero publicidad', description: 'Disfruta sin interrupciones ni banners' },
-    { icon: 'star', title: 'Descuentos exclusivos', description: 'Hasta 75% de descuento en compras' },
+    { icon: 'star', title: 'Descuentos exclusivos', description: 'Hasta 10% de descuento en todas las compras' },
   ];
 
   const plans = [
@@ -31,7 +31,7 @@ export default function PremiumScreen() {
       id: 'annual',
       name: 'Anual',
       price: '$89,99',
-      period: '/anio',
+      period: '/año',
       originalPrice: '$119,99',
       savings: 'Ahorra $30',
       description: 'La mas conveniente',
@@ -66,27 +66,37 @@ export default function PremiumScreen() {
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <LinearGradient
-          colors={['#6D5EF6', '#7A4DF3', '#25C2D3']}
+          colors={['#fb923c4D', '#14b8a64D', '#9333ea4D']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           locations={[0, 0.5, 1]}
           style={styles.hero}
         >
-          <View style={styles.badge}>
-            <Ionicons name="star" size={16} color={colors.background} />
-            <Text style={styles.badgeText}>Premium</Text>
+          <View style={[styles.premiumBadge, { backgroundColor: 'rgba(209, 147, 16, 0.2)', borderColor: '#d19310' }, { marginBottom: spacing.lg } ]}>
+            <Ionicons name="star" size={16} color={'#d19310'} />
+            <Text style={[styles.premiumBadgeText, { color: '#d19310' }]}>Premium</Text>
           </View>
 
           <Text style={styles.heroTitle}>Desbloquea el</Text>
-          <View style={styles.gradientWord}>
-            <Text style={styles.gradientWordText}>poder del gaming</Text>
+
+          <View style={[styles.gradientTextContainer, { marginBottom: spacing.md }]}>
+            <LinearGradient
+              colors={['#fb923c80', '#14b8a680', '#9333ea80']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.gradientTextBackground}
+            >
+              <Text style={[styles.gradientText, { color: '#ffffff' }]}>
+                poder del gaming
+              </Text>
+            </LinearGradient>
           </View>
-          <Text style={styles.heroSubtitle}>
+
+          <Text style={[styles.heroSubtitle, { marginBottom: spacing.xxl, marginTop: spacing.xs }]}>
             Accede a toda la biblioteca, descuentos exclusivos y experiencia sin publicidad.
           </Text>
 
           <View style={styles.trialPill}>
-            <Ionicons name="star" size={16} color={colors.background} />
             <Text style={styles.trialText}>Prueba gratuita de 7 dias</Text>
           </View>
           <Text style={styles.webHint}>Suscripciones disponibles en la web</Text>
@@ -230,10 +240,44 @@ const styles = StyleSheet.create({
   featureText: { color: '#D6EEF7', flex: 1 },
   notice: { color: '#9ED3E6', fontStyle: 'italic', marginBottom: spacing.sm },
   cta: { backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: 20, paddingVertical: 10 },
-  ctaText: { color: colors.background, fontWeight: '900' },
+  ctaText: { fontWeight: '800', backgroundColor: 'transparent' },
 
   popularFlag: { position: 'absolute', top: -10, left: 0, right: 0, alignItems: 'center', zIndex: 1 },
   popularFlagInner: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 25, backgroundColor: colors.accent },
   popularFlagText: { color: colors.background, fontWeight: 'bold' },
+
+  gradientTextContainer: {
+    marginBottom: 32,
+    alignSelf: 'center',
+  },
+  gradientTextBackground: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  gradientText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 25,
+    borderWidth: 1,
+    marginBottom: 32,
+    gap: 8,
+  },
+  premiumBadgeText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
+
+
 

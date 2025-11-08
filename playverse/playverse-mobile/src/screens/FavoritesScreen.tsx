@@ -145,6 +145,7 @@ export default function FavoritesScreen() {
                     isFavorite: isFav,
                   }}
                   showPrices
+                  compactPrices
                   onPress={() => gid && nav.navigate('GameDetail', { gameId: gid, initial: g })}
                 />
               </View>

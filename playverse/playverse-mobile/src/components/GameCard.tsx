@@ -42,6 +42,7 @@ export type GameCardProps = {
   overlayLabel?: string;
   showPrices?: boolean;   // default true
   disabled?: boolean;
+  compactPrices?: boolean; // reduce price font sizes in tight grids
 
   onToggleFavorite?: (next: boolean) => void | Promise<void>;
   showFavorite?: boolean; // default true
@@ -53,10 +54,13 @@ function formatARS(n?: number | null) {
     return Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS',
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(Number(n));
   } catch {
-    return `$${Math.round(Number(n))}`;
+    const num = Number(n);
+    const isInt = Number.isInteger(num);
+    return `$${isInt ? num.toFixed(0) : num.toFixed(2)}`;
   }
 }
 
@@ -76,6 +80,7 @@ const GRADIENT = ['#F2B705', '#fbbf24', '#fb923c'] as const;
 export default function GameCard(props: GameCardProps) {
   const { game, style, onPress, tag, overlayLabel, disabled, onToggleFavorite } = props;
   const showPrices = props.showPrices ?? true;
+  const compactPrices = props.compactPrices ?? false;
   const showFavorite = props.showFavorite ?? true;
 
   const nav = useNavigation<any>();
@@ -83,6 +88,10 @@ export default function GameCard(props: GameCardProps) {
   const id = String(game.id ?? game.gameId ?? '');
   const title = game.title ?? 'Juego';
   const cover = game.cover_url ?? undefined;
+  const planRaw = useMemo(() => String((game as any).plan ?? '').toLowerCase(), [game]);
+  const planLabel: 'Premium' | 'Free' | undefined =
+    planRaw === 'premium' ? 'Premium' : planRaw === 'free' ? 'Free' : undefined;
+  const badgeLabel = planLabel ?? (tag || undefined);
   const description: string | undefined = useMemo(() => {
     const raw: any = (game as any).description ?? (game as any).summary;
     if (typeof raw !== 'string') return undefined;
@@ -108,6 +117,21 @@ export default function GameCard(props: GameCardProps) {
 
   const offBuy = pctOff(oBuy, fBuy);
   const offWeek = pctOff(oWeek, fWeek);
+
+  const isFree = useMemo(() => {
+    // Solo consideramos "Free to Play" cuando:
+    // - No hay precios y el plan es 'free', o
+    // - Todos los precios presentes son exactamente 0.
+    const nBuy = Number(fBuy);
+    const nWeek = Number(fWeek);
+    const hasBuy = Number.isFinite(nBuy);
+    const hasWeek = Number.isFinite(nWeek);
+    const hasAny = hasBuy || hasWeek;
+    const allPresentZero = hasAny && ((hasBuy ? nBuy === 0 : true) && (hasWeek ? nWeek === 0 : true));
+    if (allPresentZero) return true;
+    if (!hasAny && planRaw === 'free') return true;
+    return false;
+  }, [planRaw, fBuy, fWeek]);
 
   const favCtx = (useFavoritesUnsafe?.() as any) || null;
   const authCtx = (useAuthUnsafe?.() as any) || null;
@@ -163,9 +187,15 @@ export default function GameCard(props: GameCardProps) {
   const isXS = w > 0 && w < 170;
   const isSM = w >= 170 && w < 205;
 
-  const titleSize = isXS ? typography.body : isSM ? typography.body + 1 : typography.h3 - 2;
-  const priceMainSize = isXS ? typography.body + 2 : isSM ? typography.body + 3 : typography.h3 - 2;
-  const priceLabelSize = isXS ? 10 : 11;
+  // Título más chico y 1 sola línea
+  const titleSize = isXS ? Math.max(12, typography.body - 1) : isSM ? typography.body : Math.max(14, typography.h3 - 4);
+  const titleLineHeight = Math.round(titleSize * 1.1);
+  // Base sizes
+  const basePriceMain = isXS ? typography.body + 1 : isSM ? typography.body + 2 : typography.h3 - 4;
+  const basePriceLabel = 10;
+  // Compact adjustment for Catalog/Favorites grids (más pequeño fuera del Home)
+  const priceMainSize = Math.max(9, basePriceMain - (compactPrices ? 4 : 0));
+  const priceLabelSize = Math.max(8, basePriceLabel - (compactPrices ? 2 : 0));
 
   return (
     <>
@@ -248,9 +278,27 @@ export default function GameCard(props: GameCardProps) {
                 style={styles.mediaOverlay}
               />
 
-              {!!tag && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
+              {!!badgeLabel && (
+                <View
+                  style={[
+                    styles.tag,
+                    styles.tagSmall,
+                    planLabel === 'Premium'
+                      ? styles.tagPremium
+                      : planLabel === 'Free'
+                      ? styles.tagFree
+                      : styles.tagDefault,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tagText,
+                      planLabel === 'Free' ? styles.tagTextLight : styles.tagTextDark,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {badgeLabel}
+                  </Text>
                 </View>
               )}
 
@@ -266,7 +314,7 @@ export default function GameCard(props: GameCardProps) {
             <View style={styles.body}>
               <View style={styles.titleRow}>
                 <Text
-                  style={[styles.title, { fontSize: titleSize }]}
+                  style={[styles.title, { fontSize: titleSize, lineHeight: titleLineHeight }]}
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
@@ -304,22 +352,29 @@ export default function GameCard(props: GameCardProps) {
                 </Text>
               ) : null}
 
-              {showPrices && (txtWeek || txtBuy) ? (
-                <View style={styles.priceGrid}>
-                  <View style={styles.priceCol}>
-                    {txtWeek ? (
-                      <>
-                        <Text style={[styles.priceLabel, styles.priceLabelRent, { fontSize: priceLabelSize }]} numberOfLines={1}>
-                          Alquiler
-                        </Text>
+              {showPrices ? (
+                isFree ? (
+                  <View style={styles.freeWrap}>
+                    <Text style={[styles.freeLabel, compactPrices && styles.freeLabelCompact]} numberOfLines={1}>
+                      Free to Play
+                    </Text>
+                  </View>
+                ) : (txtWeek || txtBuy) ? (
+                  <View style={[styles.priceGrid, compactPrices && { columnGap: 10 }]}>
+                    <View style={styles.priceCol}>
+                      {txtWeek ? (
+                        <>
+                          <Text style={[styles.priceLabel, styles.priceLabelRent, { fontSize: priceLabelSize }]} numberOfLines={1} allowFontScaling={false}>
+                            Alquiler
+                          </Text>
                         {!!offWeek && !!txtWeekOrig ? (
-                          <Text style={styles.priceOriginal} numberOfLines={1}>
+                          <Text style={[styles.priceOriginal, compactPrices && styles.priceOriginalCompact]} numberOfLines={1} allowFontScaling={false}>
                             {txtWeekOrig}/sem
                           </Text>
                         ) : null}
-                        <Text style={[styles.priceFinal, styles.priceFinalRent, { fontSize: priceMainSize }]} numberOfLines={1}>
+                        <Text style={[styles.priceFinal, styles.priceFinalRent, { fontSize: priceMainSize }]} numberOfLines={1} allowFontScaling={false}>
                           {txtWeek}
-                          <Text style={styles.perUnit}>/sem</Text>
+                          <Text style={[styles.perUnit, compactPrices && styles.perUnitCompact]}>/sem</Text>
                         </Text>
                         {!!offWeek && (
                           <View style={[styles.offChip, styles.offChipRent]}>
@@ -330,18 +385,18 @@ export default function GameCard(props: GameCardProps) {
                     ) : null}
                   </View>
 
-                  <View style={styles.priceCol}>
+                  <View style={[styles.priceCol, styles.priceColRight]}>
                     {txtBuy ? (
                       <>
-                        <Text style={[styles.priceLabel, styles.priceLabelBuy, { fontSize: priceLabelSize }]} numberOfLines={1}>
+                        <Text style={[styles.priceLabel, styles.priceLabelBuy, { fontSize: priceLabelSize }]} numberOfLines={1} allowFontScaling={false}>
                           Compra
                         </Text>
                         {!!offBuy && !!txtBuyOrig ? (
-                          <Text style={styles.priceOriginal} numberOfLines={1}>
+                          <Text style={[styles.priceOriginal, compactPrices && styles.priceOriginalCompact]} numberOfLines={1} allowFontScaling={false}>
                             {txtBuyOrig}
                           </Text>
                         ) : null}
-                        <Text style={[styles.priceFinal, styles.priceFinalBuy, { fontSize: priceMainSize }]} numberOfLines={1}>
+                        <Text style={[styles.priceFinal, styles.priceFinalBuy, { fontSize: priceMainSize }]} numberOfLines={1} allowFontScaling={false}>
                           {txtBuy}
                         </Text>
                         {!!offBuy && (
@@ -352,7 +407,8 @@ export default function GameCard(props: GameCardProps) {
                       </>
                     ) : null}
                   </View>
-                </View>
+                  </View>
+                ) : null
               ) : null}
             </View>
           </View>
@@ -401,18 +457,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
-    backgroundColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
   tagText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
-    color: '#1B1B1B',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
+  tagSmall: { paddingHorizontal: 8, paddingVertical: 4 },
+  tagDefault: { backgroundColor: colors.accent },
+  tagPremium: { backgroundColor: colors.accent },
+  tagFree: { backgroundColor: '#1f546b', borderWidth: 1, borderColor: '#2a6a83' },
+  tagTextDark: { color: '#1B1B1B' },
+  tagTextLight: { color: '#d6eef7' },
 
   ratingPill: {
     position: 'absolute',
@@ -440,6 +500,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     minWidth: 0,
     flexShrink: 1,
+    flex: 1,
   },
   description: {
     color: '#A4C9D3',
@@ -461,9 +522,10 @@ const styles = StyleSheet.create({
   priceGrid: {
     marginTop: 2,
     flexDirection: 'row',
-    columnGap: 16,
+    columnGap: 12,
   },
   priceCol: { flex: 1, minWidth: 0 },
+  priceColRight: { alignItems: 'flex-end' },
 
   priceLabel: {
     fontWeight: '900',
@@ -479,6 +541,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     fontSize: 11,
   },
+  priceOriginalCompact: { fontSize: 10 },
 
   priceFinal: {
     marginTop: 2,
@@ -490,6 +553,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   perUnit: { fontSize: 11, fontWeight: '800', color: '#9ED3E6', marginLeft: 4 },
+  perUnitCompact: { fontSize: 9 },
   priceFinalRent: { color: '#7EE8F7' },
   priceFinalBuy: {
     color: '#F2B705',
@@ -497,6 +561,10 @@ const styles = StyleSheet.create({
     textShadowRadius: 10,
     textShadowOffset: { width: 0, height: 0 },
   },
+
+  freeWrap: { marginVertical: 7, alignItems: 'center', justifyContent: 'center' },
+  freeLabel: { color: '#00E0D1', fontWeight: '900', letterSpacing: 0.4, fontSize: 16 },
+  freeLabelCompact: { fontSize: 14 },
 
   offChip: {
     marginTop: 4,

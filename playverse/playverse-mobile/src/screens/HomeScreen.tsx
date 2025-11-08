@@ -128,8 +128,11 @@ export default function HomeScreen() {
     return list.slice(0, 10);
   }, [allGames]);
 
-  const discount = (p?: number | null) =>
-    p && isFinite(Number(p)) ? Math.round(Number(p) * 0.9) : p ?? undefined;
+  const discount = (p?: number | null) => {
+    const n = Number(p);
+    if (!Number.isFinite(n)) return p ?? undefined;
+    return Number((n * 0.9).toFixed(2));
+  };
 
   const mapGame = (row: any, idx: number) => {
     // ðŸ”’ Normalizo plan a la uniÃ³n 'free' | 'premium' para evitar el error de TS
@@ -142,6 +145,7 @@ export default function HomeScreen() {
     return {
       id: String(row?._id ?? row?.id ?? row?.gameId ?? idx),
       title: row?.title ?? 'Juego',
+      description: row?.description ?? row?.summary,
       cover_url: row?.cover_url ?? row?.coverUrl,
       gameId: row?._id ? String(row._id) : undefined,
       purchasePrice: isPremium ? discount(row?.purchasePrice) : row?.purchasePrice,
@@ -162,66 +166,58 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.root}
-      contentContainerStyle={{ paddingBottom: spacing.xxl }}
+      contentContainerStyle={{ paddingBottom: spacing.xs,  }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
       {/* Header provisto por el navigator (HeaderBar) */}
 
       {/* Hero banner */}
-      <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.md }}>
+      <View>
         <HeroBanner />
       </View>
 
-      {/* Encabezado */}
-      <View style={[styles.header, { display: 'none' }]}>
-        <Text style={styles.title}>INICIO</Text>
-        <Text style={styles.subtitle}>
-          DescubrÃ­ quÃ© hay de nuevo en PlayVerse{isPremium ? ' - descuento 10% activo.' : '.'}
-        </Text>
-      </View>
-
       {/* Nuevos juegos */}
-
-      {/* Nuevos juegos */}
-      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'center', marginBottom: spacing.lg }}>
-        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center' }}>Nuevos juegos</Text>
-        <Text style={{ color: colors.accent, opacity: 0.9, textAlign: 'center' }}>Explora la coleccion y encontra tu proxima aventura</Text>
+      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, alignItems: 'flex-start', marginBottom: spacing.lg, marginTop: 0 }}>
+        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', letterSpacing: 0.3 }}>Nuevos juegos</Text>
+        <Text style={{ color: colors.textPrimary, opacity: 0.9 }}>Explora la colección. ¡Encuentra tu próxima aventura!</Text>
       </View>
       {/* Carrusel Nuevos juegos (prototipo) */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }} contentContainerStyle={{ paddingHorizontal: PADDING_H, columnGap: GAP }}>
         {newest.map((g: any, i: number) => {
           const game = mapGame(g, i);
+          const tag = (Array.isArray(g?.genres) && g.genres.length ? g.genres[0] : (g?.genre ?? undefined));
           return (
-            <View key={game.id} style={{ width: 180 }}>
-              <GameCard game={game as any} tag={isPremium ? '-10%' : undefined} onPress={() => (g?._id || g?.id || g?.gameId) && nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })} />
+            <View key={game.id} style={{ width: 210 }}>
+              <GameCard game={game as any} onPress={() => (g?._id || g?.id || g?.gameId) && nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })} />
             </View>
           );
         })}
       </ScrollView>
 
       {/* Populares */}
-      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'center', marginBottom: spacing.lg }}>
-        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center' }}>Populares</Text>
-        <Text style={{ color: colors.accent, opacity: 0.9, textAlign: 'center' }}>Los juegos mas jugados esta semana</Text>
+      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'flex-start', marginBottom: spacing.lg }}>
+        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', letterSpacing: 0.3 }}>Populares</Text>
+        <Text style={{ color: colors.textPrimary, opacity: 0.9 }}>Los juegos mejor puntuados</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }} contentContainerStyle={{ paddingHorizontal: PADDING_H, columnGap: GAP }}>
         {popular.map((g: any, i: number) => {
           const game = mapGame(g, i);
+          const tag = (Array.isArray(g?.genres) && g.genres.length ? g.genres[0] : (g?.genre ?? undefined));
           return (
-            <View key={game.id} style={{ width: 180 }}>
+            <View key={game.id} style={{ width: 210 }}>
               <GameCard game={game as any} onPress={() => (g?._id || g?.id || g?.gameId) && nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })} />
             </View>
           );
         })}
       </ScrollView>
       
-      <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
+      <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.md, paddingBottom: spacing.xl }}>
         <Button title="Ver todo" variant="ghost" onPress={goToCatalog} style={{ alignSelf: 'center' }} />
       </View>
       {/* Próximamente */}
-      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'center', marginBottom: spacing.lg }}>
-        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center' }}>Proximamente</Text>
-        <Text style={{ color: colors.accent, opacity: 0.9, textAlign: 'center' }}>Agenda los lanzamientos que estan por llegar</Text>
+      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'flex-start', marginBottom: spacing.lg }}>
+        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', letterSpacing: 0.3 }}>Próximamente</Text>
+        <Text style={{ color: colors.textPrimary, opacity: 0.9 }}>Agenda los lanzamientos que están por llegar</Text>
       </View>
       {/* Carrusel Proximamente (prototipo) */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }} contentContainerStyle={{ paddingHorizontal: PADDING_H, columnGap: GAP }}>
@@ -233,10 +229,11 @@ export default function HomeScreen() {
           const releaseDate = typeof normalizedMs === 'number' ? new Date(normalizedMs) : null;
           const releaseLabel =
             releaseDate && !Number.isNaN(releaseDate.getTime())
-              ? `Proximamente en ${releaseDate.getFullYear()}`
-              : 'Proximamente';
+              ? `Próximamente en ${releaseDate.getFullYear()}`
+              : 'Próximamente';
+          const tag = (Array.isArray(item?.genres) && item.genres.length ? item.genres[0] : (item?.genre ?? undefined));
           return (
-            <View key={game.id} style={{ width: 180 }}>
+            <View key={game.id} style={{ width: 210 }}>
               <GameCard game={game as any} disabled overlayLabel={releaseLabel} showFavorite={false} />
             </View>
           );

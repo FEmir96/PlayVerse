@@ -265,6 +265,7 @@ export default function MyGamesScreen() {
                     cover_url: item.cover_url ?? undefined,
                     purchasePrice: undefined,
                     weeklyPrice: undefined,
+                    plan: (item as any)?.raw?.plan ?? (item as any)?.raw?.game?.plan ?? undefined,
                   }}
                   showPrices={false}
                   showFavorite={false}  // 👈 NO mostrar corazón en Mis Juegos

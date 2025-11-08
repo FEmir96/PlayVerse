@@ -17,8 +17,8 @@ const ICONS: Record<TabKey, { focused: IconName; unfocused: IconName; label: str
   Profile:   { focused: 'person', unfocused: 'person-outline', label: 'Perfil' },
 };
 
-const BAR_H = 64;
-const BUBBLE_SIZE = 36;
+const BAR_H = 68;
+const BUBBLE_SIZE = 44;
 const BUBBLE_R = BUBBLE_SIZE / 2;
 
 function TabItem({
@@ -96,7 +96,7 @@ function TabItem({
           />
           <Ionicons
             name={focused ? icon.focused : icon.unfocused}
-            size={22}
+            size={focused ? 24 : 22}
             color={focused ? '#1B1B1B' : '#9AB7C3'}
           />
         </View>
@@ -150,10 +150,15 @@ export default memo(_BottomTabBar);
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#072633',
+    backgroundColor: '#0B2330',
     borderTopWidth: 1,
-    borderTopColor: '#103949',
+    borderTopColor: '#143547',
     minHeight: BAR_H,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
   },
   webShadow: {
     boxShadow: '0 -6px 22px rgba(0,0,0,0.18)',
@@ -194,9 +199,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: '#9AB7C3',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
     includeFontPadding: false,
   },
   labelFocused: { color: colors.accent },
 });
+

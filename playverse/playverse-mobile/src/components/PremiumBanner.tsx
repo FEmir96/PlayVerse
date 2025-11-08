@@ -12,7 +12,7 @@ type Props = {
 export default function PremiumBanner({ onPress }: Props) {
   return (
     <LinearGradient
-      colors={['#6D5EF6', '#7A4DF3', '#25C2D3']}
+      colors={['#fb923c4D', '#14b8a64D', '#9333ea4D']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       locations={[0, 0.5, 1]}
