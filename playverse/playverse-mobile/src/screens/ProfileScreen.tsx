@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing, typography, radius } from '../styles/theme';
 import Button from '../components/Button';
@@ -51,6 +52,7 @@ type FieldErrors = { name?: string; email?: string; password?: string };
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const { profile, loading, error, loginEmail, register, logout, setFromProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
@@ -62,7 +64,7 @@ export default function ProfileScreen() {
 
   // Header propio
   useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
+    navigation.setOptions({ headerShown: true });
   }, [navigation]);
 
   const handleContactPress = useCallback(() => {
@@ -196,15 +198,8 @@ export default function ProfileScreen() {
 
   // Header PV
   const HeaderBar = (
-    <View style={styles.headerBar}>
-      <Pressable
-        onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
-        style={styles.iconButton}
-        accessibilityRole="button"
-        accessibilityLabel="Volver al inicio"
-      >
-        <Ionicons name="arrow-back" size={18} color={colors.accent} />
-      </Pressable>
+    <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl }]}>
+      <View style={{ width: 36, height: 36 }} />
 
       <View style={styles.centerLogoWrap}>
         <Image
@@ -296,7 +291,7 @@ export default function ProfileScreen() {
     const leftOpacity = oauthLoading ? 0.6 : 1;
     return (
       <ScrollView style={styles.root} contentContainerStyle={styles.authContainer}>
-        {HeaderBar}
+        {/* Header provisto por el navigator (HeaderBar) */}
 
         <View style={styles.branding}>
           <Text style={styles.heroTitle}>Accede a tu cuenta o regístrate</Text>
@@ -420,7 +415,7 @@ export default function ProfileScreen() {
   // ----- CON SESIÓN -----
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.profileContainer}>
-      {HeaderBar}
+      {/* Header provisto por el navigator (HeaderBar) */}
 
       <View style={styles.card}>
         <View style={styles.profileHeader}>

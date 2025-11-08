@@ -1,6 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 import { colors, radius, spacing, typography, shadows } from '../styles/theme';
 
@@ -8,26 +9,31 @@ type Props = {
   onPress?: () => void;
 };
 
-// Gradient CTA banner used in Home to invite users to Premium.
 export default function PremiumBanner({ onPress }: Props) {
   return (
     <LinearGradient
       colors={['#6D5EF6', '#7A4DF3', '#25C2D3']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
+      locations={[0, 0.5, 1]}
       style={styles.wrap}
     >
       <Pressable
         style={({ pressed }) => [styles.content, pressed && styles.pressed]}
         onPress={onPress}
-        disabled={!onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Descubre Premium"
       >
         <View style={styles.textStack}>
-          <Text style={styles.title}>¿Listo para una experiencia premium?</Text>
-          <Text style={styles.body}>
-            Catálogo ilimitado, descuentos exclusivos, cero publicidad y mucho más.
+          <Text style={styles.title}>Listo para una experiencia premium?</Text>
+          <Text style={styles.subtitle}>
+            Catalogo ilimitado, descuentos exclusivos, cero publicidad y mucho mas
           </Text>
-          <Text style={styles.cta}>Hazte Premium</Text>
+
+          <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.discoverButton}>
+            <Text style={styles.discoverButtonText}>Descubre Premium</Text>
+            <Ionicons name="arrow-forward" size={14} color="#6B21A8" />
+          </TouchableOpacity>
         </View>
       </Pressable>
     </LinearGradient>
@@ -43,28 +49,50 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    alignItems: 'center',
   },
   pressed: {
-    opacity: 0.92,
+    opacity: 0.96,
   },
   textStack: {
-    gap: spacing.xs,
+    gap: spacing.sm,
+    alignItems: 'center',
   },
   title: {
-    color: colors.accent,
-    fontSize: typography.h2,
-    fontWeight: '800',
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  body: {
-    color: colors.accent,
+  subtitle: {
+    color: colors.textPrimary,
     opacity: 0.9,
     fontSize: typography.body,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
-  cta: {
-    marginTop: spacing.sm,
-    color: colors.accent,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  discoverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  discoverButtonText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    color: '#6B21A8',
   },
 });
+

@@ -3,6 +3,7 @@ import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing, typography } from '../styles/theme';
 import { PV_LOGO_H28 } from '../lib/asset';
@@ -23,6 +24,7 @@ export default function HeaderBar({
   onBellPress,
 }: Props) {
   const nav = useNavigation();
+  const insets = useSafeAreaInsets();
   const goBack = () => {
     if (onBackPress) return onBackPress();
     // @ts-ignore
@@ -39,7 +41,7 @@ export default function HeaderBar({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(0, insets.top + spacing.sm - 5) }] }>
       <View style={styles.row}>
         {showBack ? (
           <Pressable onPress={goBack} style={styles.iconBtn} accessibilityRole="button">

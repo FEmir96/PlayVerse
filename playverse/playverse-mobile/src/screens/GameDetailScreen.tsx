@@ -41,7 +41,7 @@ export default function GameDetailScreen() {
   const linkingUrl = Linking.useURL();
 
   useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
+    navigation.setOptions({ headerShown: true });
   }, [navigation]);
 
   const resolvedGameId = useMemo(() => {
@@ -488,39 +488,7 @@ export default function GameDetailScreen() {
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={{ paddingBottom: spacing.xxl }}
       >
-        {/* Header propio */}
-        <View style={styles.headerBar}>
-          <Pressable
-            onPress={() => navigation.navigate('Tabs' as any, { screen: 'Home' } as any)}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel="Volver al inicio"
-          >
-            <Ionicons name="arrow-back" size={18} color={colors.accent} />
-          </Pressable>
-
-          <View style={styles.centerLogoWrap}>
-            <Image
-              source={require('../../assets/branding/pv-logo-h28.png')}
-              style={styles.centerLogo}
-              resizeMode="contain"
-            />
-          </View>
-
-          <Pressable
-            onPress={() => navigation.navigate(userId ? ('Notifications' as any) : ('Profile' as any))}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel="Ir a notificaciones"
-          >
-            <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-            {userId && unreadCount > 0 ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        </View>
+        {/* Header provisto por el navigator (HeaderBar) */}
 
         {/* HERO */}
         <View style={styles.header}>

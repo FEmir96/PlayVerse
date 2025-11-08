@@ -83,6 +83,12 @@ export default function GameCard(props: GameCardProps) {
   const id = String(game.id ?? game.gameId ?? '');
   const title = game.title ?? 'Juego';
   const cover = game.cover_url ?? undefined;
+  const description: string | undefined = useMemo(() => {
+    const raw: any = (game as any).description ?? (game as any).summary;
+    if (typeof raw !== 'string') return undefined;
+    const s = raw.replace(/\s+/g, ' ').trim();
+    return s.length ? s : undefined;
+  }, [game]);
 
   const rating5 = useMemo(() => {
     const r = Number(game.igdbRating);
@@ -232,9 +238,15 @@ export default function GameCard(props: GameCardProps) {
                 <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" />
               ) : (
                 <View style={[styles.cover, styles.coverFallback]}>
-                  <Text style={styles.coverFallbackText}>Sin imagen</Text>
+                  <Ionicons name="game-controller" size={36} color="#9ED3E6" />
                 </View>
               )}
+              <LinearGradient
+                colors={["transparent", "rgba(0,0,0,0.5)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.mediaOverlay}
+              />
 
               {!!tag && (
                 <View style={styles.tag}>
@@ -244,7 +256,7 @@ export default function GameCard(props: GameCardProps) {
 
               {typeof rating5 === 'number' ? (
                 <View style={styles.ratingPill}>
-                  <Ionicons name="star" size={12} color="#1b1b1b" />
+                  <Ionicons name="star" size={12} color="#FFD86B" />
                   <Text style={styles.ratingText}>{rating5.toFixed(1)}</Text>
                 </View>
               ) : null}
@@ -286,6 +298,11 @@ export default function GameCard(props: GameCardProps) {
                   <Text style={styles.infoPillText}>{overlayLabel}</Text>
                 </View>
               )}
+              {description ? (
+                <Text style={styles.description} numberOfLines={2}>
+                  {description}
+                </Text>
+              ) : null}
 
               {showPrices && (txtWeek || txtBuy) ? (
                 <View style={styles.priceGrid}>
@@ -372,7 +389,13 @@ const styles = StyleSheet.create({
   },
   cover: { width: '100%', height: '100%' },
   coverFallback: { alignItems: 'center', justifyContent: 'center' },
-  coverFallbackText: { color: '#7fa9b8', fontSize: typography.body, opacity: 0.7 },
+  mediaOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
 
   tag: {
     position: 'absolute',
@@ -393,19 +416,19 @@ const styles = StyleSheet.create({
 
   ratingPill: {
     position: 'absolute',
-    top: 10,
     right: 10,
-    backgroundColor: '#F2B705',
+    bottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#d6a304',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  ratingText: { color: '#1b1b1b', fontWeight: '900', fontSize: 12 },
+  ratingText: { color: '#fff', fontWeight: '900', fontSize: 12 },
 
   body: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: 8 },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
@@ -418,13 +441,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexShrink: 1,
   },
+  description: {
+    color: '#A4C9D3',
+    fontSize: 11,
+    lineHeight: 14,
+  },
 
   infoPill: {
     alignSelf: 'flex-start',
     backgroundColor: '#0f2d3a',
     borderWidth: 1,
     borderColor: '#1f546b',
-    borderRadius: 999,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },

@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { spacing, colors, typography } from '../styles/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, GameCard } from '../components';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useFavorites } from '../context/FavoritesContext';
@@ -28,6 +29,7 @@ function mapPlan(p?: string): 'free' | 'premium' | undefined {
 export default function FavoritesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { favorites, favoriteIds } = useFavorites(); // sin loading/refresh para evitar spinner constante
   const { profile } = useAuth();
   const userId = profile?._id ? String(profile._id) : undefined;
@@ -41,7 +43,7 @@ export default function FavoritesScreen() {
     if (!userId) return 0;
     return (notifications ?? []).filter((n: any) => n?.isRead === false).length;
   }, [userId, notifications]);
-  useLayoutEffect(() => { nav.setOptions({ headerShown: false }); }, [nav]);
+  useLayoutEffect(() => { nav.setOptions({ headerShown: true }); }, [nav]);
 
   const columns = useMemo(() => {
     const maxByWidth = Math.max(1, Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP))));
@@ -56,10 +58,8 @@ export default function FavoritesScreen() {
   if (!profile) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-        <View style={styles.headerBar}>
-          <Pressable onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)} style={styles.iconButton}>
-            <Ionicons name="arrow-back" size={18} color={colors.accent} />
-          </Pressable>
+        <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
+          <View style={{ width: 36, height: 36 }} />
 
           <View style={styles.centerLogoWrap}>
             <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />
@@ -87,10 +87,8 @@ export default function FavoritesScreen() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-      <View style={styles.headerBar}>
-        <Pressable onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)} style={styles.iconButton}>
-          <Ionicons name="arrow-back" size={18} color={colors.accent} />
-        </Pressable>
+        <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
+          <View style={{ width: 36, height: 36 }} />
 
         <View style={styles.centerLogoWrap}>
           <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />

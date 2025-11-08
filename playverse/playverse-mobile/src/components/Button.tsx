@@ -19,7 +19,7 @@ type Props = {
 export default function Button({ title, onPress, variant = 'primary', style, textStyle, disabled }: Props) {
   const { buttonClass, textClass } = useMemo(() => {
     const base =
-      'self-start rounded-pill px-lg py-sm transition-transform duration-150 active:scale-95 active:opacity-90';
+      'rounded-pill px-lg py-sm transition-transform duration-150 active:scale-95 active:opacity-90';
     if (variant === 'primary') {
       return {
         buttonClass: `${base} bg-accent shadow-card`,
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
-    alignSelf: 'flex-start',
+    alignSelf: 'auto',
   },
   fallbackPrimary: {
     backgroundColor: colors.accent,

@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { spacing, colors, typography } from '../styles/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Chip, GameCard, SearchBar } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -29,11 +30,12 @@ const ALL_GAMES_NAMES = [
 export default function CatalogScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { favoriteIds } = useFavorites();
   const { profile } = useAuth();
   const userId = profile?._id ?? null;
 
-  useLayoutEffect(() => { nav.setOptions({ headerShown: false }); }, [nav]);
+  useLayoutEffect(() => { nav.setOptions({ headerShown: true }); }, [nav]);
 
   const maxByWidth = Math.max(1, Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP))));
   const columns = width >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
@@ -84,11 +86,9 @@ export default function CatalogScreen() {
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={!!loading} onRefresh={refetch} tintColor={colors.accent} />}
     >
-      <View style={styles.headerBar}>
-        <Pressable onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)} style={styles.iconButton}
-          accessibilityRole="button" accessibilityLabel="Volver al inicio">
-          <Ionicons name="arrow-back" size={18} color={colors.accent} />
-        </Pressable>
+      <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
+        {/* Placeholder para mantener logo centrado */}
+        <View style={{ width: 36, height: 36 }} />
 
         <View style={styles.centerLogoWrap}>
           <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />

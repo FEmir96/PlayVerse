@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { spacing, colors, typography, radius } from '../styles/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, GameCard } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -49,12 +50,13 @@ function fmtDate(ts?: number | string | null) {
 export default function MyGamesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const userId = profile?._id ?? null;
   const [tab, setTab] = useState<TabKey>('rent');
 
   useLayoutEffect(() => {
-    nav.setOptions({ headerShown: false });
+    nav.setOptions({ headerShown: true });
   }, [nav]);
 
   const maxByWidth = Math.max(
@@ -147,15 +149,8 @@ export default function MyGamesScreen() {
   if (!profile) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-        <View style={styles.headerBar}>
-          <Pressable
-            onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel="Volver al inicio"
-          >
-            <Ionicons name="arrow-back" size={18} color={colors.accent} />
-          </Pressable>
+        <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
+          <View style={{ width: 36, height: 36 }} />
 
           <View style={styles.centerLogoWrap}>
             <Image
@@ -196,15 +191,8 @@ export default function MyGamesScreen() {
         <RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />
       }
     >
-      <View style={styles.headerBar}>
-        <Pressable
-          onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Volver al inicio"
-        >
-          <Ionicons name="arrow-back" size={18} color={colors.accent} />
-        </Pressable>
+      <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
+        <View style={{ width: 36, height: 36 }} />
 
         <View style={styles.centerLogoWrap}>
           <Image

@@ -13,6 +13,7 @@ import FavoritesScreen from '../screens/FavoritesScreen';
 import AuthCallbackScreen from '../screens/AuthCallbackScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ContactScreen from '../screens/ContactScreen';
+import PremiumScreen from '../screens/PremiumScreen';
 
 import BottomTabBar from './BottomTabBar';
 import HeaderBar from '../components/HeaderBar';
@@ -24,6 +25,7 @@ export type RootStackParamList = {
   GameDetail: { gameId: string; initial?: any };
   AuthCallback: undefined;
   Notifications: undefined;
+  Premium: undefined;
 };
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -139,6 +141,7 @@ export default function AppNavigator(): React.ReactElement {
       <RootStack.Screen name="GameDetail" component={GameDetailScreen} />
       <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
+      <RootStack.Screen name="Premium" component={PremiumScreen} />
     </RootStack.Navigator>
   );
 }

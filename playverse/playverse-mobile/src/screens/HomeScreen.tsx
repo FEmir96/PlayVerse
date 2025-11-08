@@ -1,4 +1,4 @@
-// playverse/playverse-mobile/src/screens/HomeScreen.tsx
+﻿// playverse/playverse-mobile/src/screens/HomeScreen.tsx
 import React, { useMemo, useLayoutEffect, useState } from 'react';
 import {
   RefreshControl,
@@ -6,23 +6,20 @@ import {
   StyleSheet,
   Text,
   View,
-  Image,
   useWindowDimensions,
-  Pressable,
   LayoutChangeEvent,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { spacing, colors, typography } from '../styles/theme';
-import { Button, GameCard, PremiumBanner } from '../components';
+import { Button, GameCard, PremiumBanner, HeroBanner } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
 import type { Game, UpcomingGame } from '../types/game';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 
-const heroLogo = require('../../assets/images/playverse-logo.png');
+// const heroLogo = require('../../assets/images/playverse-logo.png');
 
 const MIN_CARD_WIDTH = 150;
 const GAP = spacing.md;
@@ -32,9 +29,8 @@ export default function HomeScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width: winW } = useWindowDimensions();
   const [gridW, setGridW] = useState(0);
-
   useLayoutEffect(() => {
-    nav.setOptions({ headerShown: false });
+    nav.setOptions({ headerShown: true });
   }, [nav]);
 
   const auth: any = (useAuth?.() as any) ?? {};
@@ -98,7 +94,7 @@ export default function HomeScreen() {
   const newest = useMemo(() => {
     const list = (allGames ?? []).slice();
     list.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-    return list.slice(0, 6);
+    return list.slice(0, 10);
   }, [allGames]);
 
   const upcoming = useMemo(() => {
@@ -113,14 +109,30 @@ export default function HomeScreen() {
         Number(a?.releaseAt ?? a?.release_at ?? a?.firstReleaseDate ?? 0) -
         Number(b?.releaseAt ?? b?.release_at ?? b?.firstReleaseDate ?? 0)
     );
-    return list.slice(0, 6);
+    return list.slice(0, 10);
   }, [upcomingRaw, allGames]);
+
+  const topRated = useMemo(() => {
+    const list = (allGames ?? []).slice();
+    list.sort((a: any, b: any) => (Number(b?.igdbRating ?? 0) - Number(a?.igdbRating ?? 0)) || ((b.createdAt ?? 0) - (a.createdAt ?? 0)));
+    return list.slice(0, 10);
+  }, [allGames]);
+
+  const popular = useMemo(() => {
+    const list = (allGames ?? []).slice();
+    list.sort((a: any, b: any) =>
+      (Number(b?.popularity ?? b?.rentalsCount ?? 0) - Number(a?.popularity ?? a?.rentalsCount ?? 0)) ||
+      (Number(b?.igdbRating ?? 0) - Number(a?.igdbRating ?? 0)) ||
+      ((b.createdAt ?? 0) - (a.createdAt ?? 0))
+    );
+    return list.slice(0, 10);
+  }, [allGames]);
 
   const discount = (p?: number | null) =>
     p && isFinite(Number(p)) ? Math.round(Number(p) * 0.9) : p ?? undefined;
 
   const mapGame = (row: any, idx: number) => {
-    // 🔒 Normalizo plan a la unión 'free' | 'premium' para evitar el error de TS
+    // ðŸ”’ Normalizo plan a la uniÃ³n 'free' | 'premium' para evitar el error de TS
     const planRaw = String(row?.plan ?? '').toLowerCase();
     const plan = (planRaw === 'premium' ? 'premium' : planRaw === 'free' ? 'free' : undefined) as
       | 'free'
@@ -145,7 +157,6 @@ export default function HomeScreen() {
     refetchUpcoming();
   };
 
-  const wmSize = Math.max(220, Math.min(360, Math.floor(winW * 0.55)));
   const goToCatalog = () => nav.navigate('Tabs' as any, { screen: 'Catalog' } as any);
 
   return (
@@ -154,146 +165,86 @@ export default function HomeScreen() {
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
-      {/* Header */}
-      <View style={styles.headerBar}>
-        <Pressable
-          onPress={() => nav.navigate('Tabs' as any, { screen: 'Home' } as any)}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Volver al inicio"
-        >
-          <Ionicons name="arrow-back" size={18} color={colors.accent} />
-        </Pressable>
+      {/* Header provisto por el navigator (HeaderBar) */}
 
-        <View style={styles.centerLogoWrap}>
-          <Image
-            source={require('../../assets/branding/pv-logo-h28.png')}
-            style={styles.centerLogo}
-            resizeMode="contain"
-          />
-        </View>
-
-        <Pressable
-          onPress={() => nav.navigate(userId ? ('Notifications' as any) : ('Profile' as any))}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Ir a notificaciones"
-        >
-          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-          {userId && unreadCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{Math.min(unreadCount, 9)}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
-
-      {/* Marca de agua */}
-      <View style={[styles.watermark, { width: wmSize, height: wmSize, left: (winW - wmSize) / 2 }]}>
-        <Image source={heroLogo} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+      {/* Hero banner */}
+      <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.md }}>
+        <HeroBanner />
       </View>
 
       {/* Encabezado */}
-      <View style={styles.header}>
+      <View style={[styles.header, { display: 'none' }]}>
         <Text style={styles.title}>INICIO</Text>
         <Text style={styles.subtitle}>
-          Descubrí qué hay de nuevo en PlayVerse{isPremium ? ' - descuento 10% activo.' : '.'}
+          DescubrÃ­ quÃ© hay de nuevo en PlayVerse{isPremium ? ' - descuento 10% activo.' : '.'}
         </Text>
       </View>
 
       {/* Nuevos juegos */}
-      <Section
-        title="Nuevos juegos"
-        subtitle="Explorá la colección y encontrá tu próxima aventura."
-      >
-        <View style={styles.grid} onLayout={onGridLayout}>
-          {newest.map((g: any, i: number) => {
-            const game = mapGame(g, i);
-            const mr = computedCols > 1 && i % computedCols !== computedCols - 1 ? GAP : 0;
-            return (
-              <View
-                key={game.id}
-                style={{
-                  width: cardWidth,
-                  marginRight: mr,
-                  marginBottom: GAP,
-                }}
-              >
-                <GameCard
-                  game={game as any}
-                  tag={isPremium ? '-10%' : i < 2 ? 'Acción' : undefined}
-                  onPress={() =>
-                    (g?._id || g?.id || g?.gameId) &&
-                    nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })
-                  }
-                />
-              </View>
-            );
-          })}
-        </View>
-        <View style={styles.center}>
-          <Button title="Ver todo" variant="ghost" onPress={goToCatalog} />
-        </View>
-      </Section>
 
-      {/* Próximamente */}
-      <Section title="Próximamente" subtitle="Agendá los lanzamientos que están por llegar.">
-        <View style={styles.grid}>
-          {(upcoming ?? []).map((item: any, i: number) => {
-            const game = mapGame(item, i);
-            const releaseAt =
-              item?.releaseAt ?? item?.release_at ?? item?.launchDate ?? item?.firstReleaseDate;
-            const releaseMs =
-              typeof releaseAt === 'number'
-                ? releaseAt
-                : typeof releaseAt === 'string'
-                ? Date.parse(releaseAt)
-                : Number(releaseAt);
-            const normalizedMs =
-              typeof releaseMs === 'number' && Number.isFinite(releaseMs)
-                ? (releaseMs < 1e12 ? releaseMs * 1000 : releaseMs)
-                : null;
-            const releaseDate =
-              typeof normalizedMs === 'number'
-                ? new Date(normalizedMs)
-                : null;
-            const releaseLabel =
-              releaseDate && !Number.isNaN(releaseDate.getTime())
-                ? `Próximamente en ${releaseDate.getFullYear()}`
-                : 'Próximamente';
-            const mr = computedCols > 1 && i % computedCols !== computedCols - 1 ? GAP : 0;
-            return (
-              <View
-                key={game.id}
-                style={{
-                  width: cardWidth,
-                  marginRight: mr,
-                  marginBottom: GAP,
-                }}
-              >
-                <GameCard
-                  game={game as any}
-                  disabled
-                  overlayLabel={releaseLabel}
-                  showFavorite={false}
-                />
-              </View>
-            );
-          })}
-        </View>
-      </Section>
-      {/* CTA catálogo */}
-      <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
-        <Button
-          title="Ver catálogo completo"
-          variant="ghost"
-          onPress={() => nav.navigate('Tabs' as any, { screen: 'Catalog' } as any)}
-        />
+      {/* Nuevos juegos */}
+      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'center', marginBottom: spacing.lg }}>
+        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center' }}>Nuevos juegos</Text>
+        <Text style={{ color: colors.accent, opacity: 0.9, textAlign: 'center' }}>Explora la coleccion y encontra tu proxima aventura</Text>
       </View>
+      {/* Carrusel Nuevos juegos (prototipo) */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }} contentContainerStyle={{ paddingHorizontal: PADDING_H, columnGap: GAP }}>
+        {newest.map((g: any, i: number) => {
+          const game = mapGame(g, i);
+          return (
+            <View key={game.id} style={{ width: 180 }}>
+              <GameCard game={game as any} tag={isPremium ? '-10%' : undefined} onPress={() => (g?._id || g?.id || g?.gameId) && nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })} />
+            </View>
+          );
+        })}
+      </ScrollView>
 
-      {/* PremiumBanner ABAJO del botón */}
+      {/* Populares */}
+      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'center', marginBottom: spacing.lg }}>
+        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center' }}>Populares</Text>
+        <Text style={{ color: colors.accent, opacity: 0.9, textAlign: 'center' }}>Los juegos mas jugados esta semana</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }} contentContainerStyle={{ paddingHorizontal: PADDING_H, columnGap: GAP }}>
+        {popular.map((g: any, i: number) => {
+          const game = mapGame(g, i);
+          return (
+            <View key={game.id} style={{ width: 180 }}>
+              <GameCard game={game as any} onPress={() => (g?._id || g?.id || g?.gameId) && nav.navigate('GameDetail', { gameId: String(g?._id ?? g?.id ?? g?.gameId), initial: g })} />
+            </View>
+          );
+        })}
+      </ScrollView>
+      
+      <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
+        <Button title="Ver todo" variant="ghost" onPress={goToCatalog} style={{ alignSelf: 'center' }} />
+      </View>
+      {/* Próximamente */}
+      <View style={{ gap: spacing.xs, paddingHorizontal: PADDING_H, paddingTop: spacing.xl, alignItems: 'center', marginBottom: spacing.lg }}>
+        <Text style={{ color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center' }}>Proximamente</Text>
+        <Text style={{ color: colors.accent, opacity: 0.9, textAlign: 'center' }}>Agenda los lanzamientos que estan por llegar</Text>
+      </View>
+      {/* Carrusel Proximamente (prototipo) */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }} contentContainerStyle={{ paddingHorizontal: PADDING_H, columnGap: GAP }}>
+        {(upcoming ?? []).map((item: any, i: number) => {
+          const game = mapGame(item, i);
+          const releaseAt = item?.releaseAt ?? item?.release_at ?? item?.launchDate ?? item?.firstReleaseDate;
+          const releaseMs = typeof releaseAt === 'number' ? releaseAt : typeof releaseAt === 'string' ? Date.parse(releaseAt) : Number(releaseAt);
+          const normalizedMs = typeof releaseMs === 'number' && Number.isFinite(releaseMs) ? (releaseMs < 1e12 ? releaseMs * 1000 : releaseMs) : null;
+          const releaseDate = typeof normalizedMs === 'number' ? new Date(normalizedMs) : null;
+          const releaseLabel =
+            releaseDate && !Number.isNaN(releaseDate.getTime())
+              ? `Proximamente en ${releaseDate.getFullYear()}`
+              : 'Proximamente';
+          return (
+            <View key={game.id} style={{ width: 180 }}>
+              <GameCard game={game as any} disabled overlayLabel={releaseLabel} showFavorite={false} />
+            </View>
+          );
+        })}
+      </ScrollView>
+      {/* PremiumBanner ABAJO del botÃ³n */}
       <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl }}>
-        <PremiumBanner />
+        <PremiumBanner onPress={() => nav.navigate('Premium' as any)} />
       </View>
     </ScrollView>
   );
@@ -331,35 +282,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.surfaceBorder,
   },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    backgroundColor: '#0F2D3A',
-  },
-  centerLogoWrap: { flex: 1, alignItems: 'center' },
-  centerLogo: { height: 28, width: 120 },
-
-  badge: {
-    position: 'absolute',
-    right: -4,
-    top: -4,
-    backgroundColor: '#ff6b6b',
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  iconButton: {},
 
   header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.xs },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900' },
   subtitle: { color: colors.accent, opacity: 0.9 },
 
   grid: {
+    // Ocultamos el grid tradicional para usar carruseles horizontales como en el prototipo
+    display: 'none',
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: PADDING_H,
@@ -381,3 +312,8 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
 });
+
+
+
+
+

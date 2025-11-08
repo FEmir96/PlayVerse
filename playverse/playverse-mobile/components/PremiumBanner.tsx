@@ -7,28 +7,92 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
 export default function PremiumBanner() {
-  const cs = useColorScheme(); const colors = Colors[cs ?? 'light']; const router = useRouter();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  const router = useRouter();
+
+  const handleDiscoverPremium = () => {
+    router.push('/premium');
+  };
 
   return (
-    <TouchableOpacity style={{ marginHorizontal:20, marginTop: 28, borderRadius:12, overflow:'hidden' }} onPress={() => router.push('/premium')} activeOpacity={0.9}>
-      <LinearGradient colors={colors.premiumGradient} style={{ padding: 20 }} start={{x:0,y:0}} end={{x:1,y:1}}>
-        <View style={{ alignItems:'center' }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.white, textAlign: 'center', marginBottom: 6 }}>
+    <TouchableOpacity style={styles.container} onPress={handleDiscoverPremium} activeOpacity={0.9}>
+      <LinearGradient
+        colors={colors.premiumGradient}
+        style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        locations={[0, 0.5, 1]}
+      >
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: colors.white }]}>
             ¿Listo para una experiencia premium?
           </Text>
-          <Text style={{ fontSize: 14, color: colors.white, textAlign: 'center', opacity: 0.9, marginBottom: 16 }}>
-            Catálogo ilimitado, descuentos exclusivos, cero publicidad y más.
+          <Text style={[styles.subtitle, { color: colors.white }]}>
+            Catálogo ilimitado, descuentos exclusivos, cero publicidad y mucho más
           </Text>
-          <View style={[styles.btn, { backgroundColor: colors.white }]}>
-            <Text style={{ color: '#6B21A8', fontWeight: 'bold' }}>Descubrir Premium</Text>
+          
+          <TouchableOpacity 
+            style={[styles.discoverButton, { backgroundColor: colors.white }]}
+            onPress={handleDiscoverPremium}
+          >
+            <Text style={[styles.discoverButtonText, { color: '#6B21A8' }]}>
+              Descubre Premium
+            </Text>
             <Ionicons name="arrow-forward" size={14} color="#6B21A8" />
-          </View>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
     </TouchableOpacity>
   );
 }
+
 const styles = StyleSheet.create({
-  btn:{ flexDirection:'row', alignItems:'center', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 25, gap: 6,
-    shadowColor:'#000', shadowOffset:{width:0,height:4}, shadowOpacity:0.3, shadowRadius:8, elevation:8, borderWidth:1, borderColor:'rgba(255,255,255,0.2)' }
+  container: {
+    marginHorizontal: 20,
+    marginTop: 36,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  gradient: {
+    padding: 20,
+  },
+  content: {
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 19,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    opacity: 0.9,
+  },
+  discoverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  discoverButtonText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
 });
