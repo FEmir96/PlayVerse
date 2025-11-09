@@ -1,7 +1,6 @@
-// playverse-web/app/checkout/compra/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery } from "convex/react";
@@ -264,15 +263,54 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
   const brandLabel = (b: string) =>
     b === "visa" ? "Visa" : b === "mastercard" ? "Mastercard" : b === "amex" ? "Amex" : "Tarjeta";
 
-  /** ¿Ya es dueño del juego? */
+  /** Helper: obtener timestamp de posible campo expiry en fila */
+  const parseExpiry = (row: any) => {
+    if (!row) return undefined;
+    const candidates = [
+      "expiresAt","expires_at","expires","endDate","end_date","expiry","expiryDate",
+      "rentalExpires","rental_expires","expiresOn","expires_on","endsAt"
+    ];
+    const tryParse = (v: any) => {
+      if (!v) return undefined;
+      if (typeof v === "number") {
+        return Number.isFinite(v) ? v : undefined;
+      }
+      if (typeof v === "string") {
+        const parsed = Date.parse(v);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      if (v instanceof Date) return v.getTime();
+      return undefined;
+    };
+    for (const k of candidates) {
+      const val = row?.[k] ?? (row?.game ?? {})[k] ?? row?.rental?.[k];
+      const t = tryParse(val);
+      if (t) return t;
+    }
+    return undefined;
+  };
+
+  /** ¿Ya es dueño del juego? (mejor: ignora rentals vencidos) */
   const alreadyOwned = useMemo(() => {
     if (!library || !game?._id) return false;
     const gid = String(game._id);
+    const now = Date.now();
     return library.some((row: any) => {
       const g = row?.game ?? row;
       const id = String(g?._id ?? row?.gameId ?? "");
-      const kind = String(row?.kind ?? row?.type ?? "purchase").toLowerCase();
-      return id === gid && (kind === "purchase" || kind === "buy" || row?.owned === true);
+      if (id !== gid) return false;
+      const kind = String(row?.kind ?? row?.type ?? "").toLowerCase();
+      // Compra permanente -> owned
+      if (kind === "purchase" || kind === "buy" || row?.owned === true) return true;
+      // Si es rental/alquiler -> solo owned si expiry > now
+      if (kind === "rental" || kind === "rent" || kind.includes("alquiler")) {
+        const expiry = parseExpiry(row);
+        if (expiry && expiry > now) return true;
+        return false;
+      }
+      // Fallbacks: si row tiene field owned true lo respetamos
+      if (row?.owned === true) return true;
+      return false;
     });
   }, [library, game?._id]);
 
@@ -378,19 +416,9 @@ export default function PurchaseCheckoutPage({ params }: { params: { id: string 
       const navigateToSuccess = () => {
         try {
           // Prefer router navigation in a transition
-          startTransition(() => {
-            try {
-              router.replace("/checkout/compra/success");
-            } catch {
-              // ignore
-            }
-            try {
-              router.refresh();
-            } catch {}
-          });
+          router.replace("/checkout/compra/success");
+          router.refresh();
         } catch {}
-
-        // Fallback: force full-page navigation after a short delay if client router doesn't navigate
         setTimeout(() => {
           if (typeof window !== "undefined" && window.location.pathname !== "/checkout/compra/success") {
             window.location.assign("/checkout/compra/success");
