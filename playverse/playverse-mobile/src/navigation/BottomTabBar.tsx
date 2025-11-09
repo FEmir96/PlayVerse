@@ -20,6 +20,8 @@ const ICONS: Record<TabKey, { focused: IconName; unfocused: IconName; label: str
 const BAR_H = 68;
 const BUBBLE_SIZE = 44;
 const BUBBLE_R = BUBBLE_SIZE / 2;
+const HOME_BUBBLE_SIZE = 60;
+const HOME_R = HOME_BUBBLE_SIZE / 2;
 
 function TabItem({
   routeKey,
@@ -68,7 +70,11 @@ function TabItem({
   const bubbleScale  = focusAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
   const bubbleOpacity = focusAnim; // fade junto al foco
 
-  const icon = ICONS[name];
+  const baseIcon = ICONS[name];
+  const isHome = name === 'Home';
+  const iconFocused = name === 'MyGames' ? ('game-controller' as IconName) : baseIcon.focused;
+  const iconUnfocused = name === 'MyGames' ? ('game-controller-outline' as IconName) : baseIcon.unfocused;
+  const labelText = name === 'Catalog' ? 'Catálogo' : baseIcon.label;
 
   return (
     <Pressable
@@ -82,26 +88,25 @@ function TabItem({
       hitSlop={8}
     >
       <Animated.View style={[styles.itemInner, { transform: [{ scale: scaleOnPress }] }]}>
-        <View style={styles.iconWrap}>
-          {/* Burbuja naranja SOLO interior (sin cuadrado alrededor) */}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.bubble,
-              {
-                opacity: bubbleOpacity,
-                transform: [{ scale: bubbleScale }],
-              },
-            ]}
-          />
+        <View style={[styles.iconWrap, isHome && styles.iconWrapHome]}>
+          {isHome && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.homeBubble,
+                focused ? styles.homeBubbleFocused : styles.homeBubbleInactive,
+                { transform: [{ scale: bubbleScale }] },
+              ]}
+            />
+          )}
           <Ionicons
-            name={focused ? icon.focused : icon.unfocused}
-            size={focused ? 24 : 22}
-            color={focused ? '#1B1B1B' : '#9AB7C3'}
+            name={focused ? iconFocused : iconUnfocused}
+            size={isHome ? 28 : focused ? 24 : 22}
+            color={isHome && focused ? '#FFFFFF' : focused ? colors.accent : '#9AB7C3'}
           />
         </View>
         <Text style={[styles.label, focused && styles.labelFocused]} numberOfLines={1}>
-          {label}
+          {labelText}
         </Text>
       </Animated.View>
     </Pressable>
@@ -168,7 +173,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: 8,
+    paddingTop: 12,
   },
   item: {
     flex: 1,
@@ -198,11 +203,24 @@ const styles = StyleSheet.create({
   label: {
     marginTop: 4,
     color: '#9AB7C3',
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '500',
     textAlign: 'center',
     includeFontPadding: false,
   },
   labelFocused: { color: colors.accent },
+  // estilos para el botón central (Home)
+  iconWrapHome: {
+    width: HOME_BUBBLE_SIZE,
+    height: HOME_BUBBLE_SIZE,
+    borderRadius: HOME_R,
+  },
+  homeBubble: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: HOME_R,
+  },
+  homeBubbleFocused: { backgroundColor: colors.accent },
+  homeBubbleInactive: { backgroundColor: '#0B2330' },
 });
 

@@ -73,6 +73,50 @@ function pctOff(original?: number | null, final?: number | null) {
   return Math.round((1 - final / original) * 100);
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function parseRatingToFive(raw: unknown): number | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw === 'number' && isFinite(raw)) {
+    const r = raw;
+    // Soporta 0–5, 0–10 y 0–100
+    const five = r > 10 ? r / 20 : r > 5 ? r / 2 : r;
+    return Math.round(clamp(five, 0, 5) * 10) / 10;
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    // Detecta porcentajes y fracciones
+    const perc = s.endsWith('%');
+    const m = s.match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (!m) return undefined;
+    const n = Number(m[1]);
+    if (!isFinite(n)) return undefined;
+    let five: number;
+    if (perc) {
+      // 0–100%
+      five = n / 20;
+    } else if (/\/(10)\b/.test(s)) {
+      // X/10
+      five = n / 2;
+    } else if (/\/(5)\b/.test(s)) {
+      // X/5
+      five = n;
+    } else if (n > 10) {
+      // Asumir 0–100 si es mayor a 10
+      five = n / 20;
+    } else if (n > 5) {
+      // Asumir 0–10 si es mayor a 5
+      five = n / 2;
+    } else {
+      five = n;
+    }
+    return Math.round(clamp(five, 0, 5) * 10) / 10;
+  }
+  return undefined;
+}
+
 const RADIUS = 16;
 const BORDER_W = 2;
 const GRADIENT = ['#F2B705', '#fbbf24', '#fb923c'] as const;
@@ -100,10 +144,19 @@ export default function GameCard(props: GameCardProps) {
   }, [game]);
 
   const rating5 = useMemo(() => {
-    const r = Number(game.igdbRating);
-    if (!isFinite(r)) return undefined;
-    return r > 10 ? Math.round((r / 20) * 10) / 10 : Math.round(r * 10) / 10;
-  }, [game.igdbRating]);
+    // Fallbacks: igdbRating | rating | score | stars
+    const candidates: any[] = [
+      (game as any).igdbRating,
+      (game as any).rating,
+      (game as any).score,
+      (game as any).stars,
+    ];
+    for (const c of candidates) {
+      const v = parseRatingToFive(c);
+      if (typeof v === 'number' && isFinite(v)) return v;
+    }
+    return undefined;
+  }, [game]);
 
   const fBuy = game.purchasePrice ?? undefined;
   const fWeek = game.weeklyPrice ?? undefined;
@@ -302,6 +355,25 @@ export default function GameCard(props: GameCardProps) {
                 </View>
               )}
 
+              {showFavorite ? (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    toggleFavorite();
+                  }}
+                  hitSlop={8}
+                  style={styles.favBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                >
+                  <Ionicons
+                    name={isFavorite ? 'heart' : 'heart-outline'}
+                    size={20}
+                    color={isFavorite ? colors.accent : '#ffffff'}
+                  />
+                </Pressable>
+              ) : null}
+
               {typeof rating5 === 'number' ? (
                 <View style={styles.ratingPill}>
                   <Ionicons name="star" size={12} color="#FFD86B" />
@@ -320,25 +392,6 @@ export default function GameCard(props: GameCardProps) {
                 >
                   {title}
                 </Text>
-
-                {showFavorite ? (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation?.();
-                      toggleFavorite();
-                    }}
-                    hitSlop={8}
-                    style={styles.heartBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-                  >
-                    <Ionicons
-                      name={isFavorite ? 'heart' : 'heart-outline'}
-                      size={20}
-                      color={isFavorite ? colors.accent : '#a9c4cf'}
-                    />
-                  </Pressable>
-                ) : null}
               </View>
 
               {!!overlayLabel && (
@@ -360,7 +413,7 @@ export default function GameCard(props: GameCardProps) {
                     </Text>
                   </View>
                 ) : (txtWeek || txtBuy) ? (
-                  <View style={[styles.priceGrid, compactPrices && { columnGap: 10 }]}>
+                  <View style={[styles.priceGrid, compactPrices && { columnGap: 0 }]}>
                     <View style={styles.priceCol}>
                       {txtWeek ? (
                         <>
@@ -425,7 +478,7 @@ const styles = StyleSheet.create({
     padding: BORDER_W,
   },
   card: {
-    backgroundColor: '#0F2D3A',
+    backgroundColor: '#0A202A',
     borderRadius: RADIUS - 1,
     overflow: 'hidden',
     borderWidth: 1,
@@ -490,7 +543,18 @@ const styles = StyleSheet.create({
   },
   ratingText: { color: '#fff', fontWeight: '900', fontSize: 12 },
 
-  body: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: 8 },
+  favBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 999,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+
+  body: { paddingHorizontal: spacing.sm, paddingVertical: spacing.md, gap: 8 },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   heartBtn: { marginLeft: 'auto', padding: 4 },
 
