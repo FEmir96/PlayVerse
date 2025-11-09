@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, StyleSheet } from 'react-native';
+import { View, TextInput, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../styles/theme';
 
@@ -7,9 +7,11 @@ type Props = {
   value: string;
   onChangeText: (t: string) => void;
   placeholder?: string;
+  onFilterPress?: () => void;
+  hasActiveFilter?: boolean;
 };
 
-export default function SearchBar({ value, onChangeText, placeholder }: Props) {
+export default function SearchBar({ value, onChangeText, placeholder, onFilterPress, hasActiveFilter }: Props) {
   return (
     <View style={styles.wrap}>
       <Ionicons name="search" size={18} color={colors.textSecondary} />
@@ -20,7 +22,14 @@ export default function SearchBar({ value, onChangeText, placeholder }: Props) {
         placeholderTextColor={colors.textSecondary}
         style={styles.input}
       />
-      <Ionicons name="filter" size={18} color={colors.textSecondary} />
+      <Pressable
+        onPress={onFilterPress}
+        accessibilityRole="button"
+        accessibilityLabel="Abrir filtros"
+        style={{ padding: 6, borderRadius: 16 }}
+      >
+        <Ionicons name="filter" size={18} color={hasActiveFilter ? colors.accent : colors.textSecondary} />
+      </Pressable>
     </View>
   );
 }

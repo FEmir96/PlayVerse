@@ -132,6 +132,11 @@ export default function GameCard(props: GameCardProps) {
   const id = String(game.id ?? game.gameId ?? '');
   const title = game.title ?? 'Juego';
   const cover = game.cover_url ?? undefined;
+  const coverSource: any = cover
+    ? { uri: cover }
+    : title === 'Pulse Riders'
+      ? require('../../assets/images/pulse-riders.png')
+      : null;
   const planRaw = useMemo(() => String((game as any).plan ?? '').toLowerCase(), [game]);
   const planLabel: 'Premium' | 'Free' | undefined =
     planRaw === 'premium' ? 'Premium' : planRaw === 'free' ? 'Free' : undefined;
@@ -317,8 +322,8 @@ export default function GameCard(props: GameCardProps) {
           <View style={styles.card}>
             {/* Media */}
             <View style={styles.mediaWrap}>
-              {cover ? (
-                <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" />
+              {coverSource ? (
+                <Image source={coverSource} style={styles.cover} resizeMode="cover" />
               ) : (
                 <View style={[styles.cover, styles.coverFallback]}>
                   <Ionicons name="game-controller" size={36} color="#9ED3E6" />

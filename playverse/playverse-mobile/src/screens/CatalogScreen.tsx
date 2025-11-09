@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   Pressable,
   Image,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -24,6 +25,7 @@ import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE = 10;
+const MAX_PAGES_TO_SHOW = 3; // Límite de números de página a mostrar
 const CATEGORIES = ['Todos', 'Acción', 'RPG', 'Carreras', 'Shooter', 'Sandbox', 'Estrategia', 'Deportes'];
 
 const MIN_CARD_WIDTH = 150;
@@ -70,6 +72,9 @@ export default function CatalogScreen() {
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Todos');
   const [page, setPage] = useState(1);
+  const [plan, setPlan] = useState<'all' | 'free' | 'premium'>('all');
+  const [showPlanFilter, setShowPlanFilter] = useState(false);
+  const [tempPlan, setTempPlan] = useState<'all' | 'free' | 'premium'>(plan);
 
   // Categorías con scroll + flechas
   const catScrollRef = useRef<ScrollView>(null);
@@ -91,15 +96,120 @@ export default function CatalogScreen() {
     if (cat !== 'Todos') {
       list = list.filter((g) => (g.genres || []).some((x) => x?.toLowerCase().includes(cat.toLowerCase())));
     }
+    if (plan !== 'all') {
+      const want = plan === 'premium' ? 'premium' : 'free';
+      list = list.filter((g: any) => String((g as any)?.plan ?? '').toLowerCase() === want);
+    }
     list.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     return list;
-  }, [allGames, search, cat]);
+  }, [allGames, search, cat, plan]);
 
   const totalPages = Math.max(1, Math.ceil((filtered?.length ?? 0) / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 1), totalPages);
   const start = (safePage - 1) * PAGE_SIZE;
   const end = start + PAGE_SIZE;
   const visible = filtered.slice(start, end);
+
+  // Lógica para calcular qué números de página mostrar
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= MAX_PAGES_TO_SHOW) {
+      return Array.from({ length: totalPages }, (_, n) => n + 1);
+    }
+
+    const half = Math.floor(MAX_PAGES_TO_SHOW / 2);
+    let startPage = Math.max(1, safePage - half + 1); // +1 para centrar mejor
+    if (safePage <= half) {
+      startPage = 1; // Si estamos al ppio, empezar en 1
+    }
+    let endPage = Math.min(totalPages, startPage + MAX_PAGES_TO_SHOW - 1);
+
+    // Si `endPage` está al final, ajustar `startPage` para mostrar `MAX_PAGES_TO_SHOW`
+    if (endPage === totalPages) {
+      startPage = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1);
+    } else if (startPage > 1) {
+      // Ajuste para que `safePage` tienda a estar más centrada
+      startPage = Math.max(1, safePage - Math.floor(half / 2) - 1);
+      endPage = Math.min(totalPages, startPage + MAX_PAGES_TO_SHOW - 1);
+      if(endPage === totalPages) {
+         startPage = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1);
+      }
+    }
+    // Caso especial si safePage es 2 y half es 2 (MAX=4)
+     if (safePage === 2 && MAX_PAGES_TO_SHOW === 3) {
+      startPage = 1;
+      endPage = 4;
+    }
+
+    // Re-calculo final para asegurar que `start` sea 1 si `end` es menor que MAX
+    if (endPage < totalPages && endPage < MAX_PAGES_TO_SHOW) {
+      startPage = 1;
+      endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW);
+    }
+     // Re-calculo si safePage es 1
+    if (safePage === 1) {
+        startPage = 1;
+        endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW);
+    }
+
+    const pages = [];
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    
+    // Si la lógica falló y no hay páginas, mostrar solo la actual
+    if(pages.length === 0 && totalPages > 0) {
+      pages.push(safePage);
+    }
+    
+    // Si totalPages es 5 y MAX es 4, y estamos en pag 3, podria mostrar 2,3,4,5
+    if (totalPages > MAX_PAGES_TO_SHOW && (safePage > 1 && safePage < totalPages)) {
+        startPage = Math.max(1, safePage - 1); // [2, 3, 4]
+        endPage = Math.min(totalPages, safePage + 1); // [2, 3, 4]
+
+        if (safePage === totalPages - 1) { // pag 4 de 5
+           startPage = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1); // 5 - 4 + 1 = 2
+           endPage = totalPages; // 5. -> [2, 3, 4, 5]
+        } else if (safePage === 2) { // pag 2 de 5
+           startPage = 1;
+           endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW); // 4 -> [1, 2, 3, 4]
+        } else if (safePage > 2 && safePage < totalPages - 1) { // pag 3 de 6
+           startPage = Math.max(1, safePage - 2); // 1
+           endPage = Math.min(totalPages, safePage + 1); // 4 -> [1, 2, 3, 4] ???
+           
+           // Lógica más simple
+           startPage = Math.max(1, safePage - 1); // Pag 3 -> 2
+           endPage = Math.min(totalPages, safePage + (MAX_PAGES_TO_SHOW - 2)); // 3 + 2 = 5 -> [2, 3, 4, 5]
+           if (endPage - startPage + 1 < MAX_PAGES_TO_SHOW) {
+             startPage = Math.max(1, endPage - MAX_PAGES_TO_SHOW + 1);
+           }
+        }
+    }
+
+    // Lógica definitiva (re-simplificada)
+    const finalPages = [];
+    let finalStart = 1;
+    let finalEnd = totalPages;
+
+    if (totalPages > MAX_PAGES_TO_SHOW) {
+      finalStart = Math.max(1, safePage - Math.floor((MAX_PAGES_TO_SHOW - 1) / 2));
+      finalEnd = Math.min(totalPages, finalStart + MAX_PAGES_TO_SHOW - 1);
+      
+      if (finalEnd === totalPages) {
+        finalStart = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1);
+      }
+      if (finalStart === 1) {
+         finalEnd = Math.min(totalPages, MAX_PAGES_TO_SHOW);
+      }
+    }
+
+    for (let i = finalStart; i <= finalEnd; i++) {
+      finalPages.push(i);
+    }
+
+    return finalPages;
+
+  }, [safePage, totalPages]);
+
 
   return (
     <ScrollView
@@ -141,7 +251,79 @@ export default function CatalogScreen() {
         </View>
 
         <View style={styles.filters}>
-          <SearchBar value={search} onChangeText={(text) => { setSearch(text); setPage(1); }} />
+          <SearchBar
+            value={search}
+            onChangeText={(text) => { setSearch(text); setPage(1); }}
+            onFilterPress={() => { setTempPlan(plan); setShowPlanFilter(true); }}
+            hasActiveFilter={plan !== 'all'}
+          />
+
+          {showPlanFilter ? (
+            <Modal
+              visible={showPlanFilter}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowPlanFilter(false)}
+            >
+              <View style={styles.filterBackdrop}>
+                <View style={styles.filterCard}>
+                  <Text style={styles.filterTitle}>Filtrar por plan</Text>
+
+                  <View style={styles.filterOptionsWrap}>
+                    <Pressable
+                      onPress={() => setTempPlan('all')}
+                      style={({ pressed }) => [styles.filterOption, pressed && styles.filterOptionPressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: tempPlan === 'all' }}
+                      hitSlop={8}
+                    >
+                      <View style={styles.filterOptionRow}>
+                        <View style={[styles.filterDot, tempPlan === 'all' && styles.filterDotActive]} />
+                        <Text style={[styles.filterOptionText, styles.filterOptionLabel, tempPlan === 'all' && styles.filterOptionTextActive]}>Todos</Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setTempPlan('free')}
+                      style={({ pressed }) => [styles.filterOption, pressed && styles.filterOptionPressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: tempPlan === 'free' }}
+                      hitSlop={8}
+                    >
+                      <View style={styles.filterOptionRow}>
+                        <View style={[styles.filterDot, tempPlan === 'free' && styles.filterDotActive]} />
+                        <Text style={[styles.filterOptionText, styles.filterOptionLabel, tempPlan === 'free' && styles.filterOptionTextActive]}>Free</Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setTempPlan('premium')}
+                      style={({ pressed }) => [styles.filterOption, pressed && styles.filterOptionPressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: tempPlan === 'premium' }}
+                      hitSlop={8}
+                    >
+                      <View style={styles.filterOptionRow}>
+                        <View style={[styles.filterDot, tempPlan === 'premium' && styles.filterDotActive]} />
+                        <Text style={[styles.filterOptionText, styles.filterOptionLabel, tempPlan === 'premium' && styles.filterOptionTextActive]}>Premium</Text>
+                      </View>
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.filterActionsRow}>
+                    <Pressable
+                      onPress={() => { setPlan(tempPlan); setPage(1); setShowPlanFilter(false); }}
+                      style={({ pressed }) => [styles.filterBtn, styles.filterBtnPrimary, pressed && { opacity: 0.9 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Aplicar filtros"
+                    >
+                      <Text style={[styles.filterBtnText, styles.filterBtnPrimaryText]}>Aplicar</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+          ) : null}
 
           <View style={styles.categoriesRow}>
             <View style={styles.catArrowBox}>
@@ -244,11 +426,6 @@ export default function CatalogScreen() {
                   showPrices
                   compactPrices
                 />
-                {isPremium ? (
-                  <View style={styles.premiumBadge}>
-                    <Ionicons name="star" size={12} color={'#0F172A'} />
-                  </View>
-                ) : null}
               </View>
             );
           })}
@@ -276,28 +453,37 @@ export default function CatalogScreen() {
             >
               <Ionicons name="chevron-back" size={22} color={colors.accent} />
             </Pressable>
-            {Array.from({ length: totalPages }, (_, n) => n + 1).map((pg) => (
+            
+            {pageNumbers.map((pg) => (
               <Pressable
                 key={pg}
                 onPress={() => setPage(pg)}
                 style={({ pressed }) => [
-                  styles.pageButton,
-                  pg === safePage && { backgroundColor: colors.accent, borderColor: colors.accent },
+                  { marginHorizontal: 18, marginVertical: 6 },
                   pressed && { opacity: 0.9 },
                 ]}
+                accessibilityState={{ selected: pg === safePage }}
                 accessibilityRole="button"
                 accessibilityLabel={`Ir a página ${pg}`}
               >
-                <Text
+                <View
                   style={[
-                    styles.pageButtonText,
-                    pg === safePage ? { color: '#0F2D3A' } : { color: '#9AB7C3' },
+                    styles.pageButton, 
+                    pg === safePage && { backgroundColor: '#FACC15', borderColor: '#FACC15' }
                   ]}
                 >
-                  {pg}
-                </Text>
+                  <Text
+                    style={[
+                      styles.pageButtonText,
+                      pg === safePage ? { color: '#0F2D3A' } : { color: '#9AB7C3' },
+                    ]}
+                  >
+                    {pg}
+                  </Text>
+                </View>
               </Pressable>
             ))}
+
             <Pressable
               onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
@@ -338,7 +524,7 @@ const styles = StyleSheet.create({
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900', textAlign: 'center' },
   subtitle: { color: '#D6EEF7', opacity: 0.9, textAlign: 'center' },
 
-  filters: { paddingHorizontal: PADDING_H, paddingTop: spacing.md },
+  filters: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl },
   categoriesRow: { marginTop: spacing.xl, flexDirection: 'row', alignItems: 'center', columnGap: spacing.md },
   categoriesContent: { alignItems: 'center', paddingRight: spacing.lg },
   catArrowBox: { width: 38, alignItems: 'center', justifyContent: 'center' },
@@ -353,10 +539,42 @@ const styles = StyleSheet.create({
   paginationInfo: { alignItems: 'center', marginBottom: spacing.md },
   paginationText: { color: '#9AB7C3', fontSize: 14, fontWeight: '500' },
   paginationButtons: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
-  paginationButton: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 10, backgroundColor: '#0B2330' },
-  pageButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 10, backgroundColor: 'transparent' },
-  pageButtonText: { fontSize: 18, fontWeight: '800' },
+  
+  // Margen de flechas aumentado a 18
+  paginationButton: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 18, backgroundColor: '#0B2330' },
+  
+  pageButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#9AB7C3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginHorizontal: 8,
+  },
+  
+  pageButtonText: { fontSize: 16, fontWeight: '800', includeFontPadding: false },
+  
+  // Filter modal
+  filterBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  filterCard: { width: '86%', backgroundColor: '#0B2430', borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 14, padding: spacing.lg },
+  filterTitle: { color: colors.textPrimary, fontWeight: '900', fontSize: 18, marginBottom: spacing.md, textAlign: 'center' },
+  filterOptionsWrap: { },
+  filterOption: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10 },
+  filterOptionRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
+  filterOptionPressed: { backgroundColor: 'rgba(20, 53, 71, 0.35)' },
+  filterDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.surfaceBorder, backgroundColor: 'transparent' },
+  filterDotActive: { borderColor: colors.accent, backgroundColor: colors.accent },
+  filterOptionText: { color: colors.textSecondary, fontWeight: '700' },
+  filterOptionLabel: { marginLeft: 12 },
+  filterOptionTextActive: { color: colors.textPrimary },
+  filterActionsRow: { marginTop: spacing.md, flexDirection: 'row', justifyContent: 'center' },
+  filterBtn: { minWidth: 110, alignItems: 'center', paddingVertical: 10, paddingHorizontal: spacing.lg, borderRadius: 22, borderWidth: 1 },
+  filterBtnGhost: { borderColor: colors.surfaceBorder, backgroundColor: 'transparent', marginRight: spacing.md },
+  filterBtnGhostText: { color: colors.textSecondary, fontWeight: '800' },
+  filterBtnPrimary: { borderColor: colors.accent, backgroundColor: colors.accent },
+  filterBtnPrimaryText: { color: colors.accent, fontWeight: '900', borderWidth: 2,   borderColor: '#F2B705', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  filterBtnText: { fontSize: 14 },
 });
-
-
-
