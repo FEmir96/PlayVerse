@@ -107,7 +107,7 @@ export default function ContactScreen(): React.ReactElement {
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>CONTACTO</Text>
         <Text style={styles.heroSubtitle}>
-          Tienes alguna pregunta o necesitas ayuda? Estamos aqui para ti, contactanos y te responderemos lo antes
+          ¿Tienes alguna pregunta o necesitas ayuda? Estamos aquí para ayudarte, contactanos y te responderemos lo antes
           posible.
         </Text>
       </View>
@@ -193,7 +193,7 @@ export default function ContactScreen(): React.ReactElement {
           title={submitting ? 'Enviando...' : 'Enviar mensaje'}
           onPress={handleSubmit}
           disabled={submitting}
-          style={{ alignSelf: 'stretch', marginTop: spacing.md }}
+          style={{ alignItems: 'center', alignSelf: 'stretch', marginTop: spacing.md }}
         />
       </View>
 
@@ -258,11 +258,14 @@ const styles = StyleSheet.create({
     fontSize: typography.h1,
     fontWeight: '900',
     letterSpacing: 1.2,
+    alignSelf: 'center'
   },
   heroSubtitle: {
     color: colors.textSecondary,
     fontSize: typography.body,
     lineHeight: 20,
+    alignSelf: 'center',
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#0B2430',
