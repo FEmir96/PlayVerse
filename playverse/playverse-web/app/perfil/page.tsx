@@ -66,9 +66,9 @@ const HAS_PM_QUERY = Boolean(
 );
 const getPaymentMethodsRef = HAS_PM_QUERY
   ? ((api as any)["queries/getPaymentMethods"]
-      .getPaymentMethods as FunctionReference<"query">)
+    .getPaymentMethods as FunctionReference<"query">)
   : ((api as any)["queries/getUserByEmail"]
-      .getUserByEmail as FunctionReference<"query">);
+    .getUserByEmail as FunctionReference<"query">);
 
 // ⬇️ NUEVO: cancelar premium
 const cancelPremiumRef =
@@ -77,8 +77,8 @@ const cancelPremiumRef =
 
 const setAutoRenewRef =
   (api as any)["mutations/setAutoRenew"]?.setAutoRenew as
-    | FunctionReference<"mutation">
-    | undefined;
+  | FunctionReference<"mutation">
+  | undefined;
 
 // ——— Tipos UI ———
 type PaymentMethodUI = {
@@ -536,8 +536,8 @@ export default function ProfilePage() {
     role === "admin"
       ? "bg-fuchsia-700/80 text-white ring-1 ring-fuchsia-400/40"
       : role === "premium"
-      ? "bg-orange-400 text-slate-900"
-      : "bg-slate-600 text-white";
+        ? "bg-orange-400 text-slate-900"
+        : "bg-slate-600 text-white";
   const roleIcon =
     role === "admin" ? <ShieldAlert className="w-3 h-3 mr-1" /> : <Crown className="w-3 h-3 mr-1" />;
   const roleLabel = role === "admin" ? "Admin" : role === "premium" ? "Premium" : "Free";
@@ -988,7 +988,7 @@ export default function ProfilePage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-orange-400 flex items-center gap-2">
                   <Gamepad2 className="w-5 h-5" />
-                  Juegos Comprados
+                  Comprados
                 </CardTitle>
                 {/* 👉 Enlaza a /mis-juegos?tab=purchases con estilo amable (sin hover blanco) */}
                 <Link href="/mis-juegos?tab=purchases" prefetch>
@@ -1001,7 +1001,7 @@ export default function ProfilePage() {
                     "
                   >
                     <Settings className="w-4 h-4 mr-2" />
-                    Administrar mis juegos
+                    Administrar juegos
                   </Button>
                 </Link>
               </CardHeader>
@@ -1073,7 +1073,7 @@ export default function ProfilePage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-orange-400 flex items-center gap-2">
                   <Star className="w-5 h-5" />
-                  Juegos Alquilados
+                  Alquilados
                 </CardTitle>
                 {/* 👉 Enlaza a /mis-juegos?tab=rentals con estilo amable (sin hover blanco) */}
                 <Link href="/mis-juegos?tab=rentals" prefetch>
@@ -1086,7 +1086,7 @@ export default function ProfilePage() {
                     "
                   >
                     <Settings className="w-4 h-4 mr-2" />
-                    Administrar mis juegos
+                    Administrar juegos
                   </Button>
                 </Link>
               </CardHeader>

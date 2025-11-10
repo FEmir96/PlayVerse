@@ -37,7 +37,7 @@ export default function HomePage() {
         </div>
 
         <div className="container mx-auto px-4 text-center relative z-10">
-          <h1 className="text-6xl md:text-8xl font-extrabold italic text-orange-400 mb-6 tracking-wider">PLAYVERSE</h1>
+          <h1 className="text-5xl md:text-8xl font-extrabold italic text-orange-400 mb-6 tracking-wider">PLAYVERSE</h1>
           <p className="text-slate-300 text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed">
             Bienvenido al universo de los videojuegos. Alquila o compra tus favoritos en un solo lugar.
           </p>

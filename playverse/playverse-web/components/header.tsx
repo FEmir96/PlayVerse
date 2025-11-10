@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Heart, User, LogOut, Shield, ShoppingCart } from "lucide-react";
+import { Heart, User, LogOut, Shield, ShoppingCart, Menu } from "lucide-react";
 import { FavoritesDropdown } from "./favorites-dropdown";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { CartDropdown } from "./cart-dropdown"; // ⬅️ NUEVO
@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { useFavoritesStore, setFavoritesScope } from "@/components/favoritesStore";
 
 import { useQuery } from "convex/react";
@@ -90,7 +91,7 @@ export function Header() {
     setLoggingOut(true);
     try {
       clearAuth();
-      try { localStorage.removeItem("pv_email"); } catch {}
+      try { localStorage.removeItem("pv_email"); } catch { }
       setFavoritesScope("__guest__");
 
       if (status === "authenticated") {
@@ -124,8 +125,8 @@ export function Header() {
       firedWelcome.current = true;
       const provLabel =
         provider === "xbox" ? "Xbox" :
-        provider === "google" ? "Google" :
-        provider === "credentials" ? "tu cuenta" : "tu cuenta";
+          provider === "google" ? "Google" :
+            provider === "credentials" ? "tu cuenta" : "tu cuenta";
       const nameForToast = profile?.name || session?.user?.name || localUser?.name || "gamer";
       (toast as any)({ title: `¡Bienvenido, ${nameForToast}!`, description: `Inicio de sesión con ${provLabel} exitoso.` });
 
@@ -171,7 +172,7 @@ export function Header() {
             <Image src="/images/playverse-logo.png" alt="PlayVerse" width={80} height={40} className="h-10 w-auto" priority />
           </Link>
 
-          <nav className="hidden md:flex items-center space-x-1">
+          <nav className="hidden lg:flex items-center space-x-1">
             <Link href="/" className={getLinkClasses("/")}>Inicio</Link>
             <Link href="/catalogo" className={getLinkClasses("/catalogo")}>Catálogo</Link>
             <Link href="/mis-juegos" className={getLinkClasses("/mis-juegos")}>Mis juegos</Link>
@@ -180,6 +181,7 @@ export function Header() {
           </nav>
 
           <div className="flex items-center space-x-3">
+
             {logged && (
               <>
                 {/* 🛒 Carrito con dropdown (NO Link directo) */}
@@ -251,12 +253,12 @@ export function Header() {
             {!logged ? (
               <>
                 <Link href="/auth/login">
-                  <Button variant="outline" className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent hidden md:inline-flex">
+                  <Button variant="outline" className="border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent hidden lg:inline-flex">
                     Iniciar sesión
                   </Button>
                 </Link>
                 <Link href="/auth/register">
-                  <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium hidden md:inline-flex">
+                  <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium hidden lg:inline-flex">
                     Registrarse
                   </Button>
                 </Link>
@@ -321,6 +323,64 @@ export function Header() {
                 </DropdownMenu>
               </div>
             )}
+            {/* Mobile hamburger ( < 1024px ) */}
+            <div className="lg:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-orange-400 rounded-xl transition-all duration-200 hover:text-amber-300 hover:bg-orange-400/10 hover:shadow-[0_0_18px_rgba(251,146,60,0.35)] hover:ring-1 hover:ring-orange-400/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                    aria-label="Abrir menú"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="bg-slate-900 border-slate-700 text-orange-400">
+                  <nav className="mt-10 flex flex-col space-y-2">
+                    <SheetClose asChild>
+                      <Link href="/" className="px-4 py-3 rounded-md hover:bg-orange-400/10 hover:text-amber-300 transition-colors font-bold">Inicio</Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link href="/catalogo" className="px-4 py-3 rounded-md hover:bg-orange-400/10 hover:text-amber-300 transition-colors font-bold">Catálogo</Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link href="/mis-juegos" className="px-4 py-3 rounded-md hover:bg-orange-400/10 hover:text-amber-300 transition-colors font-bold">Mis juegos</Link>
+                    </SheetClose>
+                    {shouldShowPremium && (
+                      <SheetClose asChild>
+                        <Link href="/premium" className="px-4 py-3 rounded-md hover:bg-orange-400/10 hover:text-amber-300 transition-colors font-bold">Premium</Link>
+                      </SheetClose>
+                    )}
+                    <SheetClose asChild>
+                      <Link href="/contacto" className="px-4 py-3 rounded-md hover:bg-orange-400/10 hover:text-amber-300 transition-colors font-bold">Contacto</Link>
+                    </SheetClose>
+                    {!logged && (
+                      <div className="mt-4 space-y-2 px-2">
+                        <SheetClose asChild>
+                          <Button
+                            asChild
+                            variant="outline"
+                            className="w-full border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+                          >
+                            <Link href="/auth/login">Iniciar sesión</Link>
+                          </Button>
+                        </SheetClose>
+
+                        <SheetClose asChild>
+                          <Button
+                            asChild
+                            className="w-full bg-orange-400 hover:bg-orange-500 text-slate-900 font-medium"
+                          >
+                            <Link href="/auth/register">Registrarse</Link>
+                          </Button>
+                        </SheetClose>
+                      </div>
+                    )}
+                  </nav>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         </div>
       </div>
