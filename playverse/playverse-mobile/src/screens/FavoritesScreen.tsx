@@ -61,27 +61,52 @@ export default function FavoritesScreen() {
 
   if (!profile) {
     return (
-      <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
+      >
         <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
           <View style={{ width: 36, height: 36 }} />
 
           <View style={styles.centerLogoWrap}>
-            <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />
+            <Image
+              source={require('../../assets/branding/pv-logo-h28.png')}
+              style={styles.centerLogo}
+              resizeMode="contain"
+            />
           </View>
 
-          <Pressable onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)} style={styles.iconButton}>
+          <Pressable
+            onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
+            style={styles.iconButton}
+          >
             <Ionicons name="person-circle-outline" size={18} color={colors.accent} />
           </Pressable>
         </View>
 
-        <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
-          <Text style={styles.title}>FAVORITOS</Text>
-          <Text style={styles.subtitle}>Iniciá sesión para ver tus favoritos.</Text>
-          <Button title="Iniciar sesión" onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)} />
-        </View>
+        <LinearGradient
+          colors={['#0D2834', '#0F2D3A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[styles.hero, { flex: 1 }]}
+        >
+          <View style={styles.heroInner}>
+            <Text style={styles.title}>FAVORITOS</Text>
+            <Text style={styles.subtitle}>Tus juegos marcados como favoritos.</Text>
+
+            <View style={styles.centerBlock}>
+              <Text style={styles.subtitle}>Iniciá sesión para ver tus favoritos.</Text>
+              <Button
+                title="Iniciar sesión"
+                onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
+              />
+            </View>
+          </View>
+        </LinearGradient>
       </ScrollView>
     );
   }
+
 
   // La lista ya viene deduplicada desde el Context. Aseguramos claves únicas.
   const rows = favorites.map((row, i) => {
@@ -269,6 +294,18 @@ const styles = StyleSheet.create({
   paginationButton: { width: 34, height: 34, borderRadius: 22, borderWidth: 1, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 8, backgroundColor: '#0B2330' },
   pageButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 8, backgroundColor: 'transparent' },
   pagePressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
-  pageButtonText: { fontSize: 16, fontWeight: '800' }
+  pageButtonText: { fontSize: 16, fontWeight: '800' },
+
+  heroInner: {
+    flex: 1,
+    paddingHorizontal: PADDING_H,
+    paddingTop: spacing.xl,
+  },
+  centerBlock: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
 });
 

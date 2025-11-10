@@ -135,15 +135,19 @@ export default function NotificationsScreen() {
 
   if (!profile) {
     return (
-      <View style={styles.emptyRoot}>
+      <View style={[styles.emptyRoot, { flex: 1 }]}>
         <Text style={styles.title}>Notificaciones</Text>
-        <Text style={styles.subtitle}>
-          Inicia sesión para ver tus alertas personalizadas.
-        </Text>
-        <Button title="Iniciar sesión" onPress={goProfile} style={styles.loginButton} />
+
+        <View>
+          <Text style={[styles.subtitle, styles.centerText]}>
+            Inicia sesión para ver tus notificaciones.
+          </Text>
+        </View>
       </View>
     );
   }
+
+
 
   return (
     <View style={styles.container}>
@@ -251,9 +255,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   title: {
+    color: colors.accent,
     fontSize: typography.h1,
     fontWeight: '800',
-    color: colors.textPrimary,
     textAlign: 'center',
   },
   subtitle: {
@@ -364,12 +368,22 @@ const styles = StyleSheet.create({
   },
   emptyRoot: {
     flex: 1,
-    backgroundColor: colors.background,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    gap: spacing.lg,
+    paddingTop: spacing.xl,
+    backgroundColor: colors.background,
   },
-  loginButton: {
-    alignSelf: 'flex-start',
+  centerBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  centerText: {
+    textAlign: 'center',
+  },
+  centerSelf: {
+    alignSelf: 'center',
   },
 });

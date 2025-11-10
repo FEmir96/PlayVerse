@@ -223,11 +223,15 @@ export default function MyGamesScreen() {
 
   if (!profile) {
     return (
-      <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+      <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}>
         <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
           <View style={{ width: 36, height: 36 }} />
           <View style={styles.centerLogoWrap}>
-            <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />
+            <Image
+              source={require('../../assets/branding/pv-logo-h28.png')}
+              style={styles.centerLogo}
+              resizeMode="contain"
+            />
           </View>
           <Pressable
             onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
@@ -239,14 +243,34 @@ export default function MyGamesScreen() {
           </Pressable>
         </View>
 
-        <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
-          <Text style={styles.title}>MIS JUEGOS</Text>
-          <Text style={styles.subtitle}>Inicia sesión para ver tus juegos comprados o alquilados.</Text>
-          <Button title="Iniciar sesión" variant="primary" onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)} />
-        </View>
+        <LinearGradient
+          colors={['#0D2834', '#0F2D3A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[styles.hero, { flex: 1 }]}
+        >
+          <View style={styles.heroInner}>
+            <Text style={styles.title}>MIS JUEGOS</Text>
+            <Text style={styles.subtitle}>Tu arsenal personal de aventuras.</Text>
+            <View style={styles.centerBlock}>
+              <Text style={styles.subtitle}>
+                Inicia sesión para ver tus juegos comprados o alquilados.
+              </Text>
+              <Button
+                title="Iniciar sesión"
+                variant="primary"
+                onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
+              />
+            </View>
+          </View>
+        </LinearGradient>
+
+
+
       </ScrollView>
     );
   }
+
 
   return (
     <ScrollView
@@ -624,4 +648,15 @@ const styles = StyleSheet.create({
   filterBtnPrimary: { borderColor: colors.accent, backgroundColor: colors.accent },
   filterBtnPrimaryText: { color: colors.accent, fontWeight: '900', borderWidth: 2, borderColor: '#F2B705', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   filterBtnText: { fontSize: 14 },
+  heroInner: {
+    flex: 1,
+    paddingHorizontal: PADDING_H,
+    paddingTop: spacing.xl,
+  },
+  centerBlock: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
 });
