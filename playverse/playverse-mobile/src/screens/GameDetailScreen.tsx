@@ -548,12 +548,6 @@ export default function GameDetailScreen() {
                       style={[styles.galleryItem, selected && styles.selectedGalleryItem]}
                     >
                       <Image source={{ uri: u }} style={[styles.galleryThumb, selected && styles.selectedGalleryImage]} />
-                      {/* Si hay trailer, ponemos ícono play en la última como en el prototipo */}
-                      {trailerInfo.kind !== 'none' && idx === gallery.length - 1 ? (
-                        <View style={styles.playOverlay}>
-                          <Ionicons name="play" size={20} color="#fff" />
-                        </View>
-                      ) : null}
                     </Pressable>
                   );
                 })
@@ -584,7 +578,7 @@ export default function GameDetailScreen() {
         <View style={[styles.card, styles.glowCard, styles.pricingCard]}>
           <Text style={styles.premiumText}>
             {hasDiscount
-              ? 'Tenés 10% de descuento por ser Premium.'
+              ? 'Tenés 10% de descuento por ser Premium'
               : '¡Disfrutá 10% de descuento si te suscribís a Premium!'}
           </Text>
 

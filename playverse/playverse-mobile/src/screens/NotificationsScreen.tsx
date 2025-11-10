@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -91,16 +91,32 @@ export default function NotificationsScreen() {
   }, [profile?._id]);
 
   const notifications = data ?? [];
+  // Optimistic local read-tracking to avoid UI lag/breakage
+  const [localReadIds, setLocalReadIds] = useState<Set<string>>(new Set());
+  const effective = useMemo(() => {
+    return notifications.map((n) => ({
+      ...n,
+      isRead: !!(n.isRead || localReadIds.has(String(n._id))),
+    }));
+  }, [notifications, localReadIds]);
   const unread = useMemo(
-    () => notifications.filter((item) => !item.isRead).length,
-    [notifications]
+    () => effective.filter((item) => item.isRead !== true).length,
+    [effective]
   );
   const goProfile = () => navigation.navigate('Tabs', { screen: 'Profile' } as any);
 
   const markAll = async () => {
     if (!profile?._id || unread === 0) return;
-    await (convexHttp as any).mutation('notifications:markAllAsRead', { userId: profile._id });
-    refetch();
+    // Optimistic: mark all current as read
+    const prev = new Set(localReadIds);
+    try {
+      setLocalReadIds(new Set(notifications.map((n) => String(n._id))));
+      await (convexHttp as any).mutation('notifications:markAllAsRead', { userId: profile._id });
+    } catch {
+      setLocalReadIds(prev);
+    } finally {
+      refetch();
+    }
   };
 
   const clearAll = async () => {
@@ -110,12 +126,23 @@ export default function NotificationsScreen() {
   };
 
   const markAsRead = async (item: NotificationDoc) => {
-    if (!profile?._id || item.isRead) return;
-    await (convexHttp as any).mutation('notifications:markAsRead', {
-      userId: profile._id,
-      notificationId: item._id,
-    });
-    refetch();
+    if (!profile?._id) return;
+    if (item.isRead || localReadIds.has(String(item._id))) return;
+    const prev = new Set(localReadIds);
+    try {
+      // Optimistic
+      const next = new Set(localReadIds);
+      next.add(String(item._id));
+      setLocalReadIds(next);
+      await (convexHttp as any).mutation('notifications:markAsRead', {
+        userId: profile._id,
+        notificationId: item._id,
+      });
+    } catch {
+      setLocalReadIds(prev);
+    } finally {
+      refetch();
+    }
   };
 
   const deleteNotification = async (item: NotificationDoc) => {
@@ -203,7 +230,7 @@ export default function NotificationsScreen() {
           </View>
         ) : null}
 
-        {notifications.map((item) => {
+        {effective.map((item) => {
           const badge = getBadge(item.type);
           return (
             <Swipeable
