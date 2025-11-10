@@ -14,7 +14,6 @@ const NotificationTypeV = v.union(
   v.literal("achievement"),
   v.literal("purchase"),
   v.literal("game-update"),
-  // ⬇️ añadimos tipos de plan para que notificaciones de suscripción funcionen
   v.literal("plan-expired"),
   v.literal("plan-renewed")
 );
@@ -34,15 +33,14 @@ export type NotificationType =
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 /**
- * Inserta una notificación evitando duplicados del mismo tipo
- * en una ventana temporal (por defecto 10 min).
- * Exportada para poder usarse desde otras mutaciones (import directo).
+ * Intenta enviar push vía actions/pushy.sendToProfile si hay scheduler disponible.
+ * No debe bloquear la creación de la notificación en DB: cualquier fallo queda en try/catch.
  */
 async function schedulePushNotification(
   scheduler: any,
   payload: {
     userId: Id<"profiles">;
-    notificationId: Id<"notifications">;
+    notificationId: Id<"notifications"> | undefined;
     title: string;
     message: string;
     type: NotificationType;
@@ -51,9 +49,8 @@ async function schedulePushNotification(
 ) {
   if (!scheduler) return;
   try {
-    await scheduler.runAfter(0, api.actions.push.send, {
-      userId: payload.userId,
-      notificationId: payload.notificationId,
+    await scheduler.runAfter(0, api.actions.pushy.sendToProfile, {
+      profileId: payload.userId,
       title: payload.title,
       message: payload.message,
       data:
@@ -62,10 +59,14 @@ async function schedulePushNotification(
           : { type: payload.type },
     });
   } catch (error) {
-    console.error("schedulePushNotification error", error);
+    // No rompemos el flujo si push falla
+    console.error("schedulePushNotification error (pushy)", error);
   }
 }
 
+/* ─────────────────────────────────────────────
+   notifyOnceServer: inserta notificación única (evita duplicados recientes)
+   ───────────────────────────────────────────── */
 export async function notifyOnceServer(
   ctx: { db: any; scheduler?: any },
   args: {
@@ -77,22 +78,21 @@ export async function notifyOnceServer(
     dedupeWindowMs?: number; // 10 minutos por defecto
   }
 ) {
+  const { db, scheduler } = ctx;
   const { userId, type, title, message, meta, dedupeWindowMs = 10 * 60 * 1000 } = args;
   const since = Date.now() - dedupeWindowMs;
 
   let recent: any | null = null;
   try {
-    recent = await ctx.db
+    recent = await db
       .query("notifications")
       .withIndex("by_user_createdAt", (q: any) => q.eq("userId", userId).gte("createdAt", since))
       .filter((q: any) => q.eq(q.field("type"), type))
       .first();
   } catch {
-    const scan = await ctx.db.query("notifications").collect();
+    const scan = await db.query("notifications").collect();
     recent = scan
-      .filter(
-        (n: any) => String(n.userId) === String(userId) && n.createdAt >= since && n.type === type
-      )
+      .filter((n: any) => String(n.userId) === String(userId) && n.createdAt >= since && n.type === type)
       .sort((a: any, b: any) => b.createdAt - a.createdAt)[0];
   }
 
@@ -100,7 +100,7 @@ export async function notifyOnceServer(
     return { ok: true as const, skipped: true as const, id: recent._id };
   }
 
-  const id = await ctx.db.insert("notifications", {
+  const id = await db.insert("notifications", {
     userId,
     type,
     title,
@@ -113,7 +113,8 @@ export async function notifyOnceServer(
     meta,
   });
 
-  await schedulePushNotification(ctx.scheduler, {
+  // Intento de push asíncrono; no parcheamos profiles (evitamos schema-breaches)
+  await schedulePushNotification(scheduler, {
     userId,
     notificationId: id,
     title,
@@ -125,10 +126,9 @@ export async function notifyOnceServer(
   return { ok: true as const, skipped: false as const, id };
 }
 
-/**
- * Usa el índice tipado `by_user_createdAt` (["userId","createdAt"]).
- * Si no existe ese índice, hace fallback a escaneo en memoria.
- */
+/* ─────────────────────────────────────────────
+   Helpers de lectura
+   ───────────────────────────────────────────── */
 async function getRowsForUser(db: any, userId: Id<"profiles">, limit: number) {
   try {
     return await db
@@ -145,7 +145,6 @@ async function getRowsForUser(db: any, userId: Id<"profiles">, limit: number) {
   }
 }
 
-/** Intenta conteo de no leídas por índice y cae a escaneo si no existe. */
 async function getUnreadForUser(db: any, userId: Id<"profiles">) {
   try {
     return await db
@@ -154,43 +153,15 @@ async function getUnreadForUser(db: any, userId: Id<"profiles">) {
       .collect();
   } catch {
     const all = await db.query("notifications").collect();
-    return all.filter(
-      (n: any) => String(n.userId) === String(userId) && n.isRead === false
-    );
+    return all.filter((n: any) => String(n.userId) === String(userId) && n.isRead === false);
   }
 }
 
 /* ─────────────────────────────────────────────
-   Queries
+   Mutations públicas (API)
    ───────────────────────────────────────────── */
 
-/** Trae notificaciones del usuario (desc por fecha) */
-export const getForUser = query({
-  args: {
-    userId: v.id("profiles"),
-    limit: v.optional(v.number()),
-  },
-  handler: async ({ db }, { userId, limit }) => {
-    const take = clamp(limit ?? 50, 1, 200);
-    const rows = await getRowsForUser(db, userId, take);
-    return rows;
-  },
-});
-
-/** Contador de no leídas */
-export const getUnreadCount = query({
-  args: { userId: v.id("profiles") },
-  handler: async ({ db }, { userId }) => {
-    const unread = await getUnreadForUser(db, userId);
-    return unread.length;
-  },
-});
-
-/* ─────────────────────────────────────────────
-   Mutations
-   ───────────────────────────────────────────── */
-
-/** Crear una notificación (uso interno desde tus mutaciones core) */
+/** Crear una notificación personal */
 export const add = mutation({
   args: {
     userId: v.id("profiles"),
@@ -208,30 +179,34 @@ export const add = mutation({
       type: a.type,
       title: a.title,
       message: a.message,
-      gameId: a.gameId,
-      transactionId: a.transactionId,
+      gameId: a.gameId ?? undefined,
+      transactionId: a.transactionId ?? undefined,
       isRead: false,
       readAt: undefined,
       createdAt: now,
       meta: a.meta,
     });
-    await schedulePushNotification(scheduler, {
-      userId: a.userId,
-      notificationId: id,
-      title: a.title,
-      message: a.message,
-      type: a.type,
-      meta: a.meta,
-    });
+
+    // intentamos push (no obligatorio)
+    try {
+      await schedulePushNotification(scheduler, {
+        userId: a.userId,
+        notificationId: id,
+        title: a.title,
+        message: a.message,
+        type: a.type,
+        meta: a.meta,
+      });
+    } catch (err) {
+      console.error("add notification schedulePush failed", err);
+    }
+
     return { ok: true as const, id };
   },
 });
 
-// Alias por compatibilidad
-export { add as create };
-
-/** Igual que add pero con deduplicación por ventana temporal. */
-export const addOnce = mutation({
+/** notifyOnce wrapper */
+export const notifyOnce = mutation({
   args: {
     userId: v.id("profiles"),
     type: NotificationTypeV,
@@ -240,35 +215,49 @@ export const addOnce = mutation({
     meta: v.optional(v.any()),
     dedupeWindowMs: v.optional(v.number()),
   },
-  handler: async (ctx, a) => {
-    const res = await notifyOnceServer(ctx, a);
+  handler: async ({ db, scheduler }, args) => {
+    const res = await notifyOnceServer({ db, scheduler }, args as any);
     return res;
   },
 });
 
-/** Marcar una notificación como leída (solo dueño) */
+/** Marcar como leída.
+ *  Si se pasa notificationId marca solo esa; si no, marca todas no leídas para el user.
+ *  (Arregla error de validación que pasaba notificationId en la llamada)
+ */
 export const markAsRead = mutation({
   args: {
     userId: v.id("profiles"),
-    notificationId: v.id("notifications"),
+    notificationId: v.optional(v.id("notifications")),
   },
   handler: async ({ db }, { userId, notificationId }) => {
-    const n = await db.get(notificationId);
-    if (!n) return { ok: false as const, reason: "not_found" as const };
-    if (String(n.userId) !== String(userId)) {
-      return { ok: false as const, reason: "forbidden" as const };
+    if (notificationId) {
+      const n = await db.get(notificationId);
+      if (!n) return { ok: false as const, reason: "not_found" as const };
+      if (String(n.userId) !== String(userId)) return { ok: false as const, reason: "forbidden" as const };
+      if (!n.isRead) {
+        await db.patch(notificationId, { isRead: true, readAt: Date.now() });
+        return { ok: true as const, updated: true };
+      }
+      return { ok: true as const, updated: false };
     }
-    if (!n.isRead) {
-      await db.patch(notificationId, { isRead: true, readAt: Date.now() });
-      return { ok: true as const, updated: true };
+
+    // Sin notificationId: marcar todas no leídas
+    const unread = await getUnreadForUser(db, userId);
+    let count = 0;
+    for (const n of unread) {
+      await db.patch(n._id, { isRead: true, readAt: Date.now() });
+      count++;
     }
-    return { ok: true as const, updated: false };
+    return { ok: true as const, updated: count };
   },
 });
 
-/** Marcar todas como leídas del usuario */
+/** Marcar todas como leídas (existía una llamada a esta mutación y faltaba) */
 export const markAllAsRead = mutation({
-  args: { userId: v.id("profiles") },
+  args: {
+    userId: v.id("profiles"),
+  },
   handler: async ({ db }, { userId }) => {
     const unread = await getUnreadForUser(db, userId);
     let count = 0;
@@ -276,7 +265,7 @@ export const markAllAsRead = mutation({
       await db.patch(n._id, { isRead: true, readAt: Date.now() });
       count++;
     }
-    return { ok: true as const, count };
+    return { ok: true as const, updated: count };
   },
 });
 
@@ -284,7 +273,6 @@ export const markAllAsRead = mutation({
 export const clearAllForUser = mutation({
   args: { userId: v.id("profiles") },
   handler: async ({ db }, { userId }) => {
-    // Intentamos con índice por fecha; si no existe, escaneo:
     let all: any[] = [];
     try {
       all = await db
@@ -317,40 +305,28 @@ export const deleteById = mutation({
   },
 });
 
-/** Broadcast simple a todos o por rol (opcional para comunicaciones globales) */
-export const broadcast = mutation({
+/* ─────────────────────────────────────────────
+   Queries
+   ───────────────────────────────────────────── */
+
+/** Trae notificaciones del usuario (desc por fecha) */
+export const getForUser = query({
   args: {
-    type: NotificationTypeV,
-    title: v.string(),
-    message: v.string(),
-    role: v.optional(v.union(v.literal("free"), v.literal("premium"), v.literal("admin"))),
-    gameId: v.optional(v.id("games")),
-    meta: v.optional(v.any()),
-    excludeUserId: v.optional(v.id("profiles")),
+    userId: v.id("profiles"),
+    limit: v.optional(v.number()),
   },
-  handler: async ({ db }, { type, title, message, role, gameId, meta, excludeUserId }) => {
-    const now = Date.now();
-    const profiles = await db.query("profiles").collect();
+  handler: async ({ db }, { userId, limit }) => {
+    const take = clamp(limit ?? 50, 1, 200);
+    const rows = await getRowsForUser(db, userId, take);
+    return rows;
+  },
+});
 
-    const targets = (role ? profiles.filter((p) => p.role === role) : profiles).filter((p) =>
-      excludeUserId ? String(p._id) !== String(excludeUserId) : true
-    );
-
-    for (const p of targets) {
-      await db.insert("notifications", {
-        userId: p._id as Id<"profiles">,
-        type,
-        title,
-        message,
-        gameId,
-        transactionId: undefined,
-        isRead: false,
-        readAt: undefined,
-        createdAt: now,
-        meta,
-      });
-    }
-
-    return { ok: true as const, count: targets.length };
+/** Contador de no leídas */
+export const getUnreadCount = query({
+  args: { userId: v.id("profiles") },
+  handler: async ({ db }, { userId }) => {
+    const unread = await getUnreadForUser(db, userId);
+    return unread.length;
   },
 });
