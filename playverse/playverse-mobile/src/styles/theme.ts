@@ -13,7 +13,7 @@ export const colors = {
   // Secondary/description text
   textSecondary: "#A4C9D3",
   // PlayVerse accent (golden yellow)
-  accent: "#F2B705",
+  accent: "#D19325",
   // Alternate accent (orange)
   accentAlt: "#F28C0F",
   // Info/cyan used in chips and buttons

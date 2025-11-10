@@ -62,7 +62,7 @@ export default function GameCard({
         ) : (
           <View style={styles.pricingRow}>
             <View><Text style={[styles.priceLabel, { color: colors.gray }]}>Alquiler</Text><Text style={[styles.price, { color: colors.white }]}>{rentalPrice}</Text></View>
-            <View style={{ alignItems: 'flex-end' }}><Text style={[styles.priceLabel, { color: colors.gray }]}>Compra</Text><Text style={[styles.price, { color: colors.white }]}>{purchasePrice}</Text></View>
+            <View style={{ alignItems: 'flex-end' }}><Text style={[styles.priceLabel, { color: colors.gray }]}>Compra</Text><Text style={[styles.price, { color: colors.gray }]}>{purchasePrice}</Text></View>
           </View>
         )}
       </View>

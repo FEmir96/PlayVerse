@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   bot1: { width: 20, height: 20, top: 170, left: 80 },
   bot2: { width: 28, height: 28, top: 130, left: 20 },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl, zIndex: 1 },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: spacing.md, textAlign: 'center', color: colors.accent },
+  title: { fontSize: 38, fontWeight: 'bold', fontStyle: 'italic', marginBottom: spacing.md, textAlign: 'center', color: colors.accent },
   subtitle: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: spacing.lg, opacity: 0.9, color: colors.textPrimary },
   exploreButton: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 25, backgroundColor: colors.accent, marginBottom: spacing.lg },
   buttonText: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },

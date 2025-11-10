@@ -9,13 +9,13 @@ import {
   useWindowDimensions,
   Pressable,
   Image,
-  TextInput,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { spacing, colors, typography, radius } from '../styles/theme';
+import { spacing, colors, typography } from '../styles/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, GameCard, Chip, SearchBar } from '../components';
 import { useConvexQuery } from '../lib/useConvexQuery';
@@ -55,11 +55,18 @@ export default function MyGamesScreen() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const userId = profile?._id ?? null;
+
   const [tab, setTab] = useState<TabKey>('rent');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortType, setSortType] = useState<'recent' | 'oldest' | 'expires_soon' | 'expires_late'>('expires_soon');
+  const [showSortModal, setShowSortModal] = useState(false);
+  const [tempSort, setTempSort] = useState<'recent' | 'oldest' | 'expires_soon' | 'expires_late'>('expires_soon');
+
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
+
+  // Categorías con scroll + flechas
   const catScrollRef = useRef<ScrollView>(null);
   const [catX, setCatX] = useState(0);
   const [catViewW, setCatViewW] = useState(0);
@@ -74,10 +81,7 @@ export default function MyGamesScreen() {
     nav.setOptions({ headerShown: true });
   }, [nav]);
 
-  const maxByWidth = Math.max(
-    1,
-    Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP)))
-  );
+  const maxByWidth = Math.max(1, Math.min(3, Math.floor((width - PADDING_H * 2 + GAP) / (MIN_CARD_WIDTH + GAP))));
   const columns = width >= 1024 ? Math.min(3, maxByWidth) : Math.min(2, maxByWidth);
 
   const cardWidth = useMemo(() => {
@@ -159,6 +163,13 @@ export default function MyGamesScreen() {
   }, [purchasesRaw]);
 
   const visible: LibraryItem[] = tab === 'rent' ? rentals : purchased;
+
+  // sort por defecto por tab
+  React.useEffect(() => {
+    if (tab === 'rent' && (sortType === 'recent' || sortType === 'oldest')) setSortType('expires_soon');
+    if (tab === 'buy' && (sortType === 'expires_soon' || sortType === 'expires_late')) setSortType('recent');
+  }, [tab]);
+
   const categories = useMemo(() => {
     const set = new Set<string>();
     set.add('Todos');
@@ -177,7 +188,7 @@ export default function MyGamesScreen() {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return visible.filter((it) => {
+    const base = visible.filter((it) => {
       const matchesSearch = q ? String(it.title ?? '').toLowerCase().includes(q) : true;
       let matchesCat = true;
       if (selectedCategory && selectedCategory !== 'Todos') {
@@ -188,7 +199,21 @@ export default function MyGamesScreen() {
       }
       return matchesSearch && matchesCat;
     });
-  }, [visible, searchQuery, selectedCategory]);
+
+    const out = [...base];
+    if (tab === 'rent') {
+      if (sortType === 'expires_late') {
+        out.sort((a, b) => Number(b.expiresAt ?? 0) - Number(a.expiresAt ?? 0));
+      } else {
+        out.sort((a, b) => Number(a.expiresAt ?? 0) - Number(b.expiresAt ?? 0));
+      }
+    } else {
+      const getCreated = (row: any) => Number(row?.raw?.createdAt ?? 0);
+      if (sortType === 'oldest') out.sort((a, b) => getCreated(a) - getCreated(b));
+      else out.sort((a, b) => getCreated(b) - getCreated(a));
+    }
+    return out;
+  }, [visible, searchQuery, selectedCategory, sortType, tab]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(currentPage, 1), totalPages);
@@ -196,26 +221,19 @@ export default function MyGamesScreen() {
   const end = start + PAGE_SIZE;
   const pageItems = filtered.slice(start, end);
 
-  // Si no hay sesiÃ³n: CTA login (sin CatÃ¡logo)
   if (!profile) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
         <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
           <View style={{ width: 36, height: 36 }} />
-
           <View style={styles.centerLogoWrap}>
-            <Image
-              source={require('../../assets/branding/pv-logo-h28.png')}
-              style={styles.centerLogo}
-              resizeMode="contain"
-            />
+            <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />
           </View>
-
           <Pressable
             onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
             style={styles.iconButton}
             accessibilityRole="button"
-            accessibilityLabel="Ir a iniciar sesiÃ³n"
+            accessibilityLabel="Ir a iniciar sesión"
           >
             <Ionicons name="notifications-outline" size={18} color={colors.accent} />
           </Pressable>
@@ -223,14 +241,9 @@ export default function MyGamesScreen() {
 
         <View style={{ alignItems: 'center', paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
           <Text style={styles.title}>MIS JUEGOS</Text>
-          <Text style={styles.subtitle}>IniciÃ¡ sesiÃ³n para ver tus juegos comprados o alquilados.</Text>
-          <Button
-            title="Iniciar sesiÃ³n"
-            variant="primary"
-            onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)}
-          />
+          <Text style={styles.subtitle}>Inicia sesión para ver tus juegos comprados o alquilados.</Text>
+          <Button title="Iniciar sesión" variant="primary" onPress={() => nav.navigate('Tabs' as any, { screen: 'Profile' } as any)} />
         </View>
-
       </ScrollView>
     );
   }
@@ -239,21 +252,13 @@ export default function MyGamesScreen() {
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      refreshControl={
-        <RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />
-      }
+      refreshControl={<RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
       <View style={[styles.headerBar, { paddingTop: insets.top + spacing.xl, display: 'none' }]}>
         <View style={{ width: 36, height: 36 }} />
-
         <View style={styles.centerLogoWrap}>
-          <Image
-            source={require('../../assets/branding/pv-logo-h28.png')}
-            style={styles.centerLogo}
-            resizeMode="contain"
-          />
+          <Image source={require('../../assets/branding/pv-logo-h28.png')} style={styles.centerLogo} resizeMode="contain" />
         </View>
-
         <View style={styles.iconWrap}>
           <Pressable
             onPress={() => nav.navigate('Notifications' as any)}
@@ -271,7 +276,7 @@ export default function MyGamesScreen() {
         </View>
       </View>
 
-      <LinearGradient colors={["#0D2834", "#0F2D3A"]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
+      <LinearGradient colors={['#0D2834', '#0F2D3A']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
         <View style={styles.header}>
           <Text style={styles.title}>MIS JUEGOS</Text>
           <Text style={styles.subtitle}>Tu arsenal personal de aventuras.</Text>
@@ -295,8 +300,92 @@ export default function MyGamesScreen() {
       </LinearGradient>
 
       <View style={styles.searchSection}>
-        <SearchBar value={searchQuery} onChangeText={(t) => { setSearchQuery(t); setCurrentPage(1); }} placeholder="Buscar por titulo..." />
+        <SearchBar
+          value={searchQuery}
+          onChangeText={(t) => { setSearchQuery(t); setCurrentPage(1); }}
+          placeholder="Buscar por titulo..."
+          onFilterPress={() => { setTempSort(sortType); setShowSortModal(true); }}
+          hasActiveFilter={tab === 'rent' ? (sortType !== 'expires_soon') : (sortType !== 'recent')}
+        />
       </View>
+
+      {/* Sort Modal */}
+      {showSortModal ? (
+        <Modal visible={showSortModal} transparent animationType="fade" onRequestClose={() => setShowSortModal(false)}>
+          <View style={styles.filterBackdrop}>
+            <View style={styles.filterCard}>
+              <Text style={styles.filterTitle}>Ordenar por</Text>
+
+              <View style={styles.filterOptionsWrap}>
+                {tab === 'buy' ? (
+                  <>
+                    <Pressable
+                      onPress={() => setTempSort('recent')}
+                      style={({ pressed }) => [styles.filterOption, pressed && styles.filterOptionPressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: tempSort === 'recent' }}
+                    >
+                      <View style={styles.filterOptionRow}>
+                        <View style={[styles.filterDot, tempSort === 'recent' && styles.filterDotActive]} />
+                        <Text style={[styles.filterOptionText, styles.filterOptionLabel, tempSort === 'recent' && styles.filterOptionTextActive]}>Compras recientes</Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setTempSort('oldest')}
+                      style={({ pressed }) => [styles.filterOption, pressed && styles.filterOptionPressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: tempSort === 'oldest' }}
+                    >
+                      <View style={styles.filterOptionRow}>
+                        <View style={[styles.filterDot, tempSort === 'oldest' && styles.filterDotActive]} />
+                        <Text style={[styles.filterOptionText, styles.filterOptionLabel, tempSort === 'oldest' && styles.filterOptionTextActive]}>Compras antiguas</Text>
+                      </View>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Pressable
+                      onPress={() => setTempSort('expires_soon')}
+                      style={({ pressed }) => [styles.filterOption, pressed && styles.filterOptionPressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: tempSort === 'expires_soon' }}
+                    >
+                      <View style={styles.filterOptionRow}>
+                        <View style={[styles.filterDot, tempSort === 'expires_soon' && styles.filterDotActive]} />
+                        <Text style={[styles.filterOptionText, styles.filterOptionLabel, tempSort === 'expires_soon' && styles.filterOptionTextActive]}>Más cercano a vencerse</Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setTempSort('expires_late')}
+                      style={({ pressed }) => [styles.filterOption, pressed && styles.filterOptionPressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: tempSort === 'expires_late' }}
+                    >
+                      <View style={styles.filterOptionRow}>
+                        <View style={[styles.filterDot, tempSort === 'expires_late' && styles.filterDotActive]} />
+                        <Text style={[styles.filterOptionText, styles.filterOptionLabel, tempSort === 'expires_late' && styles.filterOptionTextActive]}>Vencen más tarde</Text>
+                      </View>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+
+              <View style={styles.filterActionsRow}>
+                <Pressable
+                  onPress={() => { setSortType(tempSort); setCurrentPage(1); setShowSortModal(false); }}
+                  style={({ pressed }) => [styles.filterBtn, styles.filterBtnPrimary, pressed && { opacity: 0.9 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Aplicar orden"
+                >
+                  <Text style={[styles.filterBtnText, styles.filterBtnPrimaryText]}>Aplicar</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
 
       {pageItems.length === 0 ? (
         <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
@@ -307,11 +396,7 @@ export default function MyGamesScreen() {
           {pageItems.map((item, i) => {
             const mr = columns > 1 && i % columns !== columns - 1 ? GAP : 0;
 
-            const overlay = item.owned
-              ? 'Comprado'
-              : fmtDate(item.expiresAt)
-              ? `Alquiler - vence ${fmtDate(item.expiresAt)}`
-              : undefined;
+            const overlay = item.owned ? 'Comprado' : fmtDate(item.expiresAt) ? `Vence ${fmtDate(item.expiresAt)}` : undefined;
 
             return (
               <View key={item.id} style={{ width: cardWidth, marginRight: mr, marginBottom: GAP }}>
@@ -325,7 +410,7 @@ export default function MyGamesScreen() {
                     plan: (item as any)?.raw?.plan ?? (item as any)?.raw?.game?.plan ?? undefined,
                   }}
                   showPrices={false}
-                  showFavorite={false}  // ðŸ‘ˆ NO mostrar corazÃ³n en Mis Juegos
+                  showFavorite={false}
                   overlayLabel={overlay}
                   onPress={() => {
                     const gid = item?.gameId ?? item?.id;
@@ -341,20 +426,58 @@ export default function MyGamesScreen() {
       {totalPages > 1 ? (
         <View style={styles.paginationContainer}>
           <View style={styles.paginationInfo}>
-            <Text style={styles.paginationText}>Pagina {safePage} de {totalPages} - {filtered.length} juegos</Text>
+            <Text style={styles.paginationText}>Página {safePage} de {totalPages} - {filtered.length} juegos</Text>
           </View>
+
           <View style={styles.paginationButtons}>
-            <Pressable onPress={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage === 1} style={({ pressed }) => [styles.paginationButton, safePage === 1 && { opacity: 0.55 }, pressed && { opacity: 0.9 }]}>
-              <Ionicons name="chevron-back" size={20} color={colors.accent} />
-            </Pressable>
-            {Array.from({ length: totalPages }, (_, n) => n + 1).map((pg) => (
-              <Pressable key={pg} onPress={() => setCurrentPage(pg)} accessibilityState={{ selected: pg === safePage }} style={({ pressed }) => [styles.pageButton, pg === safePage && { backgroundColor: colors.accent, borderColor: colors.accent }, pressed && { opacity: 0.9 }]}>
-                <Text style={[styles.pageButtonText, pg === safePage ? { color: '#0F2D3A' } : { color: colors.textSecondary }]}>{pg}</Text>
+            <View style={[styles.paginationButton, safePage === 1 && { opacity: 0.55 }]}>
+              <Pressable
+                onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                style={({ pressed }) => [styles.pagePressable, pressed && { opacity: 0.9 }]}
+              >
+                <Ionicons name="chevron-back" size={20} color={colors.accent} />
               </Pressable>
-            ))}
-            <Pressable onPress={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} style={({ pressed }) => [styles.paginationButton, safePage === totalPages && { opacity: 0.55 }, pressed && { opacity: 0.9 }]}>
-              <Ionicons name="chevron-forward" size={20} color={colors.accent} />
-            </Pressable>
+            </View>
+
+            {Array.from({ length: totalPages }, (_, n) => n + 1).map((pg) => {
+              const selected = pg === safePage;
+              return (
+                <Pressable
+                  key={pg}
+                  onPress={() => setCurrentPage(pg)}
+                  accessibilityState={{ selected }}
+                  style={({ pressed }) => [pressed && { opacity: 0.9 }]}
+                  hitSlop={8}
+                >
+                  <View
+                    style={[
+                      styles.pageButton,
+                      selected && { backgroundColor: colors.accent, borderColor: colors.accent },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pageButtonText,
+                        selected ? { color: '#0F2D3A' } : { color: colors.textSecondary },
+                      ]}
+                    >
+                      {pg}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+
+            <View style={[styles.paginationButton, safePage === totalPages && { opacity: 0.55 }]}>
+              <Pressable
+                onPress={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                style={({ pressed }) => [styles.pagePressable, pressed && { opacity: 0.9 }]}
+              >
+                <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+              </Pressable>
+            </View>
           </View>
         </View>
       ) : null}
@@ -378,7 +501,6 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     width: 36,
-
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
@@ -401,12 +523,25 @@ const styles = StyleSheet.create({
   centerLogoWrap: { flex: 1, alignItems: 'center' },
   centerLogo: { height: 28, width: 120 },
 
+  hero: { paddingBottom: spacing.md },
   header: { paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm },
   title: { color: colors.accent, fontSize: typography.h1, fontWeight: '900', textAlign: 'center' },
   subtitle: { color: '#D6EEF7', opacity: 0.9, textAlign: 'center' },
 
-  segmentRow: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm },
-  segmentBtn: { flex: 1 },
+  actionButtons: { flexDirection: 'row', paddingTop: spacing.md, gap: spacing.md },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  actionButtonText: { fontSize: 14, fontWeight: '800', marginLeft: 8 },
+
+  searchSection: { paddingHorizontal: PADDING_H, paddingVertical: spacing.md },
 
   grid: {
     flexDirection: 'row',
@@ -416,34 +551,77 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
 
-  // Added for hero + search + categories + pagination
-  hero: { paddingBottom: spacing.md },
-  actionButtons: { flexDirection: 'row', paddingTop: spacing.md, gap: spacing.md },
-  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1 },
-  actionButtonText: { fontSize: 14, fontWeight: '800', marginLeft: 8 },
-
-  searchSection: { paddingHorizontal: PADDING_H, paddingVertical: spacing.md },
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 10, backgroundColor: '#0B2330', marginBottom: spacing.md },
-  searchInput: { flex: 1, marginLeft: spacing.sm, color: colors.textPrimary },
-
+  // categorías con flechas
   categoriesRow: { flexDirection: 'row', alignItems: 'center', columnGap: spacing.md },
   categoriesContent: { alignItems: 'center', paddingRight: spacing.lg },
   catArrowBox: { width: 38, alignItems: 'center', justifyContent: 'center' },
-  catArrowBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', borderWidth: 1, borderColor: '#143547' },
-  categoryButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginHorizontal: 4 },
-  categoryText: { fontSize: 14, fontWeight: '700' },
+  catArrowBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    borderWidth: 1,
+    borderColor: '#143547',
+  },
 
+  // paginación
   paginationContainer: { paddingHorizontal: PADDING_H, paddingVertical: spacing.xl },
   paginationInfo: { alignItems: 'center', marginBottom: spacing.md },
   paginationText: { color: '#9AB7C3', fontSize: 14, fontWeight: '500' },
-  paginationButtons: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
-  paginationButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 8, backgroundColor: '#0B2330' },
-  pageButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 8, backgroundColor: 'transparent' },
-  pageButtonText: { fontSize: 16, fontWeight: '800' },
+
+  paginationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+
+  paginationButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    backgroundColor: '#0B2330',
+  },
+
+  pageButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: colors.surfaceBorder, // gris visible
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    backgroundColor: 'transparent',
+  },
+
+  pagePressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+
+  pageButtonText: { fontSize: 16, fontWeight: '800', includeFontPadding: false },
+
+  // modal orden
+  filterBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  filterCard: { width: '86%', backgroundColor: '#0B2430', borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 14, padding: spacing.lg },
+  filterTitle: { color: colors.textPrimary, fontWeight: '900', fontSize: 18, marginBottom: spacing.md, textAlign: 'center' },
+  filterOptionsWrap: {},
+  filterOption: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10 },
+  filterOptionRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
+  filterOptionPressed: { backgroundColor: 'rgba(20, 53, 71, 0.35)' },
+  filterDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.surfaceBorder, backgroundColor: 'transparent' },
+  filterDotActive: { borderColor: colors.accent, backgroundColor: colors.accent },
+  filterOptionText: { color: colors.textSecondary, fontWeight: '700' },
+  filterOptionLabel: { marginLeft: 12 },
+  filterOptionTextActive: { color: colors.textPrimary },
+  filterActionsRow: { marginTop: spacing.md, flexDirection: 'row', justifyContent: 'center' },
+  filterBtn: { minWidth: 110, alignItems: 'center', paddingVertical: 10, paddingHorizontal: spacing.lg, borderRadius: 22, borderWidth: 1 },
+  filterBtnPrimary: { borderColor: colors.accent, backgroundColor: colors.accent },
+  filterBtnPrimaryText: { color: colors.accent, fontWeight: '900', borderWidth: 2, borderColor: '#F2B705', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  filterBtnText: { fontSize: 14 },
 });
-
-
-
-
-
-

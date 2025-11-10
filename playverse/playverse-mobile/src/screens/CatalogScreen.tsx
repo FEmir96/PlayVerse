@@ -130,12 +130,12 @@ export default function CatalogScreen() {
       // Ajuste para que `safePage` tienda a estar más centrada
       startPage = Math.max(1, safePage - Math.floor(half / 2) - 1);
       endPage = Math.min(totalPages, startPage + MAX_PAGES_TO_SHOW - 1);
-      if(endPage === totalPages) {
-         startPage = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1);
+      if (endPage === totalPages) {
+        startPage = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1);
       }
     }
     // Caso especial si safePage es 2 y half es 2 (MAX=4)
-     if (safePage === 2 && MAX_PAGES_TO_SHOW === 3) {
+    if (safePage === 2 && MAX_PAGES_TO_SHOW === 3) {
       startPage = 1;
       endPage = 4;
     }
@@ -145,44 +145,44 @@ export default function CatalogScreen() {
       startPage = 1;
       endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW);
     }
-     // Re-calculo si safePage es 1
+    // Re-calculo si safePage es 1
     if (safePage === 1) {
-        startPage = 1;
-        endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW);
+      startPage = 1;
+      endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW);
     }
 
     const pages = [];
     for (let i = startPage; i <= endPage; i++) {
       pages.push(i);
     }
-    
+
     // Si la lógica falló y no hay páginas, mostrar solo la actual
-    if(pages.length === 0 && totalPages > 0) {
+    if (pages.length === 0 && totalPages > 0) {
       pages.push(safePage);
     }
-    
+
     // Si totalPages es 5 y MAX es 4, y estamos en pag 3, podria mostrar 2,3,4,5
     if (totalPages > MAX_PAGES_TO_SHOW && (safePage > 1 && safePage < totalPages)) {
-        startPage = Math.max(1, safePage - 1); // [2, 3, 4]
-        endPage = Math.min(totalPages, safePage + 1); // [2, 3, 4]
+      startPage = Math.max(1, safePage - 1); // [2, 3, 4]
+      endPage = Math.min(totalPages, safePage + 1); // [2, 3, 4]
 
-        if (safePage === totalPages - 1) { // pag 4 de 5
-           startPage = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1); // 5 - 4 + 1 = 2
-           endPage = totalPages; // 5. -> [2, 3, 4, 5]
-        } else if (safePage === 2) { // pag 2 de 5
-           startPage = 1;
-           endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW); // 4 -> [1, 2, 3, 4]
-        } else if (safePage > 2 && safePage < totalPages - 1) { // pag 3 de 6
-           startPage = Math.max(1, safePage - 2); // 1
-           endPage = Math.min(totalPages, safePage + 1); // 4 -> [1, 2, 3, 4] ???
-           
-           // Lógica más simple
-           startPage = Math.max(1, safePage - 1); // Pag 3 -> 2
-           endPage = Math.min(totalPages, safePage + (MAX_PAGES_TO_SHOW - 2)); // 3 + 2 = 5 -> [2, 3, 4, 5]
-           if (endPage - startPage + 1 < MAX_PAGES_TO_SHOW) {
-             startPage = Math.max(1, endPage - MAX_PAGES_TO_SHOW + 1);
-           }
+      if (safePage === totalPages - 1) { // pag 4 de 5
+        startPage = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1); // 5 - 4 + 1 = 2
+        endPage = totalPages; // 5. -> [2, 3, 4, 5]
+      } else if (safePage === 2) { // pag 2 de 5
+        startPage = 1;
+        endPage = Math.min(totalPages, MAX_PAGES_TO_SHOW); // 4 -> [1, 2, 3, 4]
+      } else if (safePage > 2 && safePage < totalPages - 1) { // pag 3 de 6
+        startPage = Math.max(1, safePage - 2); // 1
+        endPage = Math.min(totalPages, safePage + 1); // 4 -> [1, 2, 3, 4] ???
+
+        // Lógica más simple
+        startPage = Math.max(1, safePage - 1); // Pag 3 -> 2
+        endPage = Math.min(totalPages, safePage + (MAX_PAGES_TO_SHOW - 2)); // 3 + 2 = 5 -> [2, 3, 4, 5]
+        if (endPage - startPage + 1 < MAX_PAGES_TO_SHOW) {
+          startPage = Math.max(1, endPage - MAX_PAGES_TO_SHOW + 1);
         }
+      }
     }
 
     // Lógica definitiva (re-simplificada)
@@ -193,12 +193,12 @@ export default function CatalogScreen() {
     if (totalPages > MAX_PAGES_TO_SHOW) {
       finalStart = Math.max(1, safePage - Math.floor((MAX_PAGES_TO_SHOW - 1) / 2));
       finalEnd = Math.min(totalPages, finalStart + MAX_PAGES_TO_SHOW - 1);
-      
+
       if (finalEnd === totalPages) {
         finalStart = Math.max(1, totalPages - MAX_PAGES_TO_SHOW + 1);
       }
       if (finalStart === 1) {
-         finalEnd = Math.min(totalPages, MAX_PAGES_TO_SHOW);
+        finalEnd = Math.min(totalPages, MAX_PAGES_TO_SHOW);
       }
     }
 
@@ -340,7 +340,17 @@ export default function CatalogScreen() {
                 >
                   <Ionicons name="chevron-back" size={22} color={'#94A3B8'} />
                 </Pressable>
-              ) : <View style={{ width: 38 }} />}
+              ) : (
+                <Pressable
+                  disabled
+                  style={[styles.catArrowBtn, { opacity: 0.35 }]}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: true }}
+                  accessibilityLabel="Desplazar categorA-as a la izquierda"
+                >
+                  <Ionicons name="chevron-back" size={22} color={'#94A3B8'} />
+                </Pressable>
+              )}
             </View>
 
             <ScrollView
@@ -381,7 +391,17 @@ export default function CatalogScreen() {
                 >
                   <Ionicons name="chevron-forward" size={22} color={'#94A3B8'} />
                 </Pressable>
-              ) : <View style={{ width: 38 }} />}
+              ) : (
+                <Pressable
+                  disabled
+                  style={[styles.catArrowBtn, { opacity: 0.35 }]}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: true }}
+                  accessibilityLabel="Desplazar categorA-as a la derecha"
+                >
+                  <Ionicons name="chevron-forward" size={22} color={'#94A3B8'} />
+                </Pressable>
+              )}
             </View>
           </View>
         </View>
@@ -435,68 +455,54 @@ export default function CatalogScreen() {
       {filtered.length > 0 && totalPages > 1 ? (
         <View style={styles.paginationContainer}>
           <View style={styles.paginationInfo}>
-            <Text style={styles.paginationText}>
-              Página {safePage} de {totalPages} • {filtered.length} juegos
-            </Text>
+            <Text style={styles.paginationText}>Página {safePage} de {totalPages} • {filtered.length} juegos</Text>
           </View>
+
           <View style={styles.paginationButtons}>
-            <Pressable
-              onPress={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={safePage === 1}
-              style={({ pressed }) => [
-                styles.paginationButton,
-                safePage === 1 && { opacity: 0.55 },
-                pressed && { opacity: 0.9 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Página anterior"
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.accent} />
-            </Pressable>
-            
-            {pageNumbers.map((pg) => (
+            <View style={[styles.paginationButton, safePage === 1 && { opacity: 0.55 }]}>
               <Pressable
-                key={pg}
-                onPress={() => setPage(pg)}
-                style={({ pressed }) => [
-                  { marginHorizontal: 18, marginVertical: 6 },
-                  pressed && { opacity: 0.9 },
-                ]}
-                accessibilityState={{ selected: pg === safePage }}
-                accessibilityRole="button"
-                accessibilityLabel={`Ir a página ${pg}`}
+                onPress={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                style={({ pressed }) => [styles.pagePressable, pressed && { opacity: 0.9 }]}
               >
-                <View
-                  style={[
-                    styles.pageButton, 
-                    pg === safePage && { backgroundColor: '#FACC15', borderColor: '#FACC15' }
-                  ]}
+                <Ionicons name="chevron-back" size={20} color={colors.accent} />
+              </Pressable>
+            </View>
+
+            {pageNumbers.map((pg) => (
+              <View
+                key={pg}
+                style={[
+                  styles.pageButton,
+                  pg === safePage && { backgroundColor: colors.accent, borderColor: colors.accent },
+                ]}
+              >
+                <Pressable
+                  onPress={() => setPage(pg)}
+                  accessibilityState={{ selected: pg === safePage }}
+                  style={({ pressed }) => [styles.pagePressable, pressed && { opacity: 0.9 }]}
                 >
                   <Text
                     style={[
                       styles.pageButtonText,
-                      pg === safePage ? { color: '#0F2D3A' } : { color: '#9AB7C3' },
+                      pg === safePage ? { color: '#0F2D3A' } : { color: colors.textSecondary },
                     ]}
                   >
                     {pg}
                   </Text>
-                </View>
-              </Pressable>
+                </Pressable>
+              </View>
             ))}
 
-            <Pressable
-              onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage === totalPages}
-              style={({ pressed }) => [
-                styles.paginationButton,
-                safePage === totalPages && { opacity: 0.55 },
-                pressed && { opacity: 0.9 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Página siguiente"
-            >
-              <Ionicons name="chevron-forward" size={22} color={colors.accent} />
-            </Pressable>
+            <View style={[styles.paginationButton, safePage === totalPages && { opacity: 0.55 }]}>
+              <Pressable
+                onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                style={({ pressed }) => [styles.pagePressable, pressed && { opacity: 0.9 }]}
+              >
+                <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+              </Pressable>
+            </View>
           </View>
         </View>
       ) : null}
@@ -537,31 +543,46 @@ const styles = StyleSheet.create({
 
   paginationContainer: { paddingHorizontal: PADDING_H, paddingVertical: spacing.xl },
   paginationInfo: { alignItems: 'center', marginBottom: spacing.md },
-  paginationText: { color: '#9AB7C3', fontSize: 14, fontWeight: '500' },
-  paginationButtons: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
-  
-  // Margen de flechas aumentado a 18
-  paginationButton: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginHorizontal: 18, backgroundColor: '#0B2330' },
-  
+  paginationText: { color: colors.textSecondary, fontSize: 14, fontWeight: '500' },
+
+  paginationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+
+  paginationButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    backgroundColor: '#0B2330',
+  },
+
   pageButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     borderWidth: 2,
-    borderColor: '#9AB7C3',
+    borderColor: colors.surfaceBorder, // gris visible
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
     marginHorizontal: 8,
+    backgroundColor: 'transparent',
   },
-  
-  pageButtonText: { fontSize: 16, fontWeight: '800', includeFontPadding: false },
-  
+  pagePressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  pageButtonText: { fontSize: 16, fontWeight: '800' },
+
   // Filter modal
   filterBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   filterCard: { width: '86%', backgroundColor: '#0B2430', borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 14, padding: spacing.lg },
   filterTitle: { color: colors.textPrimary, fontWeight: '900', fontSize: 18, marginBottom: spacing.md, textAlign: 'center' },
-  filterOptionsWrap: { },
+  filterOptionsWrap: {},
   filterOption: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10 },
   filterOptionRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
   filterOptionPressed: { backgroundColor: 'rgba(20, 53, 71, 0.35)' },
@@ -575,6 +596,6 @@ const styles = StyleSheet.create({
   filterBtnGhost: { borderColor: colors.surfaceBorder, backgroundColor: 'transparent', marginRight: spacing.md },
   filterBtnGhostText: { color: colors.textSecondary, fontWeight: '800' },
   filterBtnPrimary: { borderColor: colors.accent, backgroundColor: colors.accent },
-  filterBtnPrimaryText: { color: colors.accent, fontWeight: '900', borderWidth: 2,   borderColor: '#F2B705', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  filterBtnPrimaryText: { color: colors.accent, fontWeight: '900', borderWidth: 2, borderColor: '#F2B705', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   filterBtnText: { fontSize: 14 },
 });

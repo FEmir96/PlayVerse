@@ -140,7 +140,19 @@ export default function AppNavigator(): React.ReactElement {
       <RootStack.Screen name="Login" component={LoginScreen} />
       <RootStack.Screen name="GameDetail" component={GameDetailScreen} />
       <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} />
-      <RootStack.Screen name="Notifications" component={NotificationsScreen} />
+      <RootStack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{
+          header: ({ navigation, back }) => (
+            <HeaderBar
+              showBack={!!back}
+              onBackPress={() => navigation.goBack()}
+              showBell={false}
+            />
+          ),
+        }}
+      />
       <RootStack.Screen name="Premium" component={PremiumScreen} />
     </RootStack.Navigator>
   );

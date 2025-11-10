@@ -119,7 +119,8 @@ function parseRatingToFive(raw: unknown): number | undefined {
 
 const RADIUS = 16;
 const BORDER_W = 2;
-const GRADIENT = ['#F2B705', '#fbbf24', '#fb923c'] as const;
+// Neutral gray gradient for the card border (replacing yellow/orange)
+const GRADIENT = ['#334155', '#475569', '#64748B'] as const;
 
 export default function GameCard(props: GameCardProps) {
   const { game, style, onPress, tag, overlayLabel, disabled, onToggleFavorite } = props;
@@ -578,7 +579,7 @@ const styles = StyleSheet.create({
   },
 
   infoPill: {
-    alignSelf: 'flex-start',
+    alignItems: 'center',
     backgroundColor: '#0f2d3a',
     borderWidth: 1,
     borderColor: '#1f546b',
@@ -616,19 +617,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: '900',
     letterSpacing: 0.2,
-    textShadowColor: 'rgba(0,0,0,0.25)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
     maxWidth: '100%',
   },
   perUnit: { fontSize: 11, fontWeight: '800', color: '#9ED3E6', marginLeft: 4 },
   perUnitCompact: { fontSize: 9 },
   priceFinalRent: { color: '#7EE8F7' },
   priceFinalBuy: {
-    color: '#F2B705',
-    textShadowColor: 'rgba(242,183,5,0.35)',
-    textShadowRadius: 10,
-    textShadowOffset: { width: 0, height: 0 },
+    color: '#FFD86B',
   },
 
   freeWrap: { marginVertical: 7, alignItems: 'center', justifyContent: 'center' },

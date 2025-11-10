@@ -163,7 +163,7 @@ export default function PremiumScreen() {
                     ))}
                   </View>
 
-                  <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+                  <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
                     <Text style={styles.notice}>Para suscribirte visita nuestra web</Text>
                     <TouchableOpacity
                       style={styles.cta}
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
   webHint: { color: '#d2e8f1', opacity: 0.8, textAlign: 'center' },
 
   section: { paddingHorizontal: spacing.xl, paddingVertical: spacing.xl },
-  sectionTitle: { color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center', marginBottom: spacing.xs },
+  sectionTitle: { color: colors.accent, fontSize: typography.h2, fontWeight: '900', textAlign: 'center', marginBottom: spacing.md },
   sectionSubtitle: { color: colors.accent, opacity: 0.9, textAlign: 'center', marginBottom: spacing.lg },
 
   benefitCard: { alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#1F546B', backgroundColor: '#0F2D3A' },
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   originalPrice: { color: '#D6EEF7', textDecorationLine: 'line-through' },
   savings: { color: '#fff', fontWeight: 'bold' },
   planDesc: { color: '#D6EEF7', opacity: 0.9, textAlign: 'center', marginTop: spacing.xs },
-  featureText: { color: '#D6EEF7', flex: 1 },
+  featureText: { color: "#fff" , flex: 1 },
   notice: { color: '#9ED3E6', fontStyle: 'italic', marginBottom: spacing.sm },
   cta: { backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: 20, paddingVertical: 10 },
   ctaText: { fontWeight: '800', backgroundColor: 'transparent' },

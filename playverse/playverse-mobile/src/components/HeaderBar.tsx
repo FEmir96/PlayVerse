@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   // ↑ Dejá el tamaño que te guste. Antes era 32x18; lo agrando para que luzca centrado.
-  logo: { width: 160, height: 40, alignSelf: 'center' },
+  logo: { width: 120, height: 30, alignSelf: 'center' },
   title: {
     color: colors.accent,
     fontSize: typography.h2,
