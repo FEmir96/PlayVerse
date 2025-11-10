@@ -1,5 +1,5 @@
 // playverse/playverse-mobile/src/components/HeaderBar.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing, typography } from '../styles/theme';
 import { PV_LOGO_H28 } from '../lib/asset';
+import { useAuth } from '../context/AuthContext';
+import { useConvexQuery } from '../lib/useConvexQuery';
 
 type Props = {
   title?: string;
@@ -25,6 +27,17 @@ export default function HeaderBar({
 }: Props) {
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
+  const { profile } = useAuth() as any;
+  const userId = profile?._id ?? null;
+  const { data: notifications } = useConvexQuery<any[]>(
+    'notifications:getForUser',
+    userId ? { userId, limit: 100 } : ({} as any),
+    { enabled: !!userId, refreshMs: 20000 }
+  );
+  const unreadCount = useMemo(() => {
+    if (!userId) return 0;
+    return (notifications ?? []).filter((n: any) => n?.isRead === false).length;
+  }, [userId, notifications]);
   const goBack = () => {
     if (onBackPress) return onBackPress();
     // @ts-ignore
@@ -61,6 +74,11 @@ export default function HeaderBar({
         {showBell ? (
           <Pressable onPress={openNotifications} style={styles.iconBtn} accessibilityRole="button">
             <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+            {!!userId && unreadCount > 0 && (
+              <View style={styles.notifBadge} pointerEvents="none">
+                <Text style={styles.notifBadgeText}>{Math.min(unreadCount, 9)}</Text>
+              </View>
+            )}
           </Pressable>
         ) : (
           <View style={styles.iconBtnPlaceholder} />
@@ -116,8 +134,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0E3A49',
+    position: 'relative',
   },
   iconBtnPlaceholder: { width: 34, height: 34 },
+  notifBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   bottomLine: {
     height: 2,
     marginTop: spacing.sm,

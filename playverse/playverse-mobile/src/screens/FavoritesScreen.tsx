@@ -152,8 +152,14 @@ export default function FavoritesScreen() {
       </LinearGradient>
 
       {rows.length === 0 ? (
-        <View style={{ paddingHorizontal: PADDING_H, paddingTop: spacing.xl, gap: spacing.sm }}>
-          <Text style={styles.subtitle}>Todavía no marcaste favoritos.</Text>
+        <View style={{ paddingHorizontal: PADDING_H, paddingTop: 50, gap: spacing.sm }}>
+          <View style={styles.centerBlock}>
+            <Text style={styles.subtitle}>Todavía no marcaste favoritos.</Text>
+            <Button
+              title="Explorar juegos"
+              onPress={() => nav.navigate('Tabs' as any, { screen: 'Catalog' } as any)}
+            />
+          </View>
         </View>
       ) : (
         <View style={styles.grid}>
