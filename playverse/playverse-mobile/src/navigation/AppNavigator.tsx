@@ -138,7 +138,19 @@ export default function AppNavigator(): React.ReactElement {
       {/* Tabs NO muestra header: lo manejan sus Stacks internos */}
       <RootStack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
       <RootStack.Screen name="Login" component={LoginScreen} />
-      <RootStack.Screen name="GameDetail" component={GameDetailScreen} />
+      <RootStack.Screen
+        name="GameDetail"
+        component={GameDetailScreen}
+        options={{
+          header: ({ navigation, back }) => (
+            <HeaderBar
+              showBack={!!back}
+              onBackPress={() => navigation.goBack()}
+              showBell={false}
+            />
+          ),
+        }}
+      />
       <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} />
       <RootStack.Screen
         name="Notifications"
