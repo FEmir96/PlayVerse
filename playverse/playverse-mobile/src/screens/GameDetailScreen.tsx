@@ -1,5 +1,6 @@
 ﻿// playverse/playverse-mobile/src/screens/GameDetailScreen.tsx
 import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import {
   ActivityIndicator,
   Image,
@@ -11,6 +12,7 @@ import {
   useWindowDimensions,
   Modal,
   Animated,
+  Share,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -28,6 +30,7 @@ import { colors, spacing, typography, radius } from '../styles/theme';
 import { resolveAssetUrl } from '../lib/asset';
 import { convexHttp } from '../lib/convexClient';
 import { useAuth } from '../context/AuthContext';
+import { useFavorites } from '../context/FavoritesContext';
 
 /** ===== Tipos para trailer ===== */
 type TrailerInfo =
@@ -45,6 +48,7 @@ export default function GameDetailScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: true });
   }, [navigation]);
+
 
   /** ===== Resolver gameId (deep links compatibles) ===== */
   const resolvedGameId = useMemo(() => {
@@ -146,13 +150,11 @@ export default function GameDetailScreen() {
       .filter(Boolean) as string[];
   }, [game, initial, igdbShots]);
 
-  /** ===== Estado para héroe + miniaturas (como el prototipo) ===== */
+  /** ===== Estado para héroe + miniaturas ===== */
   const [selectedIdx, setSelectedIdx] = useState(0);
   useEffect(() => {
-    // Si cambia la galería, reseteamos el seleccionado
     setSelectedIdx(0);
   }, [gallery.length]);
-
   const heroUri = gallery[selectedIdx];
 
   /** ===== Lightbox ===== */
@@ -171,7 +173,7 @@ export default function GameDetailScreen() {
     });
   };
 
-  /** ===== Trailer helpers + render (se conservan) ===== */
+  /** ===== Trailer helpers + render ===== */
   function normalizeHttps(u: string) {
     if (/^https?:\/\//i.test(u)) return u;
     if (/^\/\//.test(u)) return `https:${u}`;
@@ -183,16 +185,13 @@ export default function GameDetailScreen() {
   function extractYouTubeId(u: string) {
     if (!u) return undefined;
     const raw = u.startsWith('youtube:') ? u.slice('youtube:'.length) : u;
-
     if (!/^https?:\/\//i.test(raw) && isLikelyYouTubeId(raw)) return raw;
-
     const url = new URL(normalizeHttps(raw));
     const host = url.hostname.toLowerCase();
     const path = url.pathname || '';
     const seg = path.split('/').filter(Boolean);
     const qsV = url.searchParams.get('v');
     if (qsV) return qsV.replace(/[^a-zA-Z0-9_-]/g, '');
-
     if (host.includes('youtu.be')) {
       return (seg[0] || '').replace(/[^a-zA-Z0-9_-]/g, '');
     }
@@ -239,17 +238,13 @@ export default function GameDetailScreen() {
   const rawTrailerInfo = useMemo<TrailerInfo>(() => {
     const raw = trailerRaw ? resolveAssetUrl(trailerRaw) || trailerRaw : undefined;
     if (!raw) return { kind: 'none' as const };
-
     try {
       const ytId = extractYouTubeId(raw);
       if (ytId) return { kind: 'youtube' as const, videoId: ytId };
-
       const vmId = extractVimeoId(raw);
       if (vmId) return { kind: 'web' as const, url: `https://player.vimeo.com/video/${vmId}` };
-
       const url = new URL(normalizeHttps(raw));
       if (/\.(mp4|webm|mov|m3u8)(\?|#|$)/i.test(url.pathname)) return { kind: 'video' as const, url: url.toString() };
-
       return { kind: 'web' as const, url: url.toString() };
     } catch {
       if (isLikelyYouTubeId(raw)) return { kind: 'youtube' as const, videoId: raw };
@@ -268,8 +263,12 @@ export default function GameDetailScreen() {
   const [trailerError, setTrailerError] = useState(false);
   const [youtubeReady, setYoutubeReady] = useState(false);
 
-  useEffect(() => { setTrailerError(false); }, [trailerInfo.kind, trailerKey]);
-  useEffect(() => { if (trailerInfo.kind === 'youtube') setYoutubeReady(false); }, [trailerInfo.kind, trailerInfo.kind === 'youtube' ? trailerInfo.videoId : undefined]);
+  useEffect(() => {
+    setTrailerError(false);
+  }, [trailerInfo.kind, trailerKey]);
+  useEffect(() => {
+    if (trailerInfo.kind === 'youtube') setYoutubeReady(false);
+  }, [trailerInfo.kind, trailerInfo.kind === 'youtube' ? trailerInfo.videoId : undefined]);
 
   const playerSource = useMemo(
     () => (trailerInfo.kind === 'video' && trailerInfo.url ? { uri: trailerInfo.url } : null),
@@ -279,7 +278,9 @@ export default function GameDetailScreen() {
     instance.pause();
     instance.staysActiveInBackground = false;
   });
-  useEffect(() => { if (trailerInfo.kind !== 'video') player.pause(); }, [player, trailerInfo]);
+  useEffect(() => {
+    if (trailerInfo.kind !== 'video') player.pause();
+  }, [player, trailerInfo]);
 
   const renderTrailerErrorCard = (openLink?: () => void) => (
     <View style={[styles.card, styles.glowCard, styles.trailerFallback]}>
@@ -407,7 +408,6 @@ export default function GameDetailScreen() {
     if (Array.isArray(game?.genres)) return game.genres.filter(Boolean);
     return [];
   }, [game?.genres]);
-
   const firstGenre = genresArray[0];
 
   const releaseDate = useMemo(() => {
@@ -449,7 +449,90 @@ export default function GameDetailScreen() {
   const showPurchaseDiscount = hasDiscount && typeof basePurchasePrice === 'number';
   const showWeeklyDiscount = hasDiscount && typeof baseWeeklyPrice === 'number';
 
-  /** ===== Notificaciones (badge) - se mantiene, aunque no se usa en UI local ===== */
+  /** ===== Favoritos (igual lógica que GameCard) ===== */
+  const favCtx = useFavorites();
+  const computedId = useMemo(
+    () =>
+      String(
+        gameId ??
+        (game as any)?._id ??
+        (initial as any)?._id ??
+        (game as any)?.id ??
+        (initial as any)?.id ??
+        ''
+      ),
+    [gameId, game, initial]
+  );
+
+  const ctxIsFav =
+    !!(favCtx?.favoriteIds && computedId ? favCtx.favoriteIds.has?.(computedId) : false);
+  const [localFav, setLocalFav] = useState<boolean>(ctxIsFav);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  useEffect(() => {
+    setLocalFav(ctxIsFav);
+  }, [ctxIsFav, computedId]);
+
+  const isFavorite = !!localFav;
+
+  const toggleFavorite = async () => {
+    if (!computedId) return;
+    if (!profile?._id) {
+      setShowLoginModal(true);
+      return;
+    }
+    try {
+      const next = !isFavorite;
+      setLocalFav(next); // optimista
+      if (favCtx?.toggleFavorite) {
+        await favCtx.toggleFavorite(computedId, {
+          _id: computedId,
+          title: (game as any)?.title ?? (initial as any)?.title ?? 'Juego',
+          cover_url:
+            (game as any)?.cover_url ??
+            (initial as any)?.cover_url ??
+            (gallery?.[0] ?? null),
+          plan: (game as any)?.plan ?? (initial as any)?.plan ?? null,
+          weeklyPrice: (game as any)?.weeklyPrice ?? (initial as any)?.weeklyPrice ?? null,
+          purchasePrice: (game as any)?.purchasePrice ?? (initial as any)?.purchasePrice ?? null,
+          igdbRating: (game as any)?.igdbRating ?? (initial as any)?.igdbRating ?? null,
+        });
+      }
+    } catch {
+      setLocalFav(prev => !prev);
+    }
+  };
+
+  const SHARE_URL_BASE = 'https://playverse.com/juego';
+
+  const onShare = async () => {
+    try {
+      const title = (game as any)?.title ?? 'Juego';
+      const gid = (computedId ?? '').trim();
+      const url = gid
+        ? `${SHARE_URL_BASE}/${encodeURIComponent(gid)}`
+        : 'https://playverse.com';
+
+      // iOS: solo 'url'. Android: solo 'message'.
+      const payload =
+        Platform.OS === 'ios'
+          ? { message: `${title} en PlayVerse\n`, url, title }
+          : { message: `${title} en PlayVerse\n${url}`, title };
+
+      const options =
+        Platform.OS === 'ios'
+          ? { subject: `${title} | PlayVerse` }
+          : { dialogTitle: `Compartir ${title}` };
+
+      await Share.share(payload as any, options as any);
+    } catch {
+      // noop
+    }
+  };
+
+
+
+  /** ===== Notificaciones (badge) - no visible aquí ===== */
   const userId = profile?._id ?? null;
   const { data: notifications } = useConvexQuery<any[]>(
     'notifications:getForUser',
@@ -467,8 +550,7 @@ export default function GameDetailScreen() {
   return (
     <>
       <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-
-        {/* ===== HERO (similar al prototipo) ===== */}
+        {/* ===== HERO ===== */}
         <View style={styles.heroContainer}>
           {heroUri ? (
             <Pressable style={{ flex: 1 }} onPress={() => openImage(heroUri)}>
@@ -519,7 +601,7 @@ export default function GameDetailScreen() {
           </View>
         </View>
 
-        {/* ===== Tira de miniaturas con flechas (prototipo) ===== */}
+        {/* ===== Tira de miniaturas con flechas ===== */}
         <View style={styles.gallerySection}>
           <View style={styles.galleryContainer}>
             <Pressable
@@ -571,10 +653,10 @@ export default function GameDetailScreen() {
           </View>
         </View>
 
-        {/* ===== Trailer (se conserva) ===== */}
+        {/* ===== Trailer ===== */}
         {renderTrailerSection()}
 
-        {/* ===== Bloque de precios (estilo prototipo + tu lógica de descuentos) ===== */}
+        {/* ===== Bloque de precios ===== */}
         <View style={[styles.card, styles.glowCard, styles.pricingCard]}>
           <Text style={styles.premiumText}>
             {hasDiscount
@@ -621,11 +703,11 @@ export default function GameDetailScreen() {
           ) : null}
 
           <View style={styles.actionRow}>
-            <Pressable style={[styles.favoriteButton]}>
-              <Ionicons name="heart-outline" size={20} color={colors.accent} />
+            <Pressable style={[styles.favoriteButton]} onPress={toggleFavorite} accessibilityRole="button" accessibilityLabel={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}>
+              <Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={20} color={isFavorite ? colors.accent : colors.accent} />
               <Text style={styles.favoriteButtonText}>Favoritos</Text>
             </Pressable>
-            <Pressable style={styles.shareButton}>
+            <Pressable style={styles.shareButton} onPress={onShare} accessibilityRole="button" accessibilityLabel="Compartir juego">
               <Ionicons name="share-outline" size={20} color={colors.accent} />
             </Pressable>
           </View>
@@ -709,6 +791,51 @@ export default function GameDetailScreen() {
             {selectedImage ? <Image source={{ uri: selectedImage }} style={styles.lightboxImage} /> : null}
           </Animated.View>
         </Pressable>
+      </Modal>
+
+      {/* ===== Modal de login (igual estilo que GameCard) ===== */}
+      <Modal
+        visible={showLoginModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLoginModal(false)}
+      >
+        <View style={mstyles.backdrop}>
+          <View style={mstyles.modalCard}>
+            <View style={mstyles.modalHeader}>
+              <View style={mstyles.iconBadge}>
+                <Ionicons name="lock-closed" size={22} color="#0F2D3A" />
+              </View>
+              <Text style={mstyles.modalTitle}>Inicia sesión</Text>
+            </View>
+            <Text style={mstyles.modalBody}>
+              Para guardar tus juegos favoritos primero tenés que ingresar con tu cuenta PlayVerse.
+            </Text>
+
+            <View style={mstyles.buttonsRow}>
+              <Pressable
+                onPress={() => setShowLoginModal(false)}
+                style={({ pressed }) => [mstyles.btnGhost, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar"
+              >
+                <Text style={mstyles.btnGhostText}>Cancelar</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setShowLoginModal(false);
+                  navigation.navigate('Tabs' as any, { screen: 'Profile' } as any);
+                }}
+                style={({ pressed }) => [mstyles.btnPrimary, pressed && { transform: [{ scale: 0.98 }] }]}
+                accessibilityRole="button"
+                accessibilityLabel="Aceptar e ir a iniciar sesión"
+              >
+                <Text style={mstyles.btnPrimaryText}>Aceptar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </>
   );
@@ -1125,5 +1252,94 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '700',
   },
+});
 
+/* ===== Modal styles (copiados de GameCard para consistencia) ===== */
+const mstyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 21, 30, 0.78)',
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#0F2D3A',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#173A4C',
+    paddingHorizontal: 24,
+    paddingVertical: 26,
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  iconBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.accent,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  modalTitle: {
+    color: colors.accent,
+    fontSize: typography.h3,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  modalBody: {
+    color: '#D6EEF7',
+    fontSize: typography.body,
+    lineHeight: 20,
+    marginBottom: 26,
+  },
+  buttonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  btnGhost: {
+    width: '48%',
+    borderWidth: 1,
+    borderColor: '#254F62',
+    borderRadius: 14,
+    backgroundColor: '#0B2330',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnGhostText: {
+    color: '#9ED3E6',
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  btnPrimary: {
+    width: '48%',
+    borderRadius: 14,
+    backgroundColor: colors.accent,
+    paddingVertical: 12,
+    alignItems: 'center',
+    shadowColor: colors.accent,
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+  },
+  btnPrimaryText: {
+    color: '#0F2D3A',
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
 });
