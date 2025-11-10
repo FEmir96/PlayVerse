@@ -81,7 +81,7 @@ export const authLogin = mutation({
 
     if (!user) return { ok: false, error: "Usuario no encontrado" } as const;
     if (!user.passwordHash) {
-      return { ok: false, error: "La cuenta no tiene contraseña configurada. Registrate nuevamente o reseteá tu contraseña." } as const;
+      return { ok: false, error: "La cuenta no tiene contraseña configurada. Prueba a ingresar con google/xbox o reseteá tu contraseña." } as const;
     }
     const match = bcrypt.compareSync(password, user.passwordHash);
     if (!match) return { ok: false, error: "Credenciales inválidas" } as const;

@@ -48,7 +48,7 @@ const ROLE_CHIP_STYLES: Record<
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-type FieldErrors = { name?: string; email?: string; password?: string };
+type FieldErrors = { name?: string; email?: string; password?: string; confirmPassword?: string };
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -58,6 +58,7 @@ export default function ProfileScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [avatarModal, setAvatarModal] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<'google' | 'microsoft' | null>(null);
@@ -70,6 +71,18 @@ export default function ProfileScreen() {
   const handleContactPress = useCallback(() => {
     navigation.navigate('Contact' as any);
   }, [navigation]);
+
+  const confirmLogout = useCallback(() => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro de que querés cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Cerrar sesión', style: 'destructive', onPress: () => logout() },
+      ],
+      { cancelable: true }
+    );
+  }, [logout]);
 
   const userId = profile?._id;
 
@@ -110,6 +123,7 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     setFieldErrors({});
+    setConfirmPassword('');
   }, [mode]);
 
   const validateForm = useCallback(() => {
@@ -117,6 +131,7 @@ export default function ProfileScreen() {
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
+    const trimmedConfirm = confirmPassword.trim();
 
     if (!trimmedEmail) {
       errors.email = 'Ingresa tu email.';
@@ -136,6 +151,11 @@ export default function ProfileScreen() {
       } else if (trimmedName.length < 2) {
         errors.name = 'El nombre es demasiado corto.';
       }
+      if (!trimmedConfirm) {
+        errors.confirmPassword = 'Repetí tu contraseña.';
+      } else if (trimmedConfirm !== trimmedPassword) {
+        errors.confirmPassword = 'Las contraseñas no coinciden.';
+      }
     }
 
     return {
@@ -146,7 +166,7 @@ export default function ProfileScreen() {
         password: trimmedPassword,
       },
     };
-  }, [email, password, name, mode]);
+  }, [email, password, confirmPassword, name, mode]);
 
   const handleSubmit = useCallback(async () => {
     if (loading) return;
@@ -164,7 +184,7 @@ export default function ProfileScreen() {
         ? await loginEmail(values.email, values.password)
         : await register(values.name, values.email, values.password);
 
-    if (ok) setPassword('');
+    if (ok) { setPassword(''); setConfirmPassword(''); }
   }, [loading, mode, validateForm, loginEmail, register]);
 
   // Mantener contexto alineado con fullProfile
@@ -351,26 +371,41 @@ export default function ProfileScreen() {
             ) : null}
           </View>
 
+          {mode === 'register' && (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Repetir contraseña</Text>
+              <TextInput
+                value={confirmPassword}
+                onChangeText={(v) => {
+                  setConfirmPassword(v);
+                  if (fieldErrors.confirmPassword) setFieldErrors((p) => ({ ...p, confirmPassword: undefined }));
+                }}
+                secureTextEntry
+                placeholder="Repetí tu contraseña"
+                placeholderTextColor="#9AB7C3"
+                style={styles.input}
+              />
+              {fieldErrors.confirmPassword ? (
+                <Text style={styles.fieldError}>{fieldErrors.confirmPassword}</Text>
+              ) : null}
+            </View>
+          )}
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {/* Acciones: izquierda/derecha */}
-          <View style={styles.actionsRow}>
-            <View style={{ flex: 1 }}>
-              <Button
-                title={mode === 'login' ? (loading ? 'Ingresando...' : 'Ingresar') : loading ? 'Registrando...' : 'Registrarse'}
-                onPress={handleSubmit}
-                style={{ width: '100%' }}
-              />
-            </View>
-            <View style={{ width: spacing.sm }} />
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Button
-                title={mode === 'login' ? 'Ir a registro' : 'Ir a login'}
-                variant="ghost"
-                style={{ width: '100%' }}
-                onPress={() => setMode(mode === 'login' ? 'register' : 'login')}
-              />
-            </View>
+          {/* Acciones: botón + link de alternar */}
+          <View style={styles.actionsColumn}>
+            <Button
+              title={mode === 'login' ? (loading ? 'Ingresando...' : 'Ingresar') : loading ? 'Registrando...' : 'Registrarse'}
+              onPress={handleSubmit}
+              style={{ width: '100%' }}
+              textStyle={{ textAlign: 'center' }}
+            />
+            <Pressable onPress={() => setMode(mode === 'login' ? 'register' : 'login')}>
+              <Text style={styles.switchAuthText}>
+                {mode === 'login' ? '¿No tiene cuenta?' : '¿Ya tiene cuenta?'}
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -384,13 +419,13 @@ export default function ProfileScreen() {
               onPress={handleGoogle}
             />
             {oauthLoading === 'google' ? (
-              <View style={{ marginTop: spacing.xs }}>
+              <View style={{ marginTop: 0 }}>
                 <ActivityIndicator color={colors.accent} />
               </View>
             ) : null}
           </View>
 
-          <View style={{ height: spacing.sm }} />
+          <View style={{ height: 0 }} />
 
           <View style={{ opacity: oauthLoading === 'microsoft' ? 0.6 : 1 }}>
             <SocialButton
@@ -398,13 +433,11 @@ export default function ProfileScreen() {
               onPress={handleMicrosoft}
             />
             {oauthLoading === 'microsoft' ? (
-              <View style={{ marginTop: spacing.xs }}>
+              <View style={{ marginTop: 0 }}>
                 <ActivityIndicator color={colors.accent} />
               </View>
             ) : null}
           </View>
-
-          <Text style={styles.helper}>Autenticación nativa sin abrir la web.</Text>
         </View>
 
         <FAQ onContactPress={handleContactPress} />
@@ -419,25 +452,7 @@ export default function ProfileScreen() {
 
       <View style={styles.card}>
         <View style={styles.profileHeader}>
-          <Pressable style={styles.avatar} onPress={() => setAvatarModal(true)}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-            ) : (
-              <Text style={{ color: colors.accent, fontWeight: '700' }}>PV</Text>
-            )}
-          </Pressable>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.value}>{fullProfile?.name || profile.name || 'Jugador'}</Text>
-            <Text style={styles.label}>{profile.email}</Text>
-          </View>
-          <Button title="Cerrar sesión" variant="ghost" onPress={logout} />
-        </View>
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionHeading}>Plan y suscripción</Text>
-        <View style={styles.roleRow}>
-          <Text style={styles.label}>Rol actual</Text>
           <View style={[styles.rolePill, ROLE_CHIP_STYLES[profile?.role ?? 'free'].pill]}>
             <Text
               style={[
@@ -448,26 +463,25 @@ export default function ProfileScreen() {
               {ROLE_CHIP_STYLES[profile?.role ?? 'free'].label}
             </Text>
           </View>
+
+          <Pressable style={styles.avatar} onPress={() => setAvatarModal(true)}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={{ color: colors.accent, fontWeight: '700' }}>PV</Text>
+            )}
+          </Pressable>
+
+          <Text style={[styles.value, { textAlign: 'center' }]}>
+            {fullProfile?.name || profile.name || 'Jugador'}
+          </Text>
+
+          <Text style={[styles.label, { textAlign: 'center' }]}>{profile.email}</Text>
+
+          <Button title="Cerrar sesión" variant="ghost" onPress={confirmLogout} />
         </View>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionHeading}>Alertas</Text>
-        <Pressable onPress={() => navigation.navigate('Notifications' as any)} style={styles.notificationButton}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <Ionicons name="notifications" size={20} color={colors.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.notificationTitle}>Ver notificaciones</Text>
-              <Text style={styles.helper}>
-                {(notifications ?? []).filter((n: any) => !n?.isRead).length > 0
-                  ? `${(notifications ?? []).filter((n: any) => !n?.isRead).length} pendientes`
-                  : 'Estás al día'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
-          </View>
-        </Pressable>
-      </View>
 
       <View style={styles.listRow}>
         <View style={[styles.card, styles.listCol]}>
@@ -538,6 +552,61 @@ function GameRow({ title, cover, note }: { title?: string; cover?: string; note?
 }
 
 function FAQ({ onContactPress }: { onContactPress: () => void }) {
+  const [open, setOpen] = React.useState<number | null>(null);
+
+  const items = [
+    {
+      q: '¿Cómo funciona el alquiler de juegos?',
+      a: 'Podés alquilar cualquier juego por un período semanal y jugarlo las veces que quieras durante ese tiempo.',
+    },
+    {
+      q: '¿Qué incluye la membresía Premium?',
+      a: 'Acceso ilimitado a nuestra biblioteca, descuentos exclusivos y cero publicidad.',
+    },
+    {
+      q: '¿Puedo cancelar mi suscripción?',
+      a: 'Sí, podés cancelar en cualquier momento desde tu perfil. Los beneficios permanecen hasta el fin del ciclo pagado.',
+    },
+  ];
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.sectionHeading}>Preguntas frecuentes</Text>
+      {items.map((it, idx) => (
+        <View key={idx} style={{ marginTop: idx === 0 ? spacing.sm : spacing.xs }}>
+          <Pressable
+            onPress={() => setOpen(open === idx ? null : idx)}
+            style={({ pressed }) => [
+              styles.faqTrigger,
+              pressed ? { backgroundColor: '#203745' } : null,
+            ]}
+          >
+            <Text style={styles.faqQuestion} numberOfLines={1} ellipsizeMode="tail">{it.q}</Text>
+            <Ionicons
+              style={styles.faqChevron}
+              name={open === idx ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.accent}
+            />
+          </Pressable>
+          {open === idx ? (
+            <View style={styles.faqAnswerWrap}>
+              <Text style={styles.faqAnswer}>{it.a}</Text>
+            </View>
+          ) : null}
+        </View>
+      ))}
+      <Button
+        title="Contacto"
+        variant="ghost"
+        onPress={onContactPress}
+        style={{ alignSelf: 'center', marginTop: spacing.lg }}
+      />
+    </View>
+  );
+}
+
+function FAQStatic({ onContactPress }: { onContactPress: () => void }) {
   return (
     <View style={styles.card}>
       <Text style={styles.sectionHeading}>Preguntas frecuentes</Text>
@@ -548,7 +617,7 @@ function FAQ({ onContactPress }: { onContactPress: () => void }) {
         title="Contacto"
         variant="ghost"
         onPress={onContactPress}
-        style={{ alignSelf: 'flex-start', marginTop: spacing.md }}
+        style={{ alignSelf: 'center', marginTop: spacing.lg }}
       />
     </View>
   );
@@ -599,7 +668,7 @@ const styles = StyleSheet.create({
   heroTitle: { color: colors.accent, fontSize: typography.h1, fontWeight: '900', textAlign: 'center' },
 
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#0B2430',
     borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: radius.lg,
@@ -631,15 +700,72 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  actionsColumn: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  switchAuthText: {
+    color: colors.accent,
+    fontSize: typography.body,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingVertical: 6,
+  },
 
   sectionHeading: { color: colors.accent, fontWeight: '800', fontSize: typography.h3 },
-  helper: { color: colors.accent, fontSize: typography.caption },
+  helper: { color: '#D1D5DB', fontSize: typography.caption },
 
-  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  // FAQ
+  faqTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'relative',
+    width: '100%',
+    flexWrap: 'nowrap',
+    minHeight: 44,
+    backgroundColor: '#0F2D3A',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    paddingRight: spacing.xl,
+  },
+  faqQuestion: {
+    color: '#D9E7EF',
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    lineHeight: typography.body,
+    includeFontPadding: false as any,
+    paddingRight: spacing.sm,
+    marginTop: 4,
+  },
+  faqChevron: {
+    position: 'absolute',
+    right: 0,
+    top: '50%',
+    marginTop: -10,
+  },
+  faqAnswerWrap: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  faqAnswer: {
+    color: '#9AB9C6',
+    fontSize: typography.caption,
+  },
+
+  profileHeader: { flexDirection: 'column', alignItems: 'center', gap: spacing.md },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: '#0B2430',
     alignItems: 'center',
     justifyContent: 'center',

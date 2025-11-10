@@ -26,7 +26,7 @@ export const authLogin = mutation({
       return {
         ok: false,
         error:
-          "La cuenta no tiene contraseña configurada. Por favor, registrate nuevamente o reseteá tu contraseña.",
+          "La cuenta no tiene contraseña configurada. Prueba a ingresar con google/xbox o reseteá tu contraseña.",
       } as const;
     }
 
