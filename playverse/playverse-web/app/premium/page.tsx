@@ -19,9 +19,7 @@ import { api } from "@convex";
 const getUserByEmailRef =
   (api as any)["queries/getUserByEmail"].getUserByEmail as FunctionReference<"query">;
 
-// ───────────────────────────────────────────────────────────────────────────────
-// Datos UI (mismo estilo)
-// ───────────────────────────────────────────────────────────────────────────────
+
 const premiumPlans = [
   {
     id: "monthly",
@@ -50,7 +48,7 @@ const premiumPlans = [
     period: "/3 meses",
     description: "Equilibrio perfecto entre precio y flexibilidad",
     popular: false,
-    features: ["Mejor precio que mensual", "Todo lo de mensual", "Renovación cada 3 meses", "Sin permanencia"],
+    features: ["Mejor precio que mensual", "Todo lo de mensual", "Renovación cada 3 meses"],
   },
 ];
 
@@ -271,9 +269,8 @@ export default function PremiumPage() {
             return (
               <div
                 key={plan.id}
-                className={`border rounded-2xl p-6 bg-slate-800/40 border-slate-700 hover:border-orange-400 transition ${
-                  isSelected ? "shadow-lg shadow-orange-500/20" : ""
-                }`}
+                className={`border rounded-2xl p-6 bg-slate-800/40 border-slate-700 hover:border-orange-400 transition ${isSelected ? "shadow-lg shadow-orange-500/20" : ""
+                  }`}
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-2xl font-bold text-white">{plan.name}</h3>
@@ -294,7 +291,7 @@ export default function PremiumPage() {
                 <Button
                   onClick={() => handleSubscribe(plan.id)}
                   variant={isSelected ? "default" : "outline"}
-                  className={isSelected ? "w-full bg-orange-400 text-slate-900" : "w-full border-orange-400 text-orange-400"}
+                  className={isSelected ? "w-full bg-orange-400 text-slate-900 hover:bg-amber-500" : "w-full bg-transparent border-orange-400 text-orange-400 hover:bg-amber-400"}
                 >
                   Elegir plan
                 </Button>
@@ -322,14 +319,6 @@ export default function PremiumPage() {
                   : "bg-slate-700 text-slate-400 font-semibold px-8 cursor-not-allowed"}
               >
                 {trialAvailable ? "Comenzar prueba gratuita" : "Prueba gratuita ya usada"}
-              </Button>
-              <Button
-                onClick={() => handleSubscribe("annual")}
-                size="lg"
-                variant="outline"
-                className="border-orange-400 text-orange-300 font-semibold px-8"
-              >
-                Ver planes completos
               </Button>
             </div>
           </div>
