@@ -1,7 +1,7 @@
 // convex/mutations/admin/updateGame.ts  (wrapper panel admin)
-// Detecta cambios por campo y crea JOBS ligeros en notification_jobs.
-// Además inserta una notificación inmediata para el admin (requesterId)
-// para que el admin reciba la notificación al instante.
+// Detecta cambios por campo y crea notificaciones en la tabla `notifications`
+// para los roles correspondientes y para el admin que realizó el cambio.
+
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { updateGameCore } from "../../lib/gameCore";
@@ -53,7 +53,6 @@ export const updateGame = mutation({
     gameId: v.id("games"),
     requesterId: v.optional(v.id("profiles")),
 
-    // campos sueltos
     title: v.optional(v.union(v.string(), v.null())),
     description: v.optional(v.union(v.string(), v.null())),
     cover_url: v.optional(v.union(v.string(), v.null())),
@@ -74,17 +73,16 @@ export const updateGame = mutation({
     const { patch, ...top } = args as any;
     const merged = patch ? { ...top, ...patch } : top;
 
-    // leer antes y después para diff
     const before = await db.get(args.gameId);
     const result = await updateGameCore(db, merged);
     const after = await db.get(args.gameId);
 
-    const watchedFields: string[] = [
+    const watchedFields = [
       "title","description","cover_url","trailer_url","extraTrailerUrl","extraImages","genres",
       "purchasePrice","weeklyPrice","embed_url","embed_allow","embed_sandbox","plan"
     ];
 
-    const changes: Array<{ field: string; before: any; after: any }> = [];
+    const changes = [];
     for (const f of watchedFields) {
       const b = before ? (before as any)[f] : undefined;
       const a = after ? (after as any)[f] : undefined;
@@ -95,16 +93,22 @@ export const updateGame = mutation({
 
     const now = Date.now();
 
-    // Determinar targetRoles según plan final (after)
     const planFinal = (after as any)?.plan ?? (before as any)?.plan ?? "free";
-    const rolesForPlan = planFinal === "premium" ? ["premium", "admin"] : ["free", "premium", "admin"];
+    const roleTargets = planFinal === "premium"
+      ? ["premium", "admin"]
+      : ["free", "premium", "admin"];
 
-    // Por cada cambio: crear JOB ligero en notification_jobs (uno por campo)
-    // y además insertar notificación inmediata para el requester (admin) si existe
+    // Obtenemos todos los usuarios con esos roles
+    const usersToNotify = await db
+      .query("profiles")
+      .filter(q => q.or(...roleTargets.map(role => q.eq(q.field("role"), role))))
+      .collect();
+
     for (const change of changes) {
       const f = change.field;
       let titleMsg = `Actualización: ${(after as any)?.title ?? (before as any)?.title ?? "Juego"}`;
       let message = `Se actualizó ${f}.`;
+
       if (f === "purchasePrice") {
         titleMsg = `Precio de compra actualizado: ${(after as any)?.title ?? (before as any)?.title ?? "Juego"}`;
         message = `Precio compra: ${moneyLabel(change.before)} → ${moneyLabel(change.after)}`;
@@ -116,53 +120,55 @@ export const updateGame = mutation({
         message = `Se actualizó la descripción del juego.`;
       }
 
-      // Insertamos JOB ligero (cast a any porque notification_jobs puede no estar tipado aún)
-      try {
-        await (db as any).insert("notification_jobs", {
-          kind: "game-update",
+      // ✅ Insertamos notificación para cada usuario del rol correspondiente
+      for (const user of usersToNotify) {
+        await db.insert("notifications", {
+          userId: user._id,
+          type: "game-update",
           title: titleMsg,
           message,
           gameId: args.gameId,
-          targetRoles: rolesForPlan,
-          meta: { field: change.field, before: change.before, after: change.after, updatedBy: args.requesterId ?? null },
-          status: "pending",
+          transactionId: undefined,
+          isRead: false,
+          readAt: undefined,
           createdAt: now,
+          meta: {
+            field: f,
+            before: change.before,
+            after: change.after,
+            updatedBy: args.requesterId ?? null,
+          },
         });
-      } catch (err) {
-        console.error("updateGame: failed to insert notification_job", err);
       }
 
-      // Insertamos una notificación inmediata para el requester (admin) si existe
+      // ✅ También insertamos notificación instantánea al ADMIN que hizo el cambio
       if (args.requesterId) {
-        try {
-          await db.insert("notifications", {
-            userId: args.requesterId,
-            type: "game-update",
+        await db.insert("notifications", {
+          userId: args.requesterId,
+          type: "game-update",
+          title: titleMsg,
+          message,
+          gameId: args.gameId,
+          transactionId: undefined,
+          isRead: false,
+          readAt: undefined,
+          createdAt: now,
+          meta: {
+            field: f,
+            before: change.before,
+            after: change.after,
+            updatedBy: args.requesterId ?? null,
+          },
+        });
+
+        // 📌 Opcional: enviar push instantáneo al admin
+        if (scheduler) {
+          scheduler.runAfter(0, api.actions.pushy.sendToProfile, {
+            profileId: args.requesterId,
             title: titleMsg,
             message,
-            gameId: args.gameId,
-            transactionId: undefined,
-            isRead: false,
-            readAt: undefined,
-            createdAt: now,
-            meta: { field: change.field, before: change.before, after: change.after, updatedBy: args.requesterId ?? null },
-          });
-
-          // intentamos planificar push al requester (si hay scheduler), no bloqueante
-          if (scheduler) {
-            try {
-              await scheduler.runAfter(0, api.actions.pushy.sendToProfile, {
-                profileId: args.requesterId,
-                title: titleMsg,
-                message,
-                data: { type: "game-update", meta: { gameId: String(args.gameId), field: change.field } },
-              });
-            } catch (e) {
-              console.error("schedule push to requester failed", e);
-            }
-          }
-        } catch (e) {
-          console.error("updateGame: failed to insert immediate notification for requester", e);
+            data: { type: "game-update", meta: { gameId: String(args.gameId), field: f } },
+          }).catch(err => console.error(err));
         }
       }
     }
