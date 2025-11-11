@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Heart, User, LogOut, Shield, ShoppingCart, Menu } from "lucide-react";
 import { FavoritesDropdown } from "./favorites-dropdown";
 import { NotificationsDropdown } from "./notifications-dropdown";
-import { CartDropdown } from "./cart-dropdown"; // ⬅️ NUEVO
+import { CartDropdown } from "./cart-dropdown";
 
 import { useAuthStore } from "@/lib/useAuthStore";
 import type { AuthState } from "@/lib/useAuthStore";

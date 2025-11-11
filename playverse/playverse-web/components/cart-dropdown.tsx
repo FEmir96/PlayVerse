@@ -41,13 +41,13 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
     userId ? { userId } : "skip"
   ) as
     | Array<{
-        cartItemId: Id<"cartItems">;
-        gameId: Id<"games">;
-        title: string;
-        cover_url?: string | null;
-        price_buy: number;
-        currency: "USD";
-      }>
+      cartItemId: Id<"cartItems">;
+      gameId: Id<"games">;
+      title: string;
+      cover_url?: string | null;
+      price_buy: number;
+      currency: "USD";
+    }>
     | undefined;
 
   const cartRemove = useMutation(api.mutations.cart.remove as any);
@@ -76,11 +76,26 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
 
   return (
     <div
-      className={`absolute right-0 mt-3 w-[420px] z-50 transition-all duration-200 ease-out
-        ${isOpen ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-1 scale-95 pointer-events-none"}`}
       ref={wrapRef}
       role="dialog"
       aria-hidden={!isOpen}
+      className={[
+        // 👇 En mobile es fixed a la ventana; desde sm vuelve a absolute anclado al botón
+        "fixed sm:absolute z-50",
+        // 👉 En mobile ocupa casi todo el ancho, centrado; en sm se alinea al borde derecho del trigger
+        "inset-x-2 sm:inset-auto sm:right-0",
+        // 👉 Separación desde arriba: en mobile bajo el header (5rem ~ 80px); en sm pegado al botón
+        "top-20 sm:top-[calc(100%+8px)]",
+        // 👉 Ancho: full en mobile, 420px en sm+
+        "w-full sm:w-[420px] mx-auto sm:mx-0",
+        // 👉 Altura máxima con scroll interno
+        "max-h-[75vh] overflow-y-auto overscroll-contain",
+        // Transiciones / estado abierto-cerrado
+        "transition-all duration-200 ease-out",
+        isOpen
+          ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+          : "opacity-0 translate-y-1 scale-95 pointer-events-none",
+      ].join(" ")}
     >
       <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-orange-400/40 to-purple-500/40">
         <div className="rounded-2xl bg-slate-900 border border-slate-700 overflow-hidden shadow-2xl">
@@ -185,23 +200,25 @@ export function CartDropdown({ isOpen, onClose, userId }: Props) {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-3 bg-slate-900/80 flex items-center justify-between">
-            <div className="text-amber-400 font-semibold">
-              Total:{" "}
-              {discountRate > 0 ? (
-                <>
-                  <span className="text-slate-400 line-through mr-2">
-                    {fmt(subtotalBase, "USD")}
-                  </span>
-                  <span>{fmt(subtotal, "USD")}</span>
-                </>
-              ) : (
-                fmt(subtotalBase, "USD")
-              )}
-            </div>
+          <div className="px-4 py-3 bg-slate-900/80 flex items-center justify-between pb-[env(safe-area-inset-bottom)]">
+            {hasItems && (
+              <div className="text-amber-400 font-semibold">
+                Total:{" "}
+                {discountRate > 0 ? (
+                  <>
+                    <span className="text-slate-400 line-through mr-2">
+                      {fmt(subtotalBase, "USD")}
+                    </span>
+                    <span>{fmt(subtotal, "USD")}</span>
+                  </>
+                ) : (
+                  fmt(subtotalBase, "USD")
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Link href="/checkout/carrito" onClick={onClose}>
-                <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900">
+                <Button className="bg-orange-400 hover:bg-orange-500 text-slate-900 mb-3">
                   <ShoppingCart className="w-4 h-4 mr-2" />
                   Ir al carrito
                 </Button>

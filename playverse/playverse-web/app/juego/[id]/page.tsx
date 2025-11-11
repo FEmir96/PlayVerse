@@ -124,7 +124,7 @@ function deepFindBuyPrice(game: any): number | undefined {
       typeof val === "number"
         ? (Number.isFinite(val) ? val : undefined)
         : typeof val === "string"
-        ? (() => {
+          ? (() => {
             const s0 = val.trim().replace(/\s+/g, "");
             const s1 = s0.replace(/[^\d.,-]/g, "");
             const hasComma = s1.includes(",");
@@ -135,7 +135,7 @@ function deepFindBuyPrice(game: any): number | undefined {
             const nn = Number(s);
             return Number.isFinite(nn) ? nn : undefined;
           })()
-        : undefined;
+          : undefined;
 
     if (n === undefined) return;
 
@@ -348,11 +348,11 @@ export default function GameDetailPage() {
     profile?._id ? { userId: profile._id } : "skip"
   ) as
     | Array<{
-        _id: string;
-        game?: { _id?: Id<"games">; title?: string; cover_url?: string };
-        gameId?: Id<"games">;
-        expiresAt?: number | null;
-      }>
+      _id: string;
+      game?: { _id?: Id<"games">; title?: string; cover_url?: string };
+      gameId?: Id<"games">;
+      expiresAt?: number | null;
+    }>
     | undefined;
 
   const purchases = useQuery(
@@ -360,12 +360,12 @@ export default function GameDetailPage() {
     profile?._id ? { userId: profile._id } : "skip"
   ) as
     | Array<{
-        _id: string;
-        game?: { _id?: Id<"games">; title?: string; cover_url?: string };
-        gameId?: Id<"games">;
-        title?: string;
-        createdAt?: number;
-      }>
+      _id: string;
+      game?: { _id?: Id<"games">; title?: string; cover_url?: string };
+      gameId?: Id<"games">;
+      title?: string;
+      createdAt?: number;
+    }>
     | undefined;
 
   const hasLibraryQuery =
@@ -375,12 +375,12 @@ export default function GameDetailPage() {
     profile?._id && hasLibraryQuery ? { userId: profile._id } : "skip"
   ) as
     | Array<{
-        game?: any;
-        gameId?: Id<"games">;
-        type?: string;
-        kind?: string;
-        owned?: boolean;
-      }>
+      game?: any;
+      gameId?: Id<"games">;
+      type?: string;
+      kind?: string;
+      owned?: boolean;
+    }>
     | undefined;
 
   const now = Date.now();
@@ -534,7 +534,7 @@ export default function GameDetailPage() {
         handlePlay();
         clean();
       }
-    } catch {}
+    } catch { }
   }, [isLogged, profile, game?._id, router]);
 
   /* ====== Precios calculados (solo UI) ====== */
@@ -710,7 +710,7 @@ export default function GameDetailPage() {
 
     try {
       window.dispatchEvent(new Event("pv:favorites:changed"));
-    } catch {}
+    } catch { }
   };
 
   const copyLink = async () => {
@@ -718,7 +718,7 @@ export default function GameDetailPage() {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch {}
+    } catch { }
   };
 
   /* ===== Metadatos e info visual ===== */
@@ -732,8 +732,8 @@ export default function GameDetailPage() {
     typeof igdbUserRating === "number"
       ? igdbUserRating
       : typeof igdbRating === "number"
-      ? igdbRating
-      : undefined;
+        ? igdbRating
+        : undefined;
   const userStars =
     typeof score100 === "number" ? +(score100 / 20).toFixed(1) : undefined;
 
@@ -806,9 +806,9 @@ export default function GameDetailPage() {
                 <h1 className="text-2xl font-bold text-orange-400">{game.title}</h1>
                 <div className="flex items-center gap-2">
                   {/* replaced: category badge hidden */}{false && (
-                  <Badge className="bg-orange-400 text-slate-900 hover:bg-orange-500">
-                    {(game as any).genres?.[0] || "Acción"}
-                  </Badge>
+                    <Badge className="bg-orange-400 text-slate-900 hover:bg-orange-500">
+                      {(game as any).genres?.[0] || "Acción"}
+                    </Badge>
                   )}
                   {isPremiumPlan ? (
                     <Badge className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-600 text-slate-900 shadow-md shadow-yellow-400/50">
@@ -845,9 +845,8 @@ export default function GameDetailPage() {
                           <button
                             key={i}
                             onClick={() => setSelectedIndex(i)}
-                            className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${
-                              selected ? "border-orange-400" : "border-slate-600"
-                            }`}
+                            className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-colors ${selected ? "border-orange-400" : "border-slate-600"
+                              }`}
                             title={m.type === "video" ? "Trailer" : `Screenshot ${i + 1}`}
                           >
                             {m.type === "video" ? (
@@ -922,7 +921,7 @@ export default function GameDetailPage() {
                     <div className="space-y-4">
                       {typeof baseBuy === "number" && (
                         <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-800/50 border border-cyan-400/20">
-                          <span className="text-slate-300 font-medium">Comprar</span>
+                          <span className="text-slate-300 font-medium">Compra</span>
                           <div className="flex items-center gap-3">
                             {isPremiumViewer && baseBuy > 0 ? (
                               <>

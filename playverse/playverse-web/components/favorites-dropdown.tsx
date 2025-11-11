@@ -4,7 +4,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { X, Trash2, ShoppingCart, PlaySquare } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import { useFavoritesStore } from "@/components/favoritesStore";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -42,34 +42,40 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
     api.mutations.toggleFavorite.toggleFavorite as any
   );
 
-  // ⬇️ ya no cerramos por click-afuera acá (lo maneja Header) — sólo Escape por accesibilidad
+  // Sólo Escape para accesibilidad (click-afuera lo maneja Header)
   const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     function onEsc(e: KeyboardEvent) {
       if (e.key === "Escape" && isOpen) onClose();
     }
     document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("keydown", onEsc);
-    };
+    return () => document.removeEventListener("keydown", onEsc);
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    const handler = () => {};
+    const handler = () => { };
     window.addEventListener("pv:favorites:changed", handler);
     return () => window.removeEventListener("pv:favorites:changed", handler);
   }, []);
 
   const hasItems = items && items.length > 0;
 
-  // ⬇️ SIEMPRE montado para animación suave
+  // Panel responsive: fixed en mobile, absolute en >= sm. SIN overflow aquí.
   return (
     <div
-      className={`absolute right-0 mt-3 w-[380px] z-50 transition-all duration-200 ease-out
-        ${isOpen ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-1 scale-95 pointer-events-none"}`}
       ref={wrapRef}
       role="dialog"
       aria-hidden={!isOpen}
+      className={[
+        "fixed sm:absolute z-50",
+        "inset-x-2 sm:inset-auto sm:right-0",
+        "top-16 sm:top-[calc(100%+8px)]",
+        "w-full sm:w-[380px] mx-auto sm:mx-0",
+        "transition-all duration-200 ease-out",
+        isOpen
+          ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+          : "opacity-0 translate-y-1 scale-95 pointer-events-none",
+      ].join(" ")}
     >
       <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-orange-400/40 to-purple-500/40">
         <div className="rounded-2xl bg-slate-900 border border-slate-700 overflow-hidden shadow-2xl">
@@ -83,14 +89,14 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                 {items.length}
               </span>
             </div>
-            {/* Cerrar */}
             <button
               onClick={onClose}
               className="text-slate-400 rounded-md transition-all duration-200
                          hover:text-orange-300 hover:bg-orange-400/10
                          hover:shadow-[0_0_12px_rgba(251,146,60,0.30)]
                          hover:ring-1 hover:ring-orange-400/30
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60"
+                         focus-visible:outline-none
+                         focus-visible:ring-2 focus-visible:ring-orange-400/60"
               aria-label="Cerrar"
               title="Cerrar"
               type="button"
@@ -99,8 +105,8 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
             </button>
           </div>
 
-          {/* Lista */}
-          <div className="max-h-[70vh] overflow-y-auto divide-y divide-slate-800">
+          {/* Lista: ÚNICO lugar con overflow */}
+          <div className="max-h-[70vh] overflow-y-auto overscroll-contain divide-y divide-slate-800">
             {!hasItems ? (
               <div className="p-6 text-center text-slate-400">
                 No agregaste juegos aún.
@@ -136,14 +142,18 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                           {g.title}
                         </Link>
 
-                        {/* Papelera */}
+                        {/* Quitar */}
                         <button
                           onClick={async () => {
                             // 1) UI optimista
                             remove(g.id);
-                            try { window.dispatchEvent(new Event("pv:favorites:changed")); } catch {}
-                            const t = g.title;
-                            toast({ title: "Eliminado de favoritos", description: `${t} se quitó de tu lista.` });
+                            try {
+                              window.dispatchEvent(new Event("pv:favorites:changed"));
+                            } catch { }
+                            toast({
+                              title: "Eliminado de favoritos",
+                              description: `${g.title} se quitó de tu lista.`,
+                            });
 
                             // 2) Server
                             try {
@@ -156,7 +166,12 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                                 const added =
                                   typeof res === "boolean"
                                     ? res
-                                    : !!(res && (res.added === true || res.status === "added" || res.result === "added"));
+                                    : !!(
+                                      res &&
+                                      (res.added === true ||
+                                        res.status === "added" ||
+                                        res.result === "added")
+                                    );
 
                                 if (added) {
                                   await toggleFavorite({
@@ -180,8 +195,6 @@ export function FavoritesDropdown({ isOpen, onClose }: Props) {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-
-                      
                     </div>
                   </div>
                 </div>

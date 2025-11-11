@@ -52,13 +52,13 @@ export default function CartCheckoutPage() {
     userId ? { userId } : "skip"
   ) as
     | Array<{
-        cartItemId: string;
-        gameId: Id<"games">;
-        title: string;
-        cover_url?: string | null;
-        price_buy: number;
-        currency: "USD";
-      }>
+      cartItemId: string;
+      gameId: Id<"games">;
+      title: string;
+      cover_url?: string | null;
+      price_buy: number;
+      currency: "USD";
+    }>
     | undefined;
 
   const items = serverItems ?? [];
@@ -71,17 +71,17 @@ export default function CartCheckoutPage() {
   const paymentMethods =
     (pmSupported
       ? (useQuery(
-          getPaymentMethods as any,
-          userId ? { userId } : "skip"
-        ) as
-          | Array<{
-              _id: Id<"paymentMethods">;
-              brand: "visa" | "mastercard" | "amex" | "otro";
-              last4: string;
-              expMonth: number;
-              expYear: number;
-            }>
-          | undefined)
+        getPaymentMethods as any,
+        userId ? { userId } : "skip"
+      ) as
+        | Array<{
+          _id: Id<"paymentMethods">;
+          brand: "visa" | "mastercard" | "amex" | "otro";
+          last4: string;
+          expMonth: number;
+          expYear: number;
+        }>
+        | undefined)
       : undefined) || [];
 
   // UI: usar guardadas vs nueva
@@ -105,7 +105,7 @@ export default function CartCheckoutPage() {
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
   const [rememberNew, setRememberNew] = useState(false);
-  
+
   // Estados de validación
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [showValidation, setShowValidation] = useState(false);
@@ -154,14 +154,14 @@ export default function CartCheckoutPage() {
     // Validación tarjeta nueva
     if (!useSaved) {
       const validation = validatePaymentForm({ holder, number, exp, cvc });
-      
+
       if (!validation.isValid) {
         const errors: Record<string, string> = {};
         validation.errors.forEach(error => {
           errors[error.field] = error.message;
         });
         setValidationErrors(errors);
-        
+
         toast({
           title: "Datos de tarjeta inválidos",
           description: "Por favor corrige los errores marcados en rojo.",
@@ -243,8 +243,8 @@ export default function CartCheckoutPage() {
   return (
     <div className="container mx-auto px-4 py-10">
       <div className="text-center mb-6">
-        <h1 className="text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">
-          Tu carrito
+        <h1 className="text-4xl md:text-5xl font-bold text-orange-400 mb-6 tracking-wide">
+          CARRITO
         </h1>
         <div className="mx-auto mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-orange-400 to-amber-300" />
       </div>
@@ -350,11 +350,10 @@ export default function CartCheckoutPage() {
                         return (
                           <label
                             key={String(pm._id)}
-                            className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer ${
-                              methodId === String(pm._id)
-                                ? "border-amber-300 bg-amber-300/10"
-                                : "border-slate-700 hover:border-amber-300/60"
-                            }`}
+                            className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer ${methodId === String(pm._id)
+                              ? "border-amber-300 bg-amber-300/10"
+                              : "border-slate-700 hover:border-amber-300/60"
+                              }`}
                           >
                             <input
                               type="radio"
@@ -390,9 +389,8 @@ export default function CartCheckoutPage() {
                           }
                         }}
                         placeholder="Nombre en la tarjeta"
-                        className={`bg-slate-700 text-white mt-1 ${
-                          validationErrors.holder ? 'border-red-400' : 'border-slate-600'
-                        }`}
+                        className={`bg-slate-700 text-white mt-1 ${validationErrors.holder ? 'border-red-400' : 'border-slate-600'
+                          }`}
                       />
                       <ValidationError error={showValidation ? validationErrors.holder : undefined} />
                     </div>
@@ -414,9 +412,8 @@ export default function CartCheckoutPage() {
                           }
                         }}
                         placeholder="4111 1111 1111 1111"
-                        className={`bg-slate-700 text-white mt-1 ${
-                          validationErrors.number ? 'border-red-400' : 'border-slate-600'
-                        }`}
+                        className={`bg-slate-700 text-white mt-1 ${validationErrors.number ? 'border-red-400' : 'border-slate-600'
+                          }`}
                         inputMode="numeric"
                         autoComplete="cc-number"
                       />
@@ -440,9 +437,8 @@ export default function CartCheckoutPage() {
                             }
                           }}
                           placeholder="MM/YY"
-                          className={`bg-slate-700 text-white mt-1 ${
-                            validationErrors.exp ? 'border-red-400' : 'border-slate-600'
-                          }`}
+                          className={`bg-slate-700 text-white mt-1 ${validationErrors.exp ? 'border-red-400' : 'border-slate-600'
+                            }`}
                           inputMode="numeric"
                           autoComplete="cc-exp"
                         />
@@ -464,9 +460,8 @@ export default function CartCheckoutPage() {
                             }
                           }}
                           placeholder="123"
-                          className={`bg-slate-700 text-white mt-1 ${
-                            validationErrors.cvc ? 'border-red-400' : 'border-slate-600'
-                          }`}
+                          className={`bg-slate-700 text-white mt-1 ${validationErrors.cvc ? 'border-red-400' : 'border-slate-600'
+                            }`}
                           inputMode="numeric"
                           autoComplete="cc-csc"
                         />
@@ -508,11 +503,10 @@ export default function CartCheckoutPage() {
               <Button
                 onClick={onPay}
                 disabled={processing || items.length === 0 || !userId}
-                className={`w-full mt-4 text-slate-900 text-lg py-6 font-bold ${
-                  processing
-                    ? "bg-slate-600 cursor-not-allowed"
-                    : "bg-orange-400 hover:bg-orange-500"
-                }`}
+                className={`w-full mt-4 text-slate-900 text-lg py-6 font-bold ${processing
+                  ? "bg-slate-600 cursor-not-allowed"
+                  : "bg-orange-400 hover:bg-orange-500"
+                  }`}
               >
                 {processing ? "Procesando…" : "Pagar ahora"}
               </Button>

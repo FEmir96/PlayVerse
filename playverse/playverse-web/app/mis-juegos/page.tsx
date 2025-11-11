@@ -1,3 +1,4 @@
+// playverse-web/app/mis-juegos/page.tsx
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
@@ -51,8 +52,6 @@ type MinimalGame = {
   ageRatingLabel?: string | null;
   genres?: string[] | null;
 };
-
-/* ────────────────────────────────────────────── */
 
 const norm = (s?: string | null) => String(s || "").trim().toLowerCase();
 
@@ -108,11 +107,10 @@ function LibraryCard({ id, title, cover, genre, kind, expiresAt }: LibraryCardPr
             {genre || "Acción"}
           </Badge>
           <Badge
-            className={`font-semibold px-2 py-0.5 text-xs ${
-              isPremiumPlan
-                ? "bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-600 text-slate-900"
-                : "bg-teal-400 text-slate-900"
-            }`}
+            className={`font-semibold px-2 py-0.5 text-xs ${isPremiumPlan
+              ? "bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-600 text-slate-900"
+              : "bg-teal-400 text-slate-900"
+              }`}
           >
             {isPremiumPlan ? "Premium" : "Free"}
           </Badge>
@@ -190,13 +188,29 @@ export default function MisJuegosPage() {
 
   const [activeTab, setActiveTab] = useState<"purchases" | "rentals">("purchases");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortType, setSortType] = useState<string>("recent");
+  const [sortType, setSortType] = useState<string>("recent"); // purchases: recent/oldest; rentals: expires_soon/expires_late
 
+  // después de los useState(...)
+  useEffect(() => {
+    setSortType((prev) => {
+      if (activeTab === "purchases") {
+        // valores válidos: "recent" | "oldest"
+        return prev === "recent" || prev === "oldest" ? prev : "recent";
+      } else {
+        // valores válidos: "expires_soon" | "expires_late"
+        return prev === "expires_soon" || prev === "expires_late" ? prev : "expires_soon";
+      }
+    });
+  }, [activeTab]);
+
+
+  // Sincroniza ?tab=... con el estado
   useEffect(() => {
     const t = (searchParams?.get("tab") || "").toLowerCase();
     if (t === "rentals" || t === "purchases") setActiveTab(t);
   }, [searchParams]);
 
+  // Cambia de tab y refleja en URL
   const setTab = (t: "purchases" | "rentals") => {
     setActiveTab(t);
     const params = new URLSearchParams(searchParams?.toString());
@@ -221,16 +235,15 @@ export default function MisJuegosPage() {
     profile?._id ? { userId: profile._id } : "skip"
   ) as PurchaseRow[] | undefined;
 
-const validUserId =
-  profile && typeof profile._id === "string" && profile._id.length > 0
-    ? profile._id
-    : null;
+  const validUserId =
+    profile && typeof profile._id === "string" && profile._id.length > 0
+      ? profile._id
+      : null;
 
-const rentals = useQuery(
-  api.queries.getUserRentals.getUserRentals as any,
-  validUserId ? { userId: validUserId as Id<"profiles"> } : "skip"
-) as RentalRow[] | undefined;
-
+  const rentals = useQuery(
+    api.queries.getUserRentals.getUserRentals as any,
+    validUserId ? { userId: validUserId as Id<"profiles"> } : "skip"
+  ) as RentalRow[] | undefined;
 
   const gamesMini =
     (useQuery(api.queries.listGamesMinimal.listGamesMinimal as any, {}) as
@@ -276,8 +289,8 @@ const rentals = useQuery(
   const activeRentals =
     Array.isArray(rentals)
       ? rentals.filter((r) =>
-          typeof r.expiresAt === "number" ? r.expiresAt > now : true
-        )
+        typeof r.expiresAt === "number" ? r.expiresAt > now : true
+      )
       : [];
 
   const dedupePurchases = (rows: PurchaseRow[]) => {
@@ -371,26 +384,79 @@ const rentals = useQuery(
         <div className="container mx-auto px-4 flex justify-center gap-2">
           <Button
             onClick={() => setTab("purchases")}
-            className={`flex items-center gap-2 ${
-              activeTab === "purchases"
-                ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
-                : "border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-            }`}
+            className={`flex items-center gap-2 ${activeTab === "purchases"
+              ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
+              : "border-orange-400 border-1 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+              }`}
           >
             <ShoppingBag className="w-4 h-4" />
             Mis compras
           </Button>
           <Button
             onClick={() => setTab("rentals")}
-            className={`flex items-center gap-2 ${
-              activeTab === "rentals"
-                ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
-                : "border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
-            }`}
+            className={`flex items-center gap-2 ${activeTab === "rentals"
+              ? "bg-orange-400 text-slate-900 hover:bg-orange-500"
+              : "border-orange-400 border-1 text-orange-400 hover:bg-orange-400 hover:text-slate-900 bg-transparent"
+              }`}
           >
             <Clock className="w-4 h-4" />
             Mis alquileres
           </Button>
+        </div>
+      </section>
+
+      {/* Search + filtros */}
+      <section className="py-6 bg-slate-900 border-b border-slate-700">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row gap-4 justify-center items-center mb-4">
+            <div className="relative flex-1 max-w-2xl">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Input
+                placeholder="Buscar por título..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
+              />
+            </div>
+
+            <div>
+              <label className="sr-only">Ordenar</label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <div>
+                    <Button
+                      className="flex items-center gap-2 bg-slate-900 border border-amber-400 text-amber-400 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-800/95"
+                    >
+                      {activeTab === "purchases"
+                        ? (sortType === "oldest" ? "Compras más antiguas" : "Compras más recientes")
+                        : (sortType === "expires_late" ? "Vence último" : "Vence primero")}
+                      <ChevronDown className="w-4 h-4 text-amber-400" />
+                    </Button>
+                  </div>
+                </DropdownMenuTrigger>
+
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={8}
+                  className="z-50 bg-slate-900 border border-amber-400 rounded-md p-1 shadow-md text-amber-400"
+                >
+                  <DropdownMenuRadioGroup value={sortType} onValueChange={(v) => setSortType(v)}>
+                    {activeTab === "purchases" ? (
+                      <>
+                        <DropdownMenuRadioItem value="recent">Compras más recientes</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="oldest">Compras más antiguas</DropdownMenuRadioItem>
+                      </>
+                    ) : (
+                      <>
+                        <DropdownMenuRadioItem value="expires_soon">Vence primero</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="expires_late">Vence último</DropdownMenuRadioItem>
+                      </>
+                    )}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -419,7 +485,7 @@ const rentals = useQuery(
               </div>
             ) : (
               <div className="text-center text-slate-400 mt-12">
-                No tenés compras todavía.
+                {searchQuery ? "No se encontraron compras con ese nombre." : "No tenés compras todavía."}
               </div>
             )
           ) : filteredRentals.length ? (
@@ -442,7 +508,7 @@ const rentals = useQuery(
             </div>
           ) : (
             <div className="text-center text-slate-400 mt-12">
-              No tenés alquileres activos.
+              {searchQuery ? "No se encontraron alquileres con ese nombre." : "No tenés alquileres activos."}
             </div>
           )}
         </div>

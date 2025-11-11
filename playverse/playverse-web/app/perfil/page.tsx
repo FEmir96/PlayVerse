@@ -1501,11 +1501,11 @@ export default function ProfilePage() {
 
             <div className="space-y-4">
               <div>
-                <Label className="text-slate-300">Marca</Label>
+                <Label className="text-slate-300 mb-1.5">Marca</Label>
                 <select
                   value={pmBrand}
                   onChange={(e) => setPmBrand(e.target.value as PaymentMethodUI["brand"])}
-                  className="mt-1 w-full rounded-md bg-slate-700 border border-slate-600 text-white px-3 py-2"
+                  className="mt-1 w-full rounded-md bg-slate-700 border border-slate-600 text-white px-2 py-2"
                 >
                   <option value="visa">Visa</option>
                   <option value="mastercard">Mastercard</option>
@@ -1515,7 +1515,7 @@ export default function ProfilePage() {
               </div>
 
               <div>
-                <Label className="text-slate-300">Número de tarjeta</Label>
+                <Label className="text-slate-300 mb-2">Número de tarjeta</Label>
                 <Input
                   value={pmNumber}
                   onChange={(e) => setPmNumber(formatCardNumber(e.target.value))}
@@ -1530,7 +1530,7 @@ export default function ProfilePage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-slate-300">Vencimiento (MM/YY)</Label>
+                  <Label className="text-slate-300 mb-2">Vencimiento (MM/YY)</Label>
                   <Input
                     value={pmExp}
                     onChange={(e) => setPmExp(formatExpLoose(e.target.value))}
@@ -1542,7 +1542,7 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div>
-                  <Label className="text-slate-300">CVV</Label>
+                  <Label className="text-slate-300 mb-2">CVV</Label>
                   <Input
                     value={pmCvv}
                     onChange={(e) => setPmCvv(e.target.value.replace(/\D/g, "").slice(0, 3))}

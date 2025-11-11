@@ -1,7 +1,7 @@
 // playverse-web/components/notifications-dropdown.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   Clock,
@@ -48,21 +48,18 @@ export function NotificationsDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  // 🔒 cerrar al click afuera (afecta botón + panel)
+  // cerrar al click afuera
   const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (!isOpen) return;
       if (!wrapRef.current) return;
-      if (!wrapRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      if (!wrapRef.current.contains(e.target as Node)) setIsOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [isOpen]);
 
-  // live queries por usuario
   const items = useQuery(
     api.notifications.getForUser,
     userId ? { userId, limit: 50 } : "skip"
@@ -118,7 +115,7 @@ export function NotificationsDropdown({
     if (href) {
       try {
         window.location.href = href;
-      } catch {}
+      } catch { }
     }
   };
 
@@ -154,18 +151,23 @@ export function NotificationsDropdown({
         )}
       </Button>
 
-      {/* Panel SIEMPRE montado para animación suave */}
+      {/* Panel: fixed en mobile, absolute en ≥sm. SIN overflow aquí */}
       <div
         id="pv-notifs-popover"
-        className={`
-          absolute right-0 mt-3 w-[420px] z-50
-          transition-all duration-200 ease-out
-          ${isOpen ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-1 scale-95 pointer-events-none"}
-        `}
         role="dialog"
         aria-hidden={!isOpen}
+        className={[
+          "fixed sm:absolute z-50",
+          "inset-x-2 sm:inset-auto sm:right-0",
+          "top-16 sm:top-[calc(100%+8px)]",
+          "w-full sm:w-[420px] mx-auto sm:mx-0",
+          "transition-all duration-200 ease-out",
+          isOpen
+            ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+            : "opacity-0 translate-y-1 scale-95 pointer-events-none",
+        ].join(" ")}
       >
-        {/* borde degradado + fondo oscuro como Favorites */}
+        {/* borde degradado + fondo oscuro */}
         <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-orange-400/40 to-purple-500/40">
           <div className="rounded-2xl bg-slate-900 border border-slate-700 overflow-hidden shadow-2xl">
             {/* Header */}
@@ -219,8 +221,8 @@ export function NotificationsDropdown({
               </div>
             </div>
 
-            {/* Lista */}
-            <div className="max-h-[70vh] overflow-y-auto p-3">
+            {/* Lista: ÚNICO lugar con overflow */}
+            <div className="max-h-[70vh] overflow-y-auto overscroll-contain p-3">
               {list.length === 0 ? (
                 <div className="p-6 text-center text-slate-400">
                   <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -241,9 +243,8 @@ export function NotificationsDropdown({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h4
-                            className={`text-sm font-semibold truncate ${
-                              !n.isRead ? "text-orange-400" : "text-cyan-300"
-                            }`}
+                            className={`text-sm font-semibold truncate ${!n.isRead ? "text-orange-400" : "text-cyan-300"
+                              }`}
                           >
                             {n.title}
                           </h4>
