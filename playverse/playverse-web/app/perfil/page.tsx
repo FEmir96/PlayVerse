@@ -637,7 +637,7 @@ export default function ProfilePage() {
 
     if (newPasswordInput !== confirmPasswordInput) {
       toast({
-        title: "Las contrasenas no coinciden",
+        title: "Las contraseñas no coinciden",
         description: "Revisa la confirmacion e intentalo de nuevo.",
         variant: "destructive",
       });
@@ -646,7 +646,7 @@ export default function ProfilePage() {
 
     if (newPasswordInput.length < 6) {
       toast({
-        title: "Contrasena muy corta",
+        title: "Contraseña muy corta",
         description: "Necesita al menos 6 caracteres.",
         variant: "destructive",
       });
@@ -664,19 +664,19 @@ export default function ProfilePage() {
       if (!result?.ok) {
         const errorMap: Record<string, string> = {
           invalid_current: "La clave actual no coincide.",
-          weak_password: "La nueva contrasena necesita al menos 6 caracteres.",
-          same_password: "Usa una contrasena diferente a la actual.",
-          no_password: "Tu cuenta no tiene contrasena local.",
+          weak_password: "La nueva contraseña necesita al menos 6 caracteres.",
+          same_password: "Usa una contraseña diferente a la actual.",
+          no_password: "Tu cuenta no tiene contraseña local.",
         };
         const message =
           errorMap[result?.error as keyof typeof errorMap] ??
-          "No se pudo cambiar la contrasena.";
+          "No se pudo cambiar la contraseña.";
         toast({ title: "No se pudo cambiar", description: message, variant: "destructive" });
         return;
       }
 
       toast({
-        title: "Contrasena actualizada",
+        title: "Contraseña actualizada",
         description: "Ya podes usar la nueva clave.",
       });
       setPasswordModalOpen(false);
@@ -832,7 +832,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div>
-                  <Label className="text-slate-300">Contrasena</Label>
+                  <Label className="text-slate-300">Contraseña</Label>
                   <div className="flex flex-wrap items-center gap-3 mt-1">
                     <div className="flex items-center gap-2">
                       <Lock className="w-4 h-4 text-slate-400" />
@@ -843,7 +843,7 @@ export default function ProfilePage() {
                       onClick={openPasswordModal}
                       className="bg-amber-500/90 hover:bg-amber-400 text-slate-900 text-sm font-semibold px-4 py-1.5 rounded-full shadow focus-visible:ring-2 focus-visible:ring-amber-300"
                     >
-                      Cambiar contrasena
+                      Cambiar contraseña
                     </Button>
                   </div>
                 </div>
@@ -1210,7 +1210,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* === MODAL: Cambiar contrasena === */}
       {passwordModalOpen && (
         <div
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
@@ -1222,7 +1221,7 @@ export default function ProfilePage() {
             className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-md space-y-4"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-orange-400 font-semibold">Cambiar contrasena</h3>
+              <h3 className="text-orange-400 font-semibold">Cambiar contraseña</h3>
               <Button
                 type="button"
                 variant="ghost"
@@ -1252,7 +1251,7 @@ export default function ProfilePage() {
                 />
               </div>
               <div>
-                <Label className="text-slate-300">Nueva contrasena</Label>
+                <Label className="text-slate-300">Nueva contraseña</Label>
                 <Input
                   type="password"
                   autoComplete="new-password"
@@ -1263,7 +1262,7 @@ export default function ProfilePage() {
                 />
               </div>
               <div>
-                <Label className="text-slate-300">Confirmar nueva contrasena</Label>
+                <Label className="text-slate-300">Confirmar nueva contraseña</Label>
                 <Input
                   type="password"
                   autoComplete="new-password"
@@ -1281,7 +1280,7 @@ export default function ProfilePage() {
                 variant="outline"
                 onClick={closePasswordModal}
                 disabled={changingPassword}
-                className="border-amber-500/60 text-amber-400 hover:bg-amber-500/10"
+                className="border-amber-500/60 text-amber-400 bg-transparent hover:bg-amber-400"
               >
                 Cancelar
               </Button>
