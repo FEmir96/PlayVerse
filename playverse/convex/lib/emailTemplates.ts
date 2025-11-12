@@ -353,16 +353,16 @@ export function buildCartEmail(opts: {
 
     const showDiscount = baseValue !== undefined && baseValue > finalValue + 0.009;
     const amountBlock = showDiscount
-      ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-            <span style="text-decoration:line-through;opacity:.7;font-size:11px">${baseMoney}</span>
-            <span style="color:${COLORS.accent};font-weight:900">${finalMoney}</span>
+      ? `<div style="text-align:right">
+            <div style="text-decoration:line-through;opacity:.7;font-size:11px;margin-bottom:4px">${baseMoney}</div>
+            <div style="color:${COLORS.accent};font-weight:900;font-size:15px;margin-bottom:3px">${finalMoney}</div>
             ${
               discountMoney
-                ? `<span style="font-size:11px;opacity:.8;color:${COLORS.accent}">Ahorro: ${discountMoney}</span>`
+                ? `<div style="font-size:11px;opacity:.8;color:${COLORS.accent}">Ahorro: ${discountMoney}</div>`
                 : ""
             }
          </div>`
-      : `<span style="color:${COLORS.accent};font-weight:900">${finalMoney}</span>`;
+      : `<div style="text-align:right;color:${COLORS.accent};font-weight:900;font-size:15px">${finalMoney}</div>`;
 
     return `
       <tr>

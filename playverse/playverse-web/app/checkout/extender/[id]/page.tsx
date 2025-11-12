@@ -14,7 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ValidationError } from "@/components/ui/validation-error";
 import { useToast } from "@/hooks/use-toast";
-import { validatePaymentForm, validateRentalWeeks } from "@/lib/validation";
+import { validatePaymentForm, validateRentalWeeks, formatExpirationInput } from "@/lib/validation";
 
 type PM = {
   _id: string;
@@ -578,8 +578,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
                       <Input
                         value={exp}
                         onChange={(e) => {
-                          const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                          setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                          setExp(formatExpirationInput(e.target.value));
                           // Limpiar error al escribir
                           if (validationErrors.exp) {
                             setValidationErrors(prev => {
@@ -685,8 +684,7 @@ export default function ExtendCheckoutPage({ params }: { params: { id: string } 
                   <Input
                     value={exp}
                     onChange={(e) => {
-                      const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                      setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                      setExp(formatExpirationInput(e.target.value));
                       // Limpiar error al escribir
                       if (validationErrors.exp) {
                         setValidationErrors(prev => {

@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ValidationError } from "@/components/ui/validation-error";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/lib/useAuthStore";
-import { validatePaymentForm } from "@/lib/validation";
+import { validatePaymentForm, formatExpirationInput } from "@/lib/validation";
 
 const getUserByIdRef =
   (api as any)["queries/getUserById"].getUserById as FunctionReference<"query">;
@@ -123,6 +123,7 @@ const profile = useQuery(
   | (Record<string, any> & { _id: Id<"profiles">; role?: string; name?: string; email?: string })
   | null
   | undefined;
+const profileLoaded = profile !== undefined;
 
 // Plan y helpers derivados de la URL
 const planKey = sp?.get("plan") ?? "monthly";
@@ -138,13 +139,14 @@ const formatMoney = (n: number) =>
   const profileTrialEndsAt =
     typeof (profile as any)?.trialEndsAt === "number" ? (profile as any).trialEndsAt : null;
   const profileRole = (profile as any)?.role;
-
-  const trialCheckoutEnabled =
-    Boolean(trial) &&
+  const trialEligible =
     Boolean(profile) &&
     profileRole !== "premium" &&
     !profileTrialUsed &&
     !(profileTrialEndsAt && profileTrialEndsAt > Date.now());
+  const trialActiveForUser =
+    Boolean(profileRole === "premium" && profileTrialEndsAt && profileTrialEndsAt > Date.now());
+  const trialCheckoutEnabled = Boolean(trial) && Boolean(trialEligible);
 
   const todayCharge = trialCheckoutEnabled ? 0 : plan.price;
   const todayChargeLabel = formatMoney(todayCharge);
@@ -157,7 +159,8 @@ const formatMoney = (n: number) =>
   const warnedTrialRef = useRef(false);
   useEffect(() => {
     if (warnedTrialRef.current) return;
-    if (trial && !trialCheckoutEnabled) {
+    if (!trial || !profileLoaded) return;
+    if (!trialCheckoutEnabled && !trialActiveForUser) {
       warnedTrialRef.current = true;
       toast({
         title: "Prueba gratuita ya utilizada",
@@ -165,7 +168,7 @@ const formatMoney = (n: number) =>
       });
       router.replace("/premium");
     }
-  }, [trial, trialCheckoutEnabled, router, toast]);
+  }, [trial, trialCheckoutEnabled, trialActiveForUser, profileLoaded, router, toast]);
 
   // Métodos desde DB si existe la query, si no mostramos UI manual
   const methods = useQuery(
@@ -562,8 +565,7 @@ const formatMoney = (n: number) =>
                         <Input
                           value={exp}
                           onChange={(e) => {
-                            const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                            setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                            setExp(formatExpirationInput(e.target.value));
                             // Limpiar error al escribir
                             if (validationErrors.exp) {
                               setValidationErrors(prev => {

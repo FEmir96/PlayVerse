@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ValidationError } from "@/components/ui/validation-error";
 import { useToast } from "@/hooks/use-toast";
-import { validatePaymentForm, type ValidationError as ValidationErrorType } from "@/lib/validation";
+import { validatePaymentForm, formatExpirationInput, type ValidationError as ValidationErrorType } from "@/lib/validation";
 
 /* helpers mínimos */
 const formatMoney = (n: number, currency = "USD") =>
@@ -424,9 +424,8 @@ export default function CartCheckoutPage() {
                         <label className="text-slate-300 text-sm">Fecha de expiración</label>
                         <Input
                           value={exp}
-                          onChange={(e) => {
-                            const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                            setExp(d.length <= 2 ? d : d.slice(0, 2) + "/" + d.slice(2));
+                            onChange={(e) => {
+                              setExp(formatExpirationInput(e.target.value));
                             // Limpiar error al escribir
                             if (validationErrors.exp) {
                               setValidationErrors(prev => {

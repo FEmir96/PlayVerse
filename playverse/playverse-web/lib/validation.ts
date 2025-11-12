@@ -91,6 +91,38 @@ export function validateExpirationDate(exp: string): ValidationError | null {
     return null;
 }
 
+export function formatExpirationInput(raw: string): string {
+    const clean = (raw || '').replace(/\D/g, '').slice(0, 4);
+    if (clean.length === 0) {
+        return '';
+    }
+
+    if (clean.length === 1) {
+        const digit = parseInt(clean, 10);
+        if (Number.isFinite(digit) && digit > 1) {
+            return `0${digit}`;
+        }
+        return clean;
+    }
+
+    let monthDigits = clean.slice(0, 2);
+    const remainder = clean.slice(2);
+
+    let monthValue = parseInt(monthDigits, 10);
+    if (!Number.isFinite(monthValue) || monthValue <= 0) {
+        monthValue = 1;
+    } else if (monthValue > 12) {
+        monthValue = 12;
+    }
+    const month = monthValue.toString().padStart(2, '0');
+
+    if (remainder.length === 0) {
+        return month;
+    }
+
+    return `${month}/${remainder}`;
+}
+
 // Validación de CVC
 export function validateCVC(cvc: string): ValidationError | null {
     if (!cvc || cvc.trim().length === 0) {
